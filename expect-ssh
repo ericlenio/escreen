@@ -1,0 +1,716 @@
+#!/bin/bash
+# vim:filetype=expect
+#
+# Drop in replacement script for ssh, or specify -local_shell_only for a local
+# shell. During an interactive session, press "\i" to load bash commands stored
+# in load_mybashprefs.
+
+if [ ! -t 0 ]; then
+  exec /usr/bin/ssh "$@"
+fi
+
+export EXP_FILE=/tmp/ssh.expect.$USER
+cat > $EXP_FILE << 'EXPECT_EOF' && exec /usr/bin/expect -f $EXP_FILE -- "$@"
+
+# apt-get install tcllib
+package require md5
+
+file delete $env(EXP_FILE)
+
+#set mybashprefs "$env(HOME)/.remoteadmin/bashrc"
+#send_error "Running $argv0\n"
+set spawn_out_slave_name 0
+#exp_internal -f /tmp/ssh.log 1
+# for prompt, "\u001b[0m" is a possible "end of color" sequence
+set ANSI_RE_TEXT_FORMATTING {\u001b\[(?:\d+;?)*[m]}
+set ANSI_RE_CURSOR_POSITIONING {\u001b\\\[\d+;\d+[Hf]}
+set ANSI_RE_GENERAL {\u001b\[[^a-zA-Z]*[a-zA-Z]}
+set ANSI_RE_SHOW_CURSOR {\u001b\[\?25h}
+set COPY_TO_CLIPBOARD_BEGIN_RE {(?:[\r\n])%copy_to_clipboard:}
+set HAS_BASH 0
+# PS1_MARKER is a non-regexp marker in the normal PS1 prompt that we search for
+# in certain situations to see if we need to load bash prefs. Watch that it
+# works in regular bash, as well as inside a screen session because screen
+# will translate many ANSI escape codes.
+#
+# TO DO: figure out why screen always translates "\033[9Xm" to
+# "\033[3Xm\033[9Xm" for X=0..9. It won't hurt us here because the 
+# marker is still in the PS1 string.
+set PS1_MARKER {\033[92m:$\033[0m }
+#set PROMPT "($ANSI_RE_TEXT_FORMATTING)*(?::(?:$ANSI_RE_TEXT_FORMATTING))*(#|\\\$)($ANSI_RE_TEXT_FORMATTING)* $"
+set PROMPT "((?!:)#|\\\$(?:$ANSI_RE_TEXT_FORMATTING)* $)"
+append PROMPT "|"
+append PROMPT "([regsub -all {([\$\[])} $PS1_MARKER [join { {\\} {\1} } {}]])$"
+set LOAD_MYBASHPREFS_MARKER "LOAD_MYBASHPREFS_MARKER"
+set OS [exec uname -s]
+set LD_SUPPORT_BASIC_AUTH secret
+
+set rcfile "$env(HOME)/.expect-ssh/config"
+if {[file exists $rcfile]} {
+  source $rcfile
+}
+
+if {[info exists env(SSH_EXPECT)] == 1} {
+  set env(SSH_EXPECT) [expr $env(SSH_EXPECT) + 1]
+} else {
+  set env(SSH_EXPECT) 0
+}
+
+set IS_INITIALIZED 0
+set CTRL_Z \032
+set LOGFILE "/tmp/ssh.log"
+match_max 10000
+
+proc resize_handler {} {
+  global spawn_out_slave_name
+  # Detect if window size has changed, and resize accordingly.
+  set rows [stty rows]
+  set cols [stty columns]
+  stty rows $rows columns $cols < $spawn_out_slave_name
+}
+
+proc copy_to_clipboard {} {
+  global PROMPT OS ANSI_RE_GENERAL
+  set clipboard_data ""
+  set max_clipboard_data_len 100000
+  log_user 1
+  expect {
+    -re "(.*)(?:\[\\r\\n]|^)%(copy_to_clipboard_EOF)" {
+      append clipboard_data $expect_out(1,string)
+      #regsub -all \000 $clipboard_data "\n" clipboard_data
+      if { $OS == "Darwin" } {
+        exec sh -c "printf '%s' \"\$0\" | pbcopy 2>&1" $clipboard_data
+      } elseif { $OS == "Linux" } {
+        exec sh -c "printf '%s' \"\$0\" | xsel -i -b 2>&1" $clipboard_data
+      } else {
+        send_user "copy_to_clipboard: need handling for $OS"
+        return
+      }
+      set l [string length $clipboard_data]
+      return $l
+      #{
+        # must be in bash command line
+        #send_user "copy_to_clipboard DONE (on host [info hostname]): $l characters copied to clipboard\n"
+        #send "\n"
+        #expect -re $PROMPT
+        #send " printf \"\\033^copy_to_clipboard DONE (on host [info hostname]): $l characters copied to clipboard\\033\\134\"\r"
+	# This send_tty does NOT work
+        #send_tty "\033^copy_to_clipboard DONE (on host [info hostname]): $l characters copied to clipboard\033\134"
+      #}
+    }
+    -re "(.{1,255})" {
+      append clipboard_data $expect_out(1,string)
+      if { [string length $clipboard_data] > $max_clipboard_data_len } {
+        # safety net: probably something is wrong
+        send_user "MAX LENGTH EXCEEDED ($max_clipboard_data_len) for copy_to_clipboard"
+      } else {
+        exp_continue
+      }
+    }
+    timeout { send_user "copy_to_clipboard: timeout waiting for file!!" }
+  }
+  log_user 1
+}
+
+proc paste_from_clipboard_in_vim {} {
+  global OS
+  send "i"
+  expect {
+    -re {\u001b\[\?25h$} {}
+    timeout { send_user "paste_from_clipboard_in_vim failed" }
+  }
+  if { "$OS" == "Linux" } {
+    set buf [exec xsel -o -b]
+  } elseif { "$OS" == "Darwin" } {
+    set buf [exec pbpaste]
+  }
+  send "$buf\u001b"
+  expect -re ".+"
+}
+
+proc load_mybashprefs {} {
+  global PROMPT HAS_BASH ANSI_RE_TEXT_FORMATTING PS1_MARKER LOAD_MYBASHPREFS_MARKER
+  log_user 1
+  if { $HAS_BASH == 0 } {
+    send_user "not a bash shell"
+    return
+  }
+  # verify we are in bash
+  send " echo 'test for bash'\r"
+  expect {
+    -re "\\r\\ntest for bash\\r\\n.*$PROMPT" {}
+    timeout { return }
+  }
+  set mybashprefs_file /tmp/.mybashprefs
+  #set mybashprefs {export PS1='${debian_chroot:+($debian_chroot)}\033[1;32m\u@\H\033[0m:\033[1;34m\w$}
+  #append mybashprefs $PS1_MARKER
+  #append mybashprefs " '\n"
+  set mybashprefs "export MYBASHPREFS_FILE=$mybashprefs_file\n"
+  append mybashprefs {export PS1='${debian_chroot:+($debian_chroot)}\033[1;32m\u@\H\033[0m:\033[1;34m\w}
+  append mybashprefs $PS1_MARKER
+  append mybashprefs "'\n"
+  append mybashprefs "export LOAD_MYBASHPREFS_MARKER='" $LOAD_MYBASHPREFS_MARKER "'\n"
+  append mybashprefs {
+unset PROMPT_COMMAND
+export VIMINIT="map <c-v> :echon \"%paste_from_clipboard_in_vim\"<cr>|vnoremap <C-c> y:call writefile(split(@\",\"\n\"),\$VIM_CLIPBOARD)<cr>:echon \"%copy_to_clipboard_in_vim\"<cr>|colorscheme elflord|syntax enable|set noswapfile number hlsearch incsearch sw=2 ignorecase wrap nocompatible ruler ai showmatch modeline modelines=5 nobackup nowritebackup textwidth=0 expandtab formatoptions=croql wildignore=*.class path=.,,**|autocmd Filetype java setlocal omnifunc=javacomplete#Complete"
+export EDITOR=/usr/bin/vim
+export FCEDIT=$EDITOR
+
+function copy_to_clipboard() {
+  local file_to_copy="$1"
+  # boundary for expect to pick up the file:
+  printf "%s" "%copy_to_clipboard:"
+  stty raw
+  if [ -n "$file_to_copy" ]; then
+    cat "$file_to_copy"
+  else
+    # copy stdin to clipboard
+    tee
+  fi
+  stty -raw
+  # ending boundary
+  printf "%s\n" "%copy_to_clipboard_EOF"
+}
+export -f copy_to_clipboard
+
+#function paste_from_clipboard() {
+#  local os=$(uname -s)
+#  # OSX/Darwin uses pbpaste, linux uses xsel
+#  if [ "$os" = "Linux" ]; then
+#    if [ ! -f /usr/bin/xsel ]; then
+#      echo "Sorry, no /usr/bin/xsel on this system."
+#      return
+#    fi
+#    xsel -o -b
+#  elif [ "$os" = "Darwin" ]; then
+#    pbpaste
+#  else
+#    echo "paste_from_clipboard: need handler for OS \"$os\""
+#  fi
+#}
+#export -f paste_from_clipboard
+
+function pathadd() {
+  if [ -d "$1" ] && [[ ":$PATH:" != *":$1:"* ]]; then
+    PATH="${PATH:+"$PATH:"}$1"
+  fi
+}
+
+function l() {
+  local os=$(uname -s)
+  if [ $os = Darwin ]; then
+    ls -laF "$@"
+  else
+    ls -laF --time-style=+'%D %H:%M:%S' "$@"
+  fi
+}
+unalias l 2>/dev/null
+export -f l
+
+function vimf() {
+  local patt="$1"
+  if [ -z "$patt" ]; then
+    patt="*"
+  else
+    patt="*$patt*"
+  fi
+  vim $(find . ! -type d ! -wholename '*/.svn*' ! -iregex '.*\.\(jar\|pdf\|swp\|png\|class\|jpg\|gif\)' -name "$patt")
+}
+export -f vimf
+
+function pg_version() {
+  # Note: just gets the major.minor version number
+  sudo -u postgres psql -tAc "select version()" 2>/dev/null | perl -pe 's{^\w+\s(\d+\.\d+).*}{$1}'
+}
+export -f pg_version
+
+function pg_activity() {
+  local version=$(pg_version)
+  local query="SELECT datname,usename,pid,client_addr,waiting,query_start,query FROM pg_stat_activity order by datname,usename,query_start"
+  perl -e "exit ( $version <= 9.2 ? 0 : 1 )" && \
+    query="SELECT datname,usename,procpid,client_addr,waiting,query_start,current_query FROM pg_stat_activity order by datname,usename,query_start"
+  sudo -u postgres psql -c "$query"
+}
+export -f pg_activity
+
+function pg_cancel_backend() {
+  local procpid="$1"
+  if [ -z "$procpid" ]; then
+    echo "Usage: pg_cancel_backend procpid"
+    return 1
+  fi
+  printf "select pg_cancel_backend($procpid);" | sudo -u postgres psql
+}
+export -f pg_cancel_backend
+
+function pg_terminate_backend() {
+  local procpid="$1"
+  if [ -z "$procpid" ]; then
+    echo "Usage: pg_terminate_backend procpid"
+    return 1
+  fi
+  printf "select pg_terminate_backend($procpid);" | sudo -u postgres psql
+}
+export -f pg_terminate_backend
+
+function signal_load_mybashprefs() {
+  # Mac does not support %N in date command, so use perl
+  local time=$(perl -MTime::HiRes -e "printf(qq(%.3f\n),Time::HiRes::time())")
+  printf "$LOAD_MYBASHPREFS_MARKER:$(hostname):$time" > $(tty)
+}
+export -f signal_load_mybashprefs
+
+function jargrep() {
+  for f in $(find . -name '*.jar'); do
+    local output=$(jar tvf $f | grep "$@")
+    if [ "$output" ]; then
+      echo "$f: $output"
+    fi
+  done
+}
+export -f jargrep
+
+function rgrep() {
+  find . -type f ! -wholename './build/*' ! -wholename '*/.svn*' ! -wholename '*.class' ! -wholename '*.jar' ! -wholename '*.swp' | xargs grep "$@" 2>/dev/null
+}
+export -f rgrep
+
+function vim() {
+  export VIM_CLIPBOARD=/tmp/vim.clipboard.$USER
+  touch $VIM_CLIPBOARD
+  chmod 600 $VIM_CLIPBOARD
+  /usr/bin/vim "$@"
+}
+export -f vim
+
+function tomcatlog() {
+  local OPTS=$(getopt -o 23ecx -- "$@")
+  eval set -- "$OPTS"
+  local flag=$1
+  local logfile=/var/log/tomcat7/catalina.out
+  local tomcat_user=tomcat7
+  local op
+  while true ; do
+    case "$1" in
+      -2) logfile=/var/log/lincdoc/catalina.out
+        tomcat_user=tomcat
+        shift
+        ;;
+      -3) logfile=/var/log/lincdoc/catalina.log
+        tomcat_user=tomcat
+        shift
+        ;;
+      -e) op=edit; shift;;
+      -c) op=clear; shift;;
+      -x) op=exceptions; shift;;
+      --) shift ; break ;;
+    esac
+  done
+  if [ "$op" = "edit" ]; then
+    # old sudo construct
+    #sudo -E -H -u $tomcat_user -- /bin/bash -c 'false
+#eval "$(base64 --decode << EOF
+#'"$(declare -f vim |base64)"'
+#EOF
+#)"
+
+    # unset DISPLAY to avoid "No protocol specified" warning from vim
+    sudo -E -H -u $tomcat_user -- /bin/bash -c "source $MYBASHPREFS_FILE && unset DISPLAY && vim -n -i NONE $logfile"
+  elif [ "$op" = "clear" ]; then
+    sudo truncate --no-create --size 0 $logfile
+    echo "$logfile was truncated."
+  elif [ "$op" = "exceptions" ]; then
+    sudo -u $tomcat_user grep Exception $logfile | less
+  else
+    sudo -E -H -u $tomcat_user multitail -f -c $logfile
+  fi
+}
+export -f tomcatlog
+
+function screen() {
+  local shell=/tmp/.bash.screen.$USER
+  #printf 'exec /bin/bash --norc --noprofile "$@"\n' > $shell
+  # why exec bash via perl here? because Mac OSX bash will munge PS1 otherwise
+  printf '#!/usr/bin/perl\n' > $shell
+  printf 'exec qw(/bin/bash --norc --noprofile),@ARGV;\n' >> $shell
+  chmod 755 $shell
+  local SCREENRC=/tmp/.screenrc.$USER
+  touch $SCREENRC
+  export SCREENRC
+  cat > $SCREENRC << 'EOF'
+startup_message off
+escape ^ee
+bind " " windowlist -b
+vbell on
+vbell_msg DING
+#shelltitle "$ |bash:"
+bindkey "\032" stuff "\032"
+#caption always "%{= kw}%-w%{= BW}%n %t%{-}%+w %-= @%H - %LD %d %LM - %c:%s"
+caption always "%{= kw}%-w%{= BW}%n%t%{-}%+w %-= @%H %m/%d %c"
+shelltitle "$ |:"
+# use printf instead of echo: works on macs
+setenv PROMPT_COMMAND 'printf "\033k${HOSTNAME}\033\134"'
+#shell $shell
+#screen rm $SCREENRC
+EOF
+  /usr/bin/screen -s $shell "$@"
+}
+export -f screen
+
+function s() {
+  local user=$1
+  if [ "$user" = "" ]; then
+    user=root
+  fi
+  id -u "$user" >/dev/null 2>&1 || { echo "No such user \"$user\"."; return; }
+  signal_load_mybashprefs
+  sudo -H -u $user -- /bin/bash
+}
+export -f s
+
+function get_ldsupport_pw() {
+  local app_context=$1
+  if [ -d /etc/lincware/lwsa ]; then
+    # 3.1 or higher
+    local ld_url="http://remoteadmin.lincware.com:$(sudo cat /var/run/lwsa-remoteadmin.http_port)/lincdoc/login/_/system"
+    local url=https://svn.lincware.com/lw/ldsupportpw
+    local cmd="$(sudo lwsa --get_psql_connect $app_context --silent) -tAc \"select config from ld_admin.ld_config_map where key = 'ldsupport-crypt-pw'\""
+    #if [ "$db" ]; then
+      #cmd="sudo -u postgres psql $db -tAc \"select config from ld_admin.ld_config_map where key = 'ldsupport-crypt-pw'\""
+    #fi
+    if [[ "$cmd" != *psql* ]]; then
+      if [ -n "$app_context" ]; then
+        echo "ERROR: no such app context: $app_context"
+        echo "Available contexts:"
+        sudo lwsa --list_app_context_ids
+      else
+        echo "ERROR: could not read lwsa configuration to get psql connect string."
+      fi
+      return
+    fi
+    local enc_pass="$(eval $cmd)"
+    # this echo triggers expect to print the password
+    stty -echo
+    echo %LD_SUPPORT_BASIC_AUTH
+    read LD_SUPPORT_BASIC_AUTH
+    stty echo
+    echo $ld_url
+    curl -k -H "Authorization: Basic $LD_SUPPORT_BASIC_AUTH" --data "$enc_pass" $url
+    echo
+  else
+    local version=$(show-version)
+    if [[ "$version" = 3* ]]; then
+      local pid=$(pgrep -U remoteadmin ssh)
+      if [ -n "$pid" ]; then
+        ps --no-headers ww $pid | perl -pe 's{.*?\b(\d+):localhost:80\b.*}{http://remoteadmin.lincware.com:$1}'
+      fi
+      generate-build-properties -get lincdoc.user.ldsupport.password
+    else
+      # version 2.x
+      local pid=$(pgrep -U sshtunnel ssh)
+      if [ -n "$pid" ]; then
+        ps --no-headers -ww -o user:12,pid,args $pid | perl -pe 's{.*?\b(\d+):localhost:80\b.*}{http://remoteadmin.lincware.com:$1}'
+      fi
+      echo "lincdoc/$(generate-build-properties -get lincdoc.ldap.password)"
+    fi
+  fi
+}
+export -f get_ldsupport_pw
+
+function ldu() {
+  perl -e'%h=map{/.\s/;99**(ord$&&7)-$`,$_}`sudo du -h`;print@h{sort%h}'
+}
+export -f ldu
+
+function update_gpg_key() {
+  local apt_keyring=/etc/apt/trusted.gpg
+  # the old key expired 04/28/2014
+  local old_key="Lincware Repository"
+  local apt_lincware_key_file=/etc/apt/trusted.gpg.d/apt.lincware.com.gpg
+  # To do: set http_proxy environment var if customer uses a proxy
+  local new_key_url=http://apt.lincware.com/apt.lincware.com.gpg
+  echo "Attempting to fetch $new_key_url now"
+  local new_key_base64="$(curl --silent $new_key_url)"
+  sudo -H bash -s << EOSUDO
+    gpg --no-default-keyring --with-colons --list-keys --keyring $apt_keyring "$old_key" >/dev/null 2>&1 && {
+      # delete old gpg key that expired on 04/28/2014
+      gpg --no-default-keyring --keyring $apt_keyring --yes --batch --delete-key "$old_key"
+    }
+    echo "$new_key_base64" | gpg --no-default-keyring --keyring $apt_lincware_key_file --import
+EOSUDO
+}
+export -f update_gpg_key
+
+OLD_LD_BIN=/opt/lincdoc/trunk/product/bin
+if [ -d $OLD_LD_BIN ]; then
+  pathadd $OLD_LD_BIN
+fi
+unset OLD_LD_BIN
+
+function ssh() {
+  signal_load_mybashprefs
+  /usr/bin/ssh "$@"
+  return $?
+}
+export -f ssh
+
+}
+  #exp_internal -f /tmp/log 0
+
+  # compress all the bash commands, base64 encode, pass over the wire, base64
+  # decode, and uncompress and eval on the remote end ...  but watch out if
+  # this base64 string exceeds 4096 bytes (1024 for mac) which seems to be the
+  # terminal driver limit (http://expect.sourceforge.net/FAQ.html#q76)
+  # "terminal input queue" "typeahead buffer"
+  # MAX_INPUT
+  # "getconf -a|grep MAX_INPUT" may help determine this value
+  #
+  # using openssl's base64 for mac/linux compatibility; use grep to filter out
+  # comment lines
+  #set c [exec "bash" "-c" "echo \"\$0\" | grep -v -E '^\\s*#' | gzip -9 --stdout | openssl base64" $mybashprefs]
+  set c [exec "bash" "-c" "echo \"\$0\" | gzip -9 --stdout | openssl base64" $mybashprefs]
+  # append \n to $mybashprefs make the md5 comparison work
+  set mybashprefs_hash [string tolower [md5::md5 -hex $mybashprefs\n]]
+  set c_len [string length $c]
+  #send_user "mybashprefs_hash=$mybashprefs_hash,len=[string length $mybashprefs]"
+  #send "eval \"\$(base64 --decode << EOF | gzip -d\r$c\rEOF\r)\"\r"
+  #expect -re "$PROMPT"
+
+  # Set HISTIGNORE to not save commands that begin with a space in bash
+  # history, including hiding this next command.
+  send "TMP=\$(history|tail -1|awk '{print \$1}') && history -d \$TMP && HISTCONTROL=ignoreboth && export HISTIGNORE=' *' && unset TMP\r"
+  expect -re $PROMPT
+  #exp_internal -f /tmp/log 1
+  send " if test -f $mybashprefs_file; then openssl md5 $mybashprefs_file; else echo 'no file'; fi\r"
+  expect -re "\\r\\n(?:.*?=\\s*)?(\\w.*?)\\r\\n.*$PROMPT"
+  set check_hash [string tolower $expect_out(1,string)]
+  #send_user "check_hash=$check_hash"
+  #exp_internal 0
+  if { $mybashprefs_hash eq $check_hash } {
+    #send_user "loading $mybashprefs_file ... "
+  } else {
+    # Note the leading space so it is not saved in bash history
+    #send_user "sending bash preferences over the wire ... "
+    send " eval \"\$(base64 --decode << ' EOF' | gzip -d | sudo tee $mybashprefs_file >/dev/null\r"
+    set lt_prompt "> (?:$ANSI_RE_TEXT_FORMATTING)*$"
+    expect -re $lt_prompt
+
+    set count 0
+    # split into manageable chunks that will not exceed terminal driver
+    # buf size
+    foreach bashline [regexp -all -inline {(?:.{0,254}\n){1,1}} "$c\n"] {
+      incr count
+      send "$bashline"
+      #send_user "ans=[string length $bashline]\n"
+      expect -re $lt_prompt
+    }
+
+    # Note the leading space so it is not saved in bash history
+    send " EOF\r)\"\r"
+    expect -re "$PROMPT"
+  }
+  set script [info script]
+  # Be paranoid: do another md5 check before sourcing the commands.
+  set warning "WARNING: $script md5 hash check failed."
+  send " \x5b\x5b \"\$(openssl md5 $mybashprefs_file)\" == *$mybashprefs_hash ]] && source $mybashprefs_file || printf '$warning\\n'\r"
+  set found_warning ""
+  expect {
+    -re "\\r\\n($warning)\\r\\n.*$PROMPT" { set found_warning $expect_out(1,string) }
+    -re $PROMPT
+  }
+  if { [string length $found_warning ] > 0 } {
+    send_user $found_warning\n
+  }
+  #send \r
+  #send_user "done ($c_len bytes/$count lines).\n"
+  #expect -re $PROMPT
+}
+### END of load_mybashprefs
+
+#if {[catch {fconfigure stdin -mode}]} {
+#  # Running ssh in a pipeline, stdin is not a keyboard
+#  eval [list system] /usr/bin/ssh $argv
+#  exit
+#}
+set local_shell_only 0
+set argv2 {}
+foreach arg $argv {
+  if { $arg == "-local_shell_only" || $arg == "-shell" } {
+    set local_shell_only 1
+  } elseif { $arg == "-debug" } {
+    # truncate the file first
+    close [open $LOGFILE "w"]
+    exp_internal -f $LOGFILE 0
+    send_user "DEBUG MODE: sending output for this session to $LOGFILE\n"
+  } else {
+    lappend argv2 "$arg"
+  }
+}
+if { $local_shell_only == 1 } {
+  eval [list spawn -noecho] /bin/bash
+} else {
+  eval [list spawn -noecho] /usr/bin/ssh $argv2
+}
+# spawn command above will set spawn_out
+set spawn_out_slave_name $spawn_out(slave,name)
+
+
+trap {
+  resize_handler
+} WINCH
+# force-resize: needed if on Mac in terminal full screen mode
+resize_handler
+
+proc init_shell {} {
+  global IS_INITIALIZED PROMPT HAS_BASH stdin_buf env
+  set stdin_buf ""
+  if { $IS_INITIALIZED == 0 } {
+    # Initialize the session
+    set IS_INITIALIZED 1
+    log_user 0
+    # test for bash shell
+    send "echo =\$BASH=\r"
+    expect -re "\\r\\n=(\[/\\w]*)=.*?$PROMPT"
+    if { [string length $expect_out(1,string)] > 0 } {
+      set HAS_BASH 1
+      # Set HISTIGNORE to not save commands that begin with a space in bash
+      # history, including hiding this next command, and the previous echo
+      # command that was used to test for $BASH.
+      send "TMP=\$(history|tail -1|awk '{print \$1}') && history -d \$TMP && history -d \$((\$TMP-1)) && HISTCONTROL=ignoreboth && HISTIGNORE=' *' && unset TMP && export SSH_EXPECT=$env(SSH_EXPECT)\r"
+      expect -re $PROMPT
+    }
+
+    log_user 1
+    load_mybashprefs
+
+  }
+}
+
+if { $env(SSH_EXPECT) > 0 } {
+  # the caller of this script is already a session of this script ... just
+  # initialize the shell and interact so that copy/paste commands always get
+  # intercepted by parent script
+  interact {
+    # "All the patterns before the -o apply to the user keystrokes. All the
+    # patterns after the -o apply to the spawned process."
+    -o
+    -nobuffer -re "${PROMPT}" init_shell
+  }
+} else {
+  set marker_re [join [ list $LOAD_MYBASHPREFS_MARKER {:([^:]+):(\d+\.\d+)} ] ""]
+  interact {
+    # monitor keyboard input for \i immediately following a bash prompt, and load
+    # bash prefs if user types in that sequence ... cuts down on false positives
+    # if say we are inside vim and use that sequence. Must do it by monitoring 1
+    # keystroke at a time, putting keystrokes into buffer variable
+    # stdin_buf.
+    -re "." {
+      set c $interact_out(0,string)
+      append stdin_buf $c
+      set buflen [string length $stdin_buf]
+      if { $stdin_buf == "\\i" } {
+	load_mybashprefs
+      } elseif { $stdin_buf == "\\d" } {
+	# toggle debug mode
+	set curr [exp_internal -info]
+	if { [string first "$LOGFILE" "$curr"] >= 0 } {
+	  send_user "DEBUG MODE is now OFF\r"
+	  send_log \n
+	  exp_internal 0
+	} else {
+	  # truncate the file first
+	  close [open $LOGFILE "w"]
+	  exp_internal -f $LOGFILE 0
+	  send_user "DEBUG MODE: sending output for this session to $LOGFILE"
+	  send_log \n
+	}
+	send \r
+	expect -re $PROMPT
+      } else {
+	if { $buflen == 1 } {
+	  if { $c != "\\" } { send -- $c }
+	} else {
+	  send -- $c
+	  # set stdin_buf to any non-blank value
+	  set stdin_buf "-"
+	}
+      }
+    }
+    # "All the patterns before the -o apply to the user keystrokes. All the
+    # patterns after the -o apply to the spawned process."
+    -o
+    -nobuffer -re $PROMPT init_shell
+    #
+    # 1st capture group is hostname, 2nd capture group is epoch seconds; store
+    # in associative array "loaded" so we do not mistakenly re-send the bash
+    # stuff. Needed sometimes if flipping back and forth between windows in
+    # screen.
+    -nobuffer -re {(?:^|[\r\n])%load_mybashprefs_signal:([^:]+):(\d+\.\d+)} {
+      expect -re $PROMPT
+      set remote_hostname $interact_out(1,string)
+      set epoch_secs $interact_out(2,string)
+      if { [info exists loaded($remote_hostname)] == 0 || $epoch_secs > $loaded($remote_hostname) } {
+	load_mybashprefs
+	set loaded($remote_hostname) $epoch_secs
+      } else {
+	#send_user "SKIPPING:$n\n"
+      }
+    }
+    -re $COPY_TO_CLIPBOARD_BEGIN_RE {
+      copy_to_clipboard
+    }
+    -re {(?:^|[\r\n])%copy_to_clipboard_in_vim[^\w].*} {
+      #set c [file size /tmp/foo]
+      #send ":echon \"copied $c bytes to clipboard\"\r"
+
+      # spawn a shell from vim and run the copy_to_clipboard bash function to
+      # complete the copy to clipboard
+      #send ":shell\r"
+      #expect -re $PROMPT
+      #send " copy_to_clipboard \$VIM_CLIPBOARD && exit\r"
+      send ":!copy_to_clipboard \$VIM_CLIPBOARD\r"
+      expect -re $COPY_TO_CLIPBOARD_BEGIN_RE
+      set n [copy_to_clipboard]
+      expect {
+        -re {Press ENTER or type command to continue.*$} {
+          send "\r"
+          expect -re "$ANSI_RE_SHOW_CURSOR$"
+          send ":echon \"$n characters were copied to clipboard\"\r"
+          expect -re "$ANSI_RE_SHOW_CURSOR$"
+        }
+        -re {has changed since editing started.*\(L\)oad File: $} {}
+      }
+    }
+    -re {[\n\r]%paste_from_clipboard_in_vim} {
+      paste_from_clipboard_in_vim
+    }
+    -re "\\n%LD_SUPPORT_BASIC_AUTH\\r" {
+      send "$LD_SUPPORT_BASIC_AUTH\r"
+    }
+    -re $marker_re {
+      #
+      # We have a request to load bash prefs into the current shell, but we
+      # only do that under certain conditions below.
+      #
+      set remote_hostname $interact_out(1,string)
+      set epoch_secs $interact_out(2,string)
+      if { [info exists loaded($remote_hostname)] == 0 || $epoch_secs > $loaded($remote_hostname) } {
+        array unset expect_out
+        expect {
+          -re $PROMPT {
+            if { [info exists expect_out(2,string)] == 0 } {
+              load_mybashprefs
+              set loaded($remote_hostname) $epoch_secs
+            }
+          }
+          -re {\? $} {
+            # probably is ssh asking for verification we really want to connect
+            # to a new host
+          }
+          timeout
+        }
+      }
+    }
+  }
+}
+EXPECT_EOF
