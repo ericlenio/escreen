@@ -77,7 +77,7 @@ proc copy_to_clipboard {} {
   set max_clipboard_data_len 100000
   log_user 1
   expect {
-    -re "(.*)(?:\[\\r\\n]|^)%(copy_to_clipboard_EOF)" {
+    -re "(.*)(?:\[\\r\\n](?:$ANSI_RE_GENERAL)*|^)%(copy_to_clipboard_EOF)" {
       append clipboard_data $expect_out(1,string)
       #regsub -all \000 $clipboard_data "\n" clipboard_data
       if { $OS == "Darwin" } {
