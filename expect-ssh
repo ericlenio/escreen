@@ -38,9 +38,11 @@ set HAS_BASH 0
 # marker is still in the PS1 string.
 set PS1_MARKER {\033[92m:$\033[0m }
 #set PROMPT "($ANSI_RE_TEXT_FORMATTING)*(?::(?:$ANSI_RE_TEXT_FORMATTING))*(#|\\\$)($ANSI_RE_TEXT_FORMATTING)* $"
-set PROMPT "((?!:)#|\\\$(?:$ANSI_RE_TEXT_FORMATTING)* $)"
+set PROMPT "(?:"
+append PROMPT "((?!:)#|\\\$(?:$ANSI_RE_TEXT_FORMATTING)* $)"
 append PROMPT "|"
 append PROMPT "([regsub -all {([\$\[])} $PS1_MARKER [join { {\\} {\1} } {}]])$"
+append PROMPT ")"
 set LOAD_MYBASHPREFS_MARKER "LOAD_MYBASHPREFS_MARKER"
 set OS [exec uname -s]
 set LD_SUPPORT_BASIC_AUTH secret
@@ -130,11 +132,11 @@ proc paste_from_clipboard_in_vim {} {
 
 proc load_mybashprefs {} {
   global PROMPT HAS_BASH ANSI_RE_TEXT_FORMATTING PS1_MARKER LOAD_MYBASHPREFS_MARKER
-  log_user 1
   if { $HAS_BASH == 0 } {
     send_user "not a bash shell"
     return
   }
+  log_user 0
   # verify we are in bash
   send " echo 'test for bash'\r"
   expect {
@@ -482,6 +484,7 @@ export -f ssh
   expect -re $PROMPT
   #exp_internal -f /tmp/log 1
   send " if test -f $mybashprefs_file; then openssl md5 $mybashprefs_file; else echo 'no file'; fi\r"
+  array unset expect_out
   expect -re "\\r\\n(?:.*?=\\s*)?(\\w.*?)\\r\\n.*$PROMPT"
   set check_hash [string tolower $expect_out(1,string)]
   #send_user "check_hash=$check_hash"
@@ -490,16 +493,14 @@ export -f ssh
     #send_user "loading $mybashprefs_file ... "
   } else {
     # Note the leading space so it is not saved in bash history
-    #send_user "sending bash preferences over the wire ... "
+    send_user "sending bash preferences over the wire ... "
     send " eval \"\$(base64 --decode << ' EOF' | gzip -d | sudo tee $mybashprefs_file >/dev/null\r"
     set lt_prompt "> (?:$ANSI_RE_TEXT_FORMATTING)*$"
     expect -re $lt_prompt
 
-    set count 0
     # split into manageable chunks that will not exceed terminal driver
     # buf size
     foreach bashline [regexp -all -inline {(?:.{0,254}\n){1,1}} "$c\n"] {
-      incr count
       send "$bashline"
       #send_user "ans=[string length $bashline]\n"
       expect -re $lt_prompt
@@ -514,12 +515,17 @@ export -f ssh
   set warning "WARNING: $script md5 hash check failed."
   send " \x5b\x5b \"\$(openssl md5 $mybashprefs_file)\" == *$mybashprefs_hash ]] && source $mybashprefs_file || printf '$warning\\n'\r"
   set found_warning ""
+  array unset expect_out
   expect {
     -re "\\r\\n($warning)\\r\\n.*$PROMPT" { set found_warning $expect_out(1,string) }
     -re $PROMPT
   }
   if { [string length $found_warning ] > 0 } {
     send_user $found_warning\n
+  } else {
+    log_user 1
+    send " clear && echo 'bash prefs loaded'\r"
+    expect -re $PROMPT
   }
   #send \r
   #send_user "done ($c_len bytes/$count lines).\n"
