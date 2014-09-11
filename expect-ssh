@@ -533,6 +533,27 @@ export -f ssh
 }
 ### END of load_mybashprefs
 
+set is_marker_prompt 0
+proc check_prompt_marker {} {
+  global expect_out is_marker_prompt
+  set is_marker_prompt [info exists expect_out(2,string)]
+  return $is_marker_prompt
+}
+
+proc main_prompt_checker {} {
+  global stdin_buf IS_INITIALIZED
+  #if { [check_prompt_marker] == 0 } {
+    #set stdin_buf ""
+  #} else {
+    # set stdin_buf to any non-blank value
+    #set stdin_buf "-"
+  #}
+  set stdin_buf ""
+  if { $IS_INITIALIZED == 0 } {
+    init_shell
+  }
+}
+
 #if {[catch {fconfigure stdin -mode}]} {
 #  # Running ssh in a pipeline, stdin is not a keyboard
 #  eval [list system] /usr/bin/ssh $argv
@@ -569,27 +590,24 @@ resize_handler
 
 proc init_shell {} {
   global IS_INITIALIZED PROMPT HAS_BASH stdin_buf env
-  set stdin_buf ""
-  if { $IS_INITIALIZED == 0 } {
-    # Initialize the session
-    set IS_INITIALIZED 1
-    log_user 1
-    # test for bash shell
-    send "echo =\$BASH=\r"
-    expect -re "\\r\\n=(\[/\\w]*)=.*?$PROMPT"
-    if { [string length $expect_out(1,string)] > 0 } {
-      set HAS_BASH 1
-      # Set HISTIGNORE to not save commands that begin with a space in bash
-      # history, including hiding this next command, and the previous echo
-      # command that was used to test for $BASH.
-      send "TMP=\$(history|tail -1|awk '{print \$1}') && history -d \$TMP && history -d \$((\$TMP-1)) && HISTCONTROL=ignoreboth && HISTIGNORE=' *' && unset TMP\r"
-      expect -re $PROMPT
-    }
-
-    log_user 1
-    load_mybashprefs $env(SSH_EXPECT)
-
+  if { $IS_INITIALIZED > 0 } { return }
+  # Initialize the session
+  set IS_INITIALIZED 1
+  log_user 1
+  # test for bash shell
+  send "echo =\$BASH=\r"
+  expect -re "\\r\\n=(\[/\\w]*)=.*?$PROMPT"
+  if { [string length $expect_out(1,string)] > 0 } {
+    set HAS_BASH 1
+    # Set HISTIGNORE to not save commands that begin with a space in bash
+    # history, including hiding this next command, and the previous echo
+    # command that was used to test for $BASH.
+    send "TMP=\$(history|tail -1|awk '{print \$1}') && history -d \$TMP && history -d \$((\$TMP-1)) && HISTCONTROL=ignoreboth && HISTIGNORE=' *' && unset TMP\r"
+    expect -re $PROMPT
   }
+
+  log_user 1
+  load_mybashprefs $env(SSH_EXPECT)
 }
 
 if { $env(SSH_EXPECT) > 0 } {
@@ -600,7 +618,7 @@ if { $env(SSH_EXPECT) > 0 } {
     # "All the patterns before the -o apply to the user keystrokes. All the
     # patterns after the -o apply to the spawned process."
     -o
-    -nobuffer -re "${PROMPT}" init_shell
+    -nobuffer -re "${PROMPT}" main_prompt_checker
   }
 } else {
   set marker_re [join [ list $LOAD_MYBASHPREFS_MARKER {:([^:]+):(\d+\.\d+):(\d+)} ] ""]
@@ -615,7 +633,7 @@ if { $env(SSH_EXPECT) > 0 } {
       append stdin_buf $c
       set buflen [string length $stdin_buf]
       if { $stdin_buf == "\\i" } {
-	load_mybashprefs
+	load_mybashprefs $env(SSH_EXPECT)
       } elseif { $stdin_buf == "\\d" } {
 	# toggle debug mode
 	set curr [exp_internal -info]
@@ -645,23 +663,8 @@ if { $env(SSH_EXPECT) > 0 } {
     # "All the patterns before the -o apply to the user keystrokes. All the
     # patterns after the -o apply to the spawned process."
     -o
-    -nobuffer -re $PROMPT init_shell
+    -nobuffer -re $PROMPT main_prompt_checker
     #
-    # 1st capture group is hostname, 2nd capture group is epoch seconds; store
-    # in associative array "loaded" so we do not mistakenly re-send the bash
-    # stuff. Needed sometimes if flipping back and forth between windows in
-    # screen.
-    -nobuffer -re {(?:^|[\r\n])%load_mybashprefs_signal:([^:]+):(\d+\.\d+)} {
-      expect -re $PROMPT
-      set remote_hostname $interact_out(1,string)
-      set epoch_secs $interact_out(2,string)
-      if { [info exists loaded($remote_hostname)] == 0 || $epoch_secs > $loaded($remote_hostname) } {
-	load_mybashprefs
-	set loaded($remote_hostname) $epoch_secs
-      } else {
-	#send_user "SKIPPING:$n\n"
-      }
-    }
     -re $COPY_TO_CLIPBOARD_BEGIN_RE {
       copy_to_clipboard
     }
@@ -720,7 +723,7 @@ if { $env(SSH_EXPECT) > 0 } {
         array unset expect_out
         expect {
           -re $PROMPT {
-            if { [info exists expect_out(2,string)] == 0 } {
+            if { [check_prompt_marker] == 0 } {
               load_mybashprefs [expr $SSH_EXPECT_CURR + 1]
               set loaded($remote_hostname) $epoch_secs
             }
