@@ -74,16 +74,18 @@ proc resize_handler {} {
 proc copy_to_clipboard {} {
   global PROMPT OS ANSI_RE_GENERAL
   set clipboard_data ""
-  set max_clipboard_data_len 100000
+  set max_clipboard_data_len 1000000
   log_user 1
   expect {
     -re "(.*)(?:\[\\r\\n](?:$ANSI_RE_GENERAL)*|^)%(copy_to_clipboard_EOF)" {
       append clipboard_data $expect_out(1,string)
       #regsub -all \000 $clipboard_data "\n" clipboard_data
+
+      #regsub -all {\033\[\d+C} $clipboard_data "" clipboard_data
       if { $OS == "Darwin" } {
         exec sh -c "printf '%s' \"\$0\" | pbcopy 2>&1" $clipboard_data
       } elseif { $OS == "Linux" } {
-        exec sh -c "printf '%s' \"\$0\" | xsel -i -b 2>&1" $clipboard_data
+        exec sh -c "printf '%s' \"\$0\" | openssl enc -base64 -d | xsel -i -b 2>&1" $clipboard_data
       } else {
         send_user "copy_to_clipboard: need handling for $OS"
         return
@@ -136,7 +138,7 @@ proc load_mybashprefs {} {
     send_user "not a bash shell"
     return
   }
-  log_user 0
+  log_user 1
   # verify we are in bash
   send " echo 'test for bash'\r"
   expect {
@@ -154,22 +156,22 @@ proc load_mybashprefs {} {
   append mybashprefs "export LOAD_MYBASHPREFS_MARKER='" $LOAD_MYBASHPREFS_MARKER "'\n"
   append mybashprefs {
 unset PROMPT_COMMAND
-export VIMINIT="map <c-v> :echon \"%paste_from_clipboard_in_vim\"<cr>|vnoremap <C-c> y:call writefile(split(@\",\"\n\"),\$VIM_CLIPBOARD)<cr>:echon \"%copy_to_clipboard_in_vim\"<cr>|colorscheme elflord|syntax enable|set noswapfile number hlsearch incsearch sw=2 ignorecase wrap nocompatible ruler ai showmatch modeline modelines=5 nobackup nowritebackup textwidth=0 expandtab formatoptions=croql wildignore=*.class path=.,,**|autocmd Filetype java setlocal omnifunc=javacomplete#Complete"
+export VIMINIT="map <c-v> :echon \"%paste_from_clipboard_in_vim\"<cr>|vnoremap <C-c> y:call writefile(split(@\",\"\n\"),\$VIM_CLIPBOARD)<cr>:!copy_to_clipboard \$VIM_CLIPBOARD<cr>|colorscheme elflord|syntax enable|set noswapfile number hlsearch incsearch sw=2 ignorecase wrap nocompatible ruler ai showmatch modeline modelines=5 nobackup nowritebackup textwidth=0 expandtab formatoptions=croql wildignore=*.class path=.,,**|autocmd Filetype java setlocal omnifunc=javacomplete#Complete"
 export EDITOR=/usr/bin/vim
 export FCEDIT=$EDITOR
 
 function copy_to_clipboard() {
+  # if this function is changed, be sure to test this out with files with tabs
+  # (like /usr/share/zoneinfo/zone.tab), and inside gnu screen
   local file_to_copy="$1"
   # boundary for expect to pick up the file:
   printf "%s" "%copy_to_clipboard:"
-  stty raw
   if [ -n "$file_to_copy" ]; then
-    cat "$file_to_copy"
+    openssl enc -base64 -in "$file_to_copy"
   else
     # copy stdin to clipboard
-    tee
+    openssl enc -base64
   fi
-  stty -raw
   # ending boundary
   printf "%s\n" "%copy_to_clipboard_EOF"
 }
@@ -485,7 +487,7 @@ export -f ssh
   #exp_internal -f /tmp/log 1
   send " if test -f $mybashprefs_file; then openssl md5 $mybashprefs_file; else echo 'no file'; fi\r"
   array unset expect_out
-  expect -re "\\r\\n(?:.*?=\\s*)?(\\w.*?)\\r\\n.*$PROMPT"
+  expect -re "\\r\\n(?:.*?=\\s*)?(\\w.*?)\\r\\n.*(?:$PROMPT)"
   set check_hash [string tolower $expect_out(1,string)]
   #send_user "check_hash=$check_hash"
   #exp_internal 0
@@ -524,8 +526,8 @@ export -f ssh
     send_user $found_warning\n
   } else {
     log_user 1
-    send " clear && echo 'bash prefs loaded'\r"
-    expect -re $PROMPT
+    #send " clear && echo 'bash prefs loaded'\r"
+    #expect -re $PROMPT
   }
   #send \r
   #send_user "done ($c_len bytes/$count lines).\n"
@@ -665,7 +667,7 @@ if { $env(SSH_EXPECT) > 0 } {
     -re $COPY_TO_CLIPBOARD_BEGIN_RE {
       copy_to_clipboard
     }
-    -re {(?:^|[\r\n])%copy_to_clipboard_in_vim[^\w].*} {
+    -re {(?:^|[\r\n](?:$ANSI_RE_GENERAL)*)%copy_to_clipboard_in_vim[^\w].*} {
       #set c [file size /tmp/foo]
       #send ":echon \"copied $c bytes to clipboard\"\r"
 
