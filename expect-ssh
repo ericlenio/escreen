@@ -80,12 +80,11 @@ proc copy_to_clipboard {} {
     -re "(.*)(?:\[\\r\\n](?:$ANSI_RE_GENERAL)*|^)%(copy_to_clipboard_EOF)" {
       append clipboard_data $expect_out(1,string)
       #regsub -all \000 $clipboard_data "\n" clipboard_data
-
       #regsub -all {\033\[\d+C} $clipboard_data "" clipboard_data
       if { $OS == "Darwin" } {
-        exec sh -c "printf '%s' \"\$0\" | pbcopy 2>&1" $clipboard_data
+        exec sh -c "printf '%s\n' \"\$0\" | openssl enc -base64 -d | pbcopy 2>&1" $clipboard_data
       } elseif { $OS == "Linux" } {
-        exec sh -c "printf '%s' \"\$0\" | openssl enc -base64 -d | xsel -i -b 2>&1" $clipboard_data
+        exec sh -c "printf '%s\n' \"\$0\" | openssl enc -base64 -d | xsel -i -b 2>&1" $clipboard_data
       } else {
         send_user "copy_to_clipboard: need handling for $OS"
         return
@@ -156,21 +155,21 @@ proc load_mybashprefs {SSH_EXPECT} {
   append mybashprefs "export LOAD_MYBASHPREFS_MARKER='" $LOAD_MYBASHPREFS_MARKER "'\n"
   append mybashprefs {
 unset PROMPT_COMMAND
-export VIMINIT="map <c-v> :echon \"%paste_from_clipboard_in_vim\"<cr>|vnoremap <C-c> y:call writefile(split(@\",\"\n\"),\$VIM_CLIPBOARD)<cr>:!copy_to_clipboard \$VIM_CLIPBOARD<cr>|colorscheme elflord|syntax enable|set noswapfile number hlsearch incsearch sw=2 ignorecase wrap nocompatible ruler ai showmatch modeline modelines=5 nobackup nowritebackup textwidth=0 expandtab formatoptions=croql wildignore=*.class path=.,,**|autocmd Filetype java setlocal omnifunc=javacomplete#Complete"
+export VIMINIT='map <c-v> :echon "%paste_from_clipboard_in_vim"<cr>|vnoremap <C-c> y:call writefile(split(@","\n","b"),$VIM_CLIPBOARD)<cr>:!copy_to_clipboard $VIM_CLIPBOARD<cr>|colorscheme elflord|syntax enable|set noswapfile number hlsearch incsearch sw=2 ignorecase wrap nocompatible ruler ai showmatch modeline modelines=5 nobackup nowritebackup textwidth=0 expandtab formatoptions=croql wildignore=*.class path=.,,**|autocmd Filetype java setlocal omnifunc=javacomplete#Complete'
 export EDITOR=/usr/bin/vim
 export FCEDIT=$EDITOR
 
 function copy_to_clipboard() {
-  # if this function is changed, be sure to test this out with files with tabs
-  # (like /usr/share/zoneinfo/zone.tab), and inside gnu screen
   local file_to_copy="$1"
-  # boundary for expect to pick up the file:
+  # boundary for expect-ssh to pick up the file:
   printf "%s" "%copy_to_clipboard:"
   if [ -n "$file_to_copy" ]; then
-    openssl enc -base64 -in "$file_to_copy"
+    # use perl to remove the last \n on the last line
+    perl -pe 'chomp if eof' "$file_to_copy" | openssl enc -base64
   else
     # copy stdin to clipboard
-    openssl enc -base64
+    # use perl to remove the last \n on the last line
+    perl -pe 'chomp if eof' -- - | openssl enc -base64
   fi
   # ending boundary
   printf "%s\n" "%copy_to_clipboard_EOF"
