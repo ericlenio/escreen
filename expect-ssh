@@ -132,7 +132,7 @@ proc paste_from_clipboard_in_vim {} {
   expect -re ".+"
 }
 
-proc load_mybashprefs {} {
+proc load_mybashprefs {SSH_EXPECT} {
   global PROMPT HAS_BASH ANSI_RE_TEXT_FORMATTING PS1_MARKER LOAD_MYBASHPREFS_MARKER
   if { $HAS_BASH == 0 } {
     send_user "not a bash shell"
@@ -260,7 +260,7 @@ export -f pg_terminate_backend
 function signal_load_mybashprefs() {
   # Mac does not support %N in date command, so use perl
   local time=$(perl -MTime::HiRes -e "printf(qq(%.3f\n),Time::HiRes::time())")
-  printf "$LOAD_MYBASHPREFS_MARKER:$(hostname):$time" > $(tty)
+  printf "$LOAD_MYBASHPREFS_MARKER:$(hostname):$time:$SSH_EXPECT" > $(tty)
 }
 export -f signal_load_mybashprefs
 
@@ -482,7 +482,7 @@ export -f ssh
 
   # Set HISTIGNORE to not save commands that begin with a space in bash
   # history, including hiding this next command.
-  send "TMP=\$(history|tail -1|awk '{print \$1}') && history -d \$TMP && HISTCONTROL=ignoreboth && export HISTIGNORE=' *' && unset TMP\r"
+  send "TMP=\$(history|tail -1|awk '{print \$1}') && history -d \$TMP && HISTCONTROL=ignoreboth && export HISTIGNORE=' *' && unset TMP && export SSH_EXPECT=$SSH_EXPECT\r"
   expect -re $PROMPT
   #exp_internal -f /tmp/log 1
   send " if test -f $mybashprefs_file; then openssl md5 $mybashprefs_file; else echo 'no file'; fi\r"
@@ -575,7 +575,7 @@ proc init_shell {} {
   if { $IS_INITIALIZED == 0 } {
     # Initialize the session
     set IS_INITIALIZED 1
-    log_user 0
+    log_user 1
     # test for bash shell
     send "echo =\$BASH=\r"
     expect -re "\\r\\n=(\[/\\w]*)=.*?$PROMPT"
@@ -584,12 +584,12 @@ proc init_shell {} {
       # Set HISTIGNORE to not save commands that begin with a space in bash
       # history, including hiding this next command, and the previous echo
       # command that was used to test for $BASH.
-      send "TMP=\$(history|tail -1|awk '{print \$1}') && history -d \$TMP && history -d \$((\$TMP-1)) && HISTCONTROL=ignoreboth && HISTIGNORE=' *' && unset TMP && export SSH_EXPECT=$env(SSH_EXPECT)\r"
+      send "TMP=\$(history|tail -1|awk '{print \$1}') && history -d \$TMP && history -d \$((\$TMP-1)) && HISTCONTROL=ignoreboth && HISTIGNORE=' *' && unset TMP\r"
       expect -re $PROMPT
     }
 
     log_user 1
-    load_mybashprefs
+    load_mybashprefs $env(SSH_EXPECT)
 
   }
 }
@@ -605,7 +605,7 @@ if { $env(SSH_EXPECT) > 0 } {
     -nobuffer -re "${PROMPT}" init_shell
   }
 } else {
-  set marker_re [join [ list $LOAD_MYBASHPREFS_MARKER {:([^:]+):(\d+\.\d+)} ] ""]
+  set marker_re [join [ list $LOAD_MYBASHPREFS_MARKER {:([^:]+):(\d+\.\d+):(\d+)} ] ""]
   interact {
     # monitor keyboard input for \i immediately following a bash prompt, and load
     # bash prefs if user types in that sequence ... cuts down on false positives
@@ -702,12 +702,13 @@ if { $env(SSH_EXPECT) > 0 } {
       #
       set remote_hostname $interact_out(1,string)
       set epoch_secs $interact_out(2,string)
+      set SSH_EXPECT_CURR $interact_out(3,string)
       if { [info exists loaded($remote_hostname)] == 0 || $epoch_secs > $loaded($remote_hostname) } {
         array unset expect_out
         expect {
           -re $PROMPT {
             if { [info exists expect_out(2,string)] == 0 } {
-              load_mybashprefs
+              load_mybashprefs [expr $SSH_EXPECT_CURR + 1]
               set loaded($remote_hostname) $epoch_secs
             }
           }
