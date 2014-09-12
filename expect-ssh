@@ -335,6 +335,10 @@ function screen() {
   printf 'exec qw(/bin/bash --norc --noprofile),@ARGV;\n' >> $shell
   chmod 755 $shell
   local SCREENRC=/tmp/.screenrc.$USER
+  # Set up a little macro so that ^a% will dump the current screen to a file,
+  # then edit it in vim.
+  local printscreen_macro=/tmp/.screenrc.$USER.printscreen
+  local hardcopy_file=/tmp/.screenrc.$USER.hardcopy
   touch $SCREENRC
   export SCREENRC
   cat > $SCREENRC << 'EOF'
@@ -353,6 +357,15 @@ setenv PROMPT_COMMAND 'printf "\033k${HOSTNAME}\033\134"'
 #shell $shell
 #screen rm $SCREENRC
 EOF
+  cat >> $SCREENRC << EOF
+bind % source $printscreen_macro
+EOF
+  cat > $printscreen_macro << EOF
+hardcopy_append off
+hardcopy $hardcopy_file
+screen vim $hardcopy_file
+EOF
+
   /usr/bin/screen -s $shell "$@"
 }
 export -f screen
