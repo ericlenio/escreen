@@ -1,17 +1,14 @@
 #!/bin/bash
 # vim:filetype=expect
 #
-# Drop in replacement script for ssh, or specify -local_shell_only for a local
-# shell. During an interactive session, press "\i" to load bash commands stored
-# in load_mybashprefs.
+# Drop in replacement script for ssh. Run with -help to see arguments.
 
 if [ ! -t 0 ]; then
   exec /usr/bin/ssh "$@"
 fi
 
 export EXP_FILE=/tmp/ssh.expect.$USER
-cat > $EXP_FILE << 'EXPECT_EOF' && exec /usr/bin/expect -f $EXP_FILE -- "$@"
-
+cat > $EXP_FILE << 'EXPECT_EOF' && exec /usr/bin/expect -c "set EXEC $(basename $0)" -f $EXP_FILE -- "$@"
 # apt-get install tcllib
 package require md5
 
@@ -562,6 +559,20 @@ proc main_prompt_checker {} {
 set local_shell_only 0
 set argv2 {}
 foreach arg $argv {
+  if { $arg == "-help" } {
+    puts "This is ssh-expect, an ssh wrapper to make things"
+    puts "easier when ssh-ing to multiple hosts, and sudo-ing"
+    puts "to multiple users. Options:"
+    puts "  -help   this help menu"
+    puts "  -shell  don't ssh but instead run a local bash shell"
+    puts "All other arguments are passed directly to ssh."
+    puts "While inside any session, type these at a prompt:"
+    puts "  ~i      load bash functions/preferences"
+    puts "  ~d      toggle debug mode (writes to $LOGFILE)"
+    puts "Upon starting, Expect statements can be placed in"
+    puts "~/.expect-ssh/config and they get sourced."
+    exit
+  }
   if { $arg == "-local_shell_only" || $arg == "-shell" } {
     set local_shell_only 1
   } elseif { $arg == "-debug" } {
@@ -623,7 +634,7 @@ if { $env(SSH_EXPECT) > 0 } {
 } else {
   set marker_re [join [ list $LOAD_MYBASHPREFS_MARKER {:([^:]+):(\d+\.\d+):(\d+)} ] ""]
   interact {
-    # monitor keyboard input for \i immediately following a bash prompt, and load
+    # monitor keyboard input for ~i immediately following a bash prompt, and load
     # bash prefs if user types in that sequence ... cuts down on false positives
     # if say we are inside vim and use that sequence. Must do it by monitoring 1
     # keystroke at a time, putting keystrokes into buffer variable
@@ -632,9 +643,9 @@ if { $env(SSH_EXPECT) > 0 } {
       set c $interact_out(0,string)
       append stdin_buf $c
       set buflen [string length $stdin_buf]
-      if { $stdin_buf == "\\i" } {
+      if { $stdin_buf == "~i" } {
 	load_mybashprefs $env(SSH_EXPECT)
-      } elseif { $stdin_buf == "\\d" } {
+      } elseif { $stdin_buf == "~d" } {
 	# toggle debug mode
 	set curr [exp_internal -info]
 	if { [string first "$LOGFILE" "$curr"] >= 0 } {
@@ -652,7 +663,7 @@ if { $env(SSH_EXPECT) > 0 } {
 	expect -re $PROMPT
       } else {
 	if { $buflen == 1 } {
-	  if { $c != "\\" } { send -- $c }
+	  if { $c != "~" } { send -- $c }
 	} else {
 	  send -- $c
 	  # set stdin_buf to any non-blank value
