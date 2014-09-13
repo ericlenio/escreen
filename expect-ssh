@@ -81,22 +81,16 @@ proc copy_to_clipboard {} {
       if { $OS == "Darwin" } {
         exec sh -c "printf '%s\n' \"\$0\" | openssl enc -base64 -d | pbcopy 2>&1" $clipboard_data
       } elseif { $OS == "Linux" } {
-        exec sh -c "printf '%s\n' \"\$0\" | openssl enc -base64 -d | xsel -i -b 2>&1" $clipboard_data
+        foreach opt {-b -p} {
+          # copy to main clipboard, and X windows primary selection
+          exec sh -c "printf '%s\n' \"\$0\" | openssl enc -base64 -d | xsel -i $opt 2>&1" $clipboard_data
+        }
       } else {
         send_user "copy_to_clipboard: need handling for $OS"
         return
       }
       set l [string length $clipboard_data]
       return $l
-      #{
-        # must be in bash command line
-        #send_user "copy_to_clipboard DONE (on host [info hostname]): $l characters copied to clipboard\n"
-        #send "\n"
-        #expect -re $PROMPT
-        #send " printf \"\\033^copy_to_clipboard DONE (on host [info hostname]): $l characters copied to clipboard\\033\\134\"\r"
-	# This send_tty does NOT work
-        #send_tty "\033^copy_to_clipboard DONE (on host [info hostname]): $l characters copied to clipboard\033\134"
-      #}
     }
     -re "(.{1,255})" {
       append clipboard_data $expect_out(1,string)
@@ -113,19 +107,39 @@ proc copy_to_clipboard {} {
 }
 
 proc paste_from_clipboard_in_vim {} {
-  global OS
-  send "i"
-  expect {
-    -re {\u001b\[\?25h$} {}
-    timeout { send_user "paste_from_clipboard_in_vim failed" }
-  }
+  global OS PROMPT ANSI_RE_SHOW_CURSOR
+  send ":shell\r"
+  expect -re $PROMPT
+  # encode the clipboard data and send it across the wire, decoding it on the
+  # other end, and store it in the VIM_CLIPBOARD file.
+  # Leading space before cat so as to not save it to history
+  send " cat << EOF | openssl enc -base64 -d > \$VIM_CLIPBOARD\r"
+  expect -re "> $"
   if { "$OS" == "Linux" } {
-    set buf [exec xsel -o -b]
+    set buf [exec xsel -o -b | openssl enc -base64]
   } elseif { "$OS" == "Darwin" } {
-    set buf [exec pbpaste]
+    set buf [exec pbpaste | openssl enc -base64]
   }
-  send "$buf\u001b"
-  expect -re ".+"
+  foreach line [split $buf] {
+    send $line\r
+    expect -re "> $"
+  }
+  send "EOF\r"
+  expect -re $PROMPT
+  send "exit\r"
+  expect {
+    -re $ANSI_RE_SHOW_CURSOR {}
+    timeout {send_error "TIMEOUT during paste, aborting"; return}
+  }
+  # read the file and put it in the unnamed register
+  send {:let @"=join(readfile($VIM_CLIPBOARD),"\n")}
+  send "\r"
+  expect {
+    -re $ANSI_RE_SHOW_CURSOR {}
+    timeout {send_error "TIMEOUT #2 during paste, aborting"; return}
+  }
+  # paste contents of unnamed register
+  send "P"
 }
 
 proc load_mybashprefs {SSH_EXPECT} {
@@ -179,23 +193,6 @@ function copy_to_clipboard() {
   printf "%s\n" "%copy_to_clipboard_EOF"
 }
 export -f copy_to_clipboard
-
-#function paste_from_clipboard() {
-#  local os=$(uname -s)
-#  # OSX/Darwin uses pbpaste, linux uses xsel
-#  if [ "$os" = "Linux" ]; then
-#    if [ ! -f /usr/bin/xsel ]; then
-#      echo "Sorry, no /usr/bin/xsel on this system."
-#      return
-#    fi
-#    xsel -o -b
-#  elif [ "$os" = "Darwin" ]; then
-#    pbpaste
-#  else
-#    echo "paste_from_clipboard: need handler for OS \"$os\""
-#  fi
-#}
-#export -f paste_from_clipboard
 
 function pathadd() {
   if [ -d "$1" ] && [[ ":$PATH:" != *":$1:"* ]]; then
@@ -402,11 +399,8 @@ function get_ldsupport_pw() {
     fi
     echo $ld_url
     local enc_pass="$(eval $cmd)"
-    #stty -echo
-    echo "%LD_SUPPORT_BASIC_AUTH|$ld_url|$enc_pass|"
-    #read LD_SUPPORT_BASIC_AUTH
-    #stty echo
-    #curl -k -H "Authorization: Basic $LD_SUPPORT_BASIC_AUTH" --data "$enc_pass" $url
+    # echo a string for expect to pick up and launch a browser session
+    echo "%LAUNCH_LDSUPPORT_LOGIN|$ld_url|$enc_pass|"
     echo
   else
     local version=$(show-version)
@@ -660,6 +654,8 @@ if { $env(SSH_EXPECT) > 0 } {
       if { $stdin_buf == "~i" } {
 	load_mybashprefs $env(SSH_EXPECT)
       } elseif { $stdin_buf == "~k" } {
+        # useful when screen was launched remotely, and you want to take it
+        # over on your local machine
         stty echo
         puts "Type YES to kill expect: "
         gets stdin ans
@@ -723,7 +719,7 @@ if { $env(SSH_EXPECT) > 0 } {
     -re {[\n\r]%paste_from_clipboard_in_vim} {
       paste_from_clipboard_in_vim
     }
-    -re {\n%LD_SUPPORT_BASIC_AUTH\|([^\|]+)\|([^\|]+)\|} {
+    -re {\n%LAUNCH_LDSUPPORT_LOGIN\|([^\|]+)\|([^\|]+)\|} {
       set ld_url $interact_out(1,string)
       set enc_pass $interact_out(2,string)
       set url https://svn.lincware.com/lw/ldsupportpw
