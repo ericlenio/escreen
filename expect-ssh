@@ -579,8 +579,10 @@ foreach arg $argv {
     puts "  -shell  don't ssh but instead run a local bash shell"
     puts "All other arguments are passed directly to ssh."
     puts "While inside any session, type these at a prompt:"
-    puts "  ~i      load bash functions/preferences"
     puts "  ~d      toggle debug mode (writes to $LOGFILE)"
+    puts "  ~i      load bash functions/preferences"
+    puts "  ~k      kill expect: useful if running screen, and you"
+    puts "          want to resume screen from another desktop"
     puts "Upon starting, Expect statements can be placed in"
     puts "~/.expect-ssh/config and they get sourced."
     exit
@@ -657,6 +659,11 @@ if { $env(SSH_EXPECT) > 0 } {
       set buflen [string length $stdin_buf]
       if { $stdin_buf == "~i" } {
 	load_mybashprefs $env(SSH_EXPECT)
+      } elseif { $stdin_buf == "~k" } {
+        stty echo
+        puts "Type YES to kill expect: "
+        gets stdin ans
+        if { $ans == "YES" } { exit } else { stty -echo }
       } elseif { $stdin_buf == "~d" } {
 	# toggle debug mode
 	set curr [exp_internal -info]
