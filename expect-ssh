@@ -738,7 +738,7 @@ if { $env(SSH_EXPECT) > 0 } {
           system open $ld_url &
         }
       } else {
-        send_error "ERROR: could not read ldsupport password"
+        send_error "ERROR: could not read ldsupport password: further info: $ld_support_pw"
       }
     }
     -re $marker_re {
