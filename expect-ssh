@@ -727,7 +727,7 @@ if { $env(SSH_EXPECT) > 0 } {
         set ld_support_pw [exec curl -s -H "Authorization: Basic $LD_SUPPORT_BASIC_AUTH" --data "$enc_pass" $url]
       } ld_support_pw
       expect -re $PROMPT
-      if { [regexp {[-\w]+$} $ld_support_pw] } {
+      if { [regexp {^[-\w]+$} $ld_support_pw] } {
         send " echo password is: $ld_support_pw\r"
         expect -re $PROMPT
         if { "$OS" == "Linux" } {
