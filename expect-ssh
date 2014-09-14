@@ -24,6 +24,7 @@ set ANSI_RE_CURSOR_POSITIONING {\u001b\\\[\d+;\d+[Hf]}
 set ANSI_RE_GENERAL {\u001b\[[^a-zA-Z]*[a-zA-Z]}
 set ANSI_RE_SHOW_CURSOR {\u001b\[\?25h}
 set COPY_TO_CLIPBOARD_BEGIN_RE {(?:[\r\n])%copy_to_clipboard:}
+set DOWNLOAD_FILE_BEGIN_RE {(?:[\r\n])%DOWNLOAD_FILE\|([^\|]+)\|}
 set HAS_BASH 0
 # PS1_MARKER is a non-regexp marker in the normal PS1 prompt that we search for
 # in certain situations to see if we need to load bash prefs. Watch that it
@@ -102,6 +103,60 @@ proc copy_to_clipboard {} {
       }
     }
     timeout { send_user "copy_to_clipboard: timeout waiting for file!!" }
+  }
+  log_user 1
+}
+
+proc get_download_filename {default_file_name} {
+  global PROMPT
+  set default_outfile "/tmp/$default_file_name"
+  spawn /bin/bash
+  set outfile ""
+  expect -re $PROMPT
+  send "read -e -i '$default_outfile' -p 'Save downloaded file to: ' ans && echo ans=\$ans\r"
+  interact {
+    -o
+    -re "\\nans=(\[^\\r\\n]*).*$PROMPT" {
+      set outfile $interact_out(1,string)
+      send "exit\r"
+    }
+  }
+  return $outfile
+}
+
+proc download {default_file_name} {
+  global PROMPT OS ANSI_RE_GENERAL
+  set outfile [get_download_filename $default_file_name]
+  if { $outfile == "" } {
+    # discontinue downloading
+    send "NO\r"
+    return
+  } else {
+    send "y\r"
+    expect -ex \n
+  }
+
+  set data ""
+  set max_clipboard_data_len 1000000
+  log_user 1
+  expect {
+    -re "(.*)(?:\[\\r\\n](?:$ANSI_RE_GENERAL)*|^)%DOWNLOAD_FILE_EOF" {
+      append data $expect_out(1,string)
+      exec sh -c "printf '%s\n' \"\$0\" | openssl enc -base64 -d -out $outfile && chmod 600 $outfile" $data
+      set l [file size $outfile]
+      puts "downloaded to $outfile, $l bytes"
+      return $l
+    }
+    -re "(.{1,255})" {
+      append data $expect_out(1,string)
+      if { [string length $data] > $max_clipboard_data_len } {
+        # safety net: probably something is wrong
+        send_user "MAX LENGTH EXCEEDED ($max_clipboard_data_len) for download"
+      } else {
+        exp_continue
+      }
+    }
+    timeout { send_user "download: timeout waiting for file!!" }
   }
   log_user 1
 }
@@ -193,6 +248,26 @@ function copy_to_clipboard() {
   printf "%s\n" "%copy_to_clipboard_EOF"
 }
 export -f copy_to_clipboard
+
+function download() {
+  local file="$1"
+  # boundary for expect-ssh to pick up the file:
+  if [ ! -e "$file" ]; then
+    echo "Error: no such file: $file"
+    return
+  fi
+  printf "%s|%s|" "%DOWNLOAD_FILE" $(basename $file)
+  local ans
+  # Only continue if a valid download filename was picked in get_download_filename
+  read -p "Continue? " ans
+  if [ "$ans" != y ]; then
+    return
+  fi
+  openssl enc -base64 -in $file
+  # ending boundary
+  printf "%s:%s\n" "%DOWNLOAD_FILE_EOF" $file
+}
+export -f download
 
 function pathadd() {
   if [ -d "$1" ] && [[ ":$PATH:" != *":$1:"* ]]; then
@@ -693,6 +768,9 @@ if { $env(SSH_EXPECT) > 0 } {
     #
     -re $COPY_TO_CLIPBOARD_BEGIN_RE {
       copy_to_clipboard
+    }
+    -re $DOWNLOAD_FILE_BEGIN_RE {
+      download $interact_out(1,string)
     }
     -re {(?:^|[\r\n](?:$ANSI_RE_GENERAL)*)%copy_to_clipboard_in_vim[^\w].*} {
       #set c [file size /tmp/foo]
