@@ -23,12 +23,10 @@ set ANSI_RE_TEXT_FORMATTING {\u001b\[(?:\d+;?)*[m]}
 set ANSI_RE_CURSOR_POSITIONING {\u001b\\\[\d+;\d+[Hf]}
 set ANSI_RE_GENERAL {\u001b\[[^a-zA-Z]*[a-zA-Z]}
 set ANSI_RE_SHOW_CURSOR {\u001b\[\?25h}
-#set COPY_TO_CLIPBOARD_BEGIN_RE {(?:[\r\n])%copy_to_clipboard:}
-set COPY_TO_CLIPBOARD_BEGIN_RE {%copy_to_clipboard:([^:]+):}
+set COPY_TO_CLIPBOARD_BEGIN_RE [join { % {copy_to_clipboard:([^:]+):} } "" ]
 set LOAD_MYBASHPREFS_MARKER "LOAD_MYBASHPREFS_MARKER"
 set LOAD_MYBASHPREFS_MARKER_RE [join [ list $LOAD_MYBASHPREFS_MARKER {:([^:]+):(\d+\.\d+):(\d+)} ] ""]
-#set DOWNLOAD_FILE_BEGIN_RE {(?:[\r\n])%DOWNLOAD_FILE\|([^\|]+)\|}
-set DOWNLOAD_FILE_BEGIN_RE {%DOWNLOAD_FILE\|([^\|]+)\|([^\|]+)\|}
+set DOWNLOAD_FILE_BEGIN_RE [join { % {DOWNLOAD_FILE\|([^\|]+)\|([^\|]+)\|} } "" ]
 set HAS_BASH 0
 # PS1_MARKER is a non-regexp marker in the normal PS1 prompt that we search for
 # in certain situations to see if we need to load bash prefs. Watch that it
@@ -809,6 +807,7 @@ if { $env(SSH_EXPECT) > 0 } {
     -nobuffer -re "${PROMPT}" main_prompt_checker
   }
 } else {
+  array set loaded {}
   interact {
     -re "." { process_keystroke $interact_out(0,string) }
     # "All the patterns before the -o apply to the user keystrokes. All the
@@ -836,10 +835,10 @@ if { $env(SSH_EXPECT) > 0 } {
         #-re {has changed since editing started.*\(L\)oad File: $} {}
       #}
     #}
-    -re {\x25paste_from_clipboard_in_vim} {
+    -re [join { % paste_from_clipboard_in_vim} ""] {
       paste_from_clipboard_in_vim
     }
-    -re {%LAUNCH_LDSUPPORT_LOGIN\|([^\|]+)\|([^\|]+)\|([^\|]+)\|} {
+    -re [join { % {LAUNCH_LDSUPPORT_LOGIN\|([^\|]+)\|([^\|]+)\|([^\|]+)\|} } ""] {
       set ld_url $interact_out(1,string)
       set enc_pass $interact_out(2,string)
       set time_of_day $interact_out(3,string)
@@ -853,22 +852,24 @@ if { $env(SSH_EXPECT) > 0 } {
       # localhost" should.
       #
       set remote_hostname $interact_out(1,string)
-      set epoch_secs $interact_out(2,string)
+      set time_of_day $interact_out(2,string)
       set SSH_EXPECT_CURR $interact_out(3,string)
-      if { [info exists loaded($remote_hostname)] == 0 || $epoch_secs > $loaded($remote_hostname) } {
+      if { [info exists loaded($remote_hostname)] == 0 || $time_of_day > $loaded($remote_hostname) } {
         array unset expect_out
         expect {
           -re $PROMPT {
             if { [check_prompt_marker expect_out] == 0 } {
               load_mybashprefs [expr $SSH_EXPECT_CURR + 1]
-              set loaded($remote_hostname) $epoch_secs
+              set loaded($remote_hostname) $time_of_day
             }
           }
           -re {\? $} {
             # probably is ssh asking for verification we really want to connect
             # to a new host
           }
-          timeout
+          timeout {
+            send_user "timeout while loading bashprefs: remote_hostname=$remote_hostname, time_of_day=$time_of_day, loaded=$loaded($remote_hostname)\n"
+          }
         }
       }
     }
