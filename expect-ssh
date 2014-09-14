@@ -23,10 +23,10 @@ set ANSI_RE_TEXT_FORMATTING {\u001b\[(?:\d+;?)*[m]}
 set ANSI_RE_CURSOR_POSITIONING {\u001b\\\[\d+;\d+[Hf]}
 set ANSI_RE_GENERAL {\u001b\[[^a-zA-Z]*[a-zA-Z]}
 set ANSI_RE_SHOW_CURSOR {\u001b\[\?25h}
-set COPY_TO_CLIPBOARD_BEGIN_RE [join { % {copy_to_clipboard:([^:]+):} } "" ]
+set COPY_TO_CLIPBOARD_BEGIN_RE [join { ~ {copy_to_clipboard:([^:]+):} } "" ]
 set LOAD_MYBASHPREFS_MARKER "LOAD_MYBASHPREFS_MARKER"
 set LOAD_MYBASHPREFS_MARKER_RE [join [ list $LOAD_MYBASHPREFS_MARKER {:([^:]+):(\d+\.\d+):(\d+)} ] ""]
-set DOWNLOAD_FILE_BEGIN_RE [join { % {DOWNLOAD_FILE\|([^\|]+)\|([^\|]+)\|} } "" ]
+set DOWNLOAD_FILE_BEGIN_RE [join { ~ {DOWNLOAD_FILE\|([^\|]+)\|([^\|]+)\|} } "" ]
 set HAS_BASH 0
 # PS1_MARKER is a non-regexp marker in the normal PS1 prompt that we search for
 # in certain situations to see if we need to load bash prefs. Watch that it
@@ -39,7 +39,7 @@ set HAS_BASH 0
 set PS1_MARKER {\033[92m:$\033[0m }
 #set PROMPT "($ANSI_RE_TEXT_FORMATTING)*(?::(?:$ANSI_RE_TEXT_FORMATTING))*(#|\\\$)($ANSI_RE_TEXT_FORMATTING)* $"
 set PROMPT "(?:"
-append PROMPT "((?!:)#|\\\$(?:$ANSI_RE_TEXT_FORMATTING)* $)"
+append PROMPT "((?!:)(?:#|\\\$)(?:$ANSI_RE_TEXT_FORMATTING)* $)"
 append PROMPT "|"
 append PROMPT "([regsub -all {([\$\[])} $PS1_MARKER [join { {\\} {\1} } {}]])$"
 append PROMPT ")"
@@ -81,7 +81,7 @@ proc copy_to_clipboard {time_of_day} {
   set max_clipboard_data_len 1000000
   log_user 1
   expect {
-    -re "(.*)(?:\[\\r\\n](?:$ANSI_RE_GENERAL)*|^)%(copy_to_clipboard_EOF)" {
+    -re "(.*)(?:\[\\r\\n](?:$ANSI_RE_GENERAL)*|^)~copy_to_clipboard_EOF" {
       append clipboard_data $expect_out(1,string)
       #regsub -all \000 $clipboard_data "\n" clipboard_data
       #regsub -all {\033\[\d+C} $clipboard_data "" clipboard_data
@@ -152,7 +152,7 @@ proc download {default_file_name time_of_day} {
   set max_clipboard_data_len 1000000
   log_user 1
   expect {
-    -re "(.*)(?:\[\\r\\n](?:$ANSI_RE_GENERAL)*|^)%DOWNLOAD_FILE_EOF" {
+    -re "(.*)(?:\[\\r\\n](?:$ANSI_RE_GENERAL)*|^)~DOWNLOAD_FILE_EOF" {
       append data $expect_out(1,string)
       exec sh -c "printf '%s\n' \"\$0\" | openssl enc -base64 -d -out $outfile && chmod 600 $outfile" $data
       set l [file size $outfile]
@@ -240,14 +240,14 @@ chmod 600 $VIM_CLIPBOARD || {
   return
 }
 
-export VIMINIT='map <c-v> :echon "%" "paste_from_clipboard_in_vim"<cr>|vnoremap <C-c> y:call writefile(split(@","\n","b"),$VIM_CLIPBOARD)<cr>:!copy_to_clipboard $VIM_CLIPBOARD<cr>|colorscheme elflord|syntax enable|set noswapfile number hlsearch incsearch sw=2 ignorecase wrap nocompatible ruler ai showmatch modeline modelines=5 nobackup nowritebackup textwidth=0 expandtab formatoptions=croql wildignore=*.class path=.,,**|autocmd Filetype java setlocal omnifunc=javacomplete#Complete'
+export VIMINIT='map <c-v> :echon "~" "paste_from_clipboard_in_vim"<cr>|vnoremap <C-c> y:call writefile(split(@","\n","b"),$VIM_CLIPBOARD)<cr>:!copy_to_clipboard $VIM_CLIPBOARD<cr>|colorscheme elflord|syntax enable|set noswapfile number hlsearch incsearch sw=2 ignorecase wrap nocompatible ruler ai showmatch modeline modelines=5 nobackup nowritebackup textwidth=0 expandtab formatoptions=croql wildignore=*.class path=.,,**|autocmd Filetype java setlocal omnifunc=javacomplete#Complete'
 export EDITOR=/usr/bin/vim
 export FCEDIT=$EDITOR
 
 function copy_to_clipboard() {
   local file_to_copy="$1"
   # boundary for expect-ssh to pick up the file:
-  printf "%s:%s:" "%copy_to_clipboard" $(get_time_with_millis)
+  printf "%s:%s:" "~copy_to_clipboard" $(get_time_with_millis)
   if [ -n "$file_to_copy" ]; then
     # use perl to remove the last \n on the last line
     perl -pe 'chomp if eof' "$file_to_copy" | openssl enc -base64
@@ -257,7 +257,7 @@ function copy_to_clipboard() {
     perl -pe 'chomp if eof' -- - | openssl enc -base64
   fi
   # ending boundary
-  printf "%s\n" "%copy_to_clipboard_EOF"
+  printf "%s\n" "~copy_to_clipboard_EOF"
 }
 export -f copy_to_clipboard
 
@@ -268,7 +268,7 @@ function download() {
     echo "Error: no such file: $file"
     return
   fi
-  printf "%s|%s|%s|" "%DOWNLOAD_FILE" $(basename $file) $(get_time_with_millis)
+  printf "%s|%s|%s|" "~DOWNLOAD_FILE" $(basename $file) $(get_time_with_millis)
   local ans
   # Only continue if a valid download filename was picked in get_download_filename
   read -p "Continue? " ans
@@ -277,7 +277,7 @@ function download() {
   fi
   openssl enc -base64 -in $file
   # ending boundary
-  printf "%s:%s\n" "%DOWNLOAD_FILE_EOF" $file
+  printf "%s:%s\n" "~DOWNLOAD_FILE_EOF" $file
 }
 export -f download
 
@@ -493,7 +493,7 @@ function get_ldsupport_pw() {
     echo $ld_url
     local enc_pass="$(eval $cmd)"
     # echo a string for expect to pick up and launch a browser session
-    echo "%LAUNCH_LDSUPPORT_LOGIN|$ld_url|$enc_pass|$(get_time_with_millis)|"
+    echo "~LAUNCH_LDSUPPORT_LOGIN|$ld_url|$enc_pass|$(get_time_with_millis)|"
     echo
   else
     local version=$(show-version)
@@ -631,24 +631,33 @@ export -f ssh
 
 set is_marker_prompt 0
 proc check_prompt_marker {arr} {
-  global is_marker_prompt
+  global is_marker_prompt PS1_MARKER
   upvar $arr arr_ref
-  set is_marker_prompt [info exists arr_ref(2,string)]
+  set marker {*}$PS1_MARKER
+  if { [info exists arr_ref(2,string)]==1 && [string trim $arr_ref(2,string)]==$marker } {
+    set is_marker_prompt 1
+  } else {
+    set is_marker_prompt 0
+  }
   return $is_marker_prompt
 }
 
-proc main_prompt_checker {} {
-  global stdin_buf IS_INITIALIZED
-  #if { [check_prompt_marker] == 0 } {
-    #set stdin_buf ""
-  #} else {
-    # set stdin_buf to any non-blank value
-    #set stdin_buf "-"
-  #}
+array set loaded {}
+array set load_mybashprefs_flag {}
+proc main_prompt_checker {arr} {
+  global stdin_buf IS_INITIALIZED interact_out expect_out loaded load_mybashprefs_flag
+  #upvar $arr arr_ref
   set stdin_buf ""
   if { $IS_INITIALIZED == 0 } {
     init_shell
   }
+  if { [array size load_mybashprefs_flag] > 0 } {
+    if { [check_prompt_marker $arr] == 0 } {
+      load_mybashprefs [expr $load_mybashprefs_flag(SSH_EXPECT_CURR) + 1]
+      set loaded($load_mybashprefs_flag(remote_hostname)) $load_mybashprefs_flag(time_of_day)
+    }
+  }
+  array set load_mybashprefs_flag {}
 }
 
 #if {[catch {fconfigure stdin -mode}]} {
@@ -804,16 +813,15 @@ if { $env(SSH_EXPECT) > 0 } {
     # "All the patterns before the -o apply to the user keystrokes. All the
     # patterns after the -o apply to the spawned process."
     -o
-    -nobuffer -re "${PROMPT}" main_prompt_checker
+    -nobuffer -re "${PROMPT}" { main_prompt_checker interact_out }
   }
 } else {
-  array set loaded {}
   interact {
     -re "." { process_keystroke $interact_out(0,string) }
     # "All the patterns before the -o apply to the user keystrokes. All the
     # patterns after the -o apply to the spawned process."
     -o
-    -nobuffer -re $PROMPT main_prompt_checker
+    -nobuffer -re $PROMPT { main_prompt_checker interact_out }
     #
     -re $COPY_TO_CLIPBOARD_BEGIN_RE {
       copy_to_clipboard $interact_out(1,string)
@@ -821,7 +829,7 @@ if { $env(SSH_EXPECT) > 0 } {
     -re $DOWNLOAD_FILE_BEGIN_RE {
       download $interact_out(1,string) $interact_out(2,string)
     }
-    #-re {(?:^|[\r\n](?:$ANSI_RE_GENERAL)*)%copy_to_clipboard_in_vim[^\w].*} {
+    #-re {(?:^|[\r\n](?:$ANSI_RE_GENERAL)*)~copy_to_clipboard_in_vim[^\w].*} {
       #send ":!copy_to_clipboard \$VIM_CLIPBOARD\r"
       #expect -re $COPY_TO_CLIPBOARD_BEGIN_RE
       #set n [copy_to_clipboard]
@@ -835,10 +843,10 @@ if { $env(SSH_EXPECT) > 0 } {
         #-re {has changed since editing started.*\(L\)oad File: $} {}
       #}
     #}
-    -re [join { % paste_from_clipboard_in_vim} ""] {
+    -re [join { ~ paste_from_clipboard_in_vim} ""] {
       paste_from_clipboard_in_vim
     }
-    -re [join { % {LAUNCH_LDSUPPORT_LOGIN\|([^\|]+)\|([^\|]+)\|([^\|]+)\|} } ""] {
+    -re [join { ~ {LAUNCH_LDSUPPORT_LOGIN\|([^\|]+)\|([^\|]+)\|([^\|]+)\|} } ""] {
       set ld_url $interact_out(1,string)
       set enc_pass $interact_out(2,string)
       set time_of_day $interact_out(3,string)
@@ -856,21 +864,9 @@ if { $env(SSH_EXPECT) > 0 } {
       set SSH_EXPECT_CURR $interact_out(3,string)
       if { [info exists loaded($remote_hostname)] == 0 || $time_of_day > $loaded($remote_hostname) } {
         array unset expect_out
-        expect {
-          -re $PROMPT {
-            if { [check_prompt_marker expect_out] == 0 } {
-              load_mybashprefs [expr $SSH_EXPECT_CURR + 1]
-              set loaded($remote_hostname) $time_of_day
-            }
-          }
-          -re {\? $} {
-            # probably is ssh asking for verification we really want to connect
-            # to a new host
-          }
-          timeout {
-            send_user "timeout while loading bashprefs: remote_hostname=$remote_hostname, time_of_day=$time_of_day, loaded=$loaded($remote_hostname)\n"
-          }
-        }
+        set load_mybashprefs_flag(remote_hostname) $remote_hostname
+        set load_mybashprefs_flag(time_of_day) $time_of_day
+        set load_mybashprefs_flag(SSH_EXPECT_CURR) $SSH_EXPECT_CURR
       }
     }
   }
