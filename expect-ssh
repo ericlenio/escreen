@@ -86,11 +86,11 @@ proc copy_to_clipboard {time_of_day} {
       #regsub -all \000 $clipboard_data "\n" clipboard_data
       #regsub -all {\033\[\d+C} $clipboard_data "" clipboard_data
       if { $OS == "Darwin" } {
-        exec sh -c "printf '%s\n' \"\$0\" | openssl enc -base64 -d | pbcopy 2>&1" $clipboard_data
+        exec sh -c "printf '%s\n' \"\$0\" | openssl enc -base64 -d | gzip -d -c | pbcopy 2>&1" $clipboard_data
       } elseif { $OS == "Linux" } {
         foreach opt {-b -p} {
           # copy to main clipboard, and X windows primary selection
-          exec sh -c "printf '%s\n' \"\$0\" | openssl enc -base64 -d | xsel -i $opt 2>&1" $clipboard_data
+          exec sh -c "printf '%s\n' \"\$0\" | openssl enc -base64 -d | gzip -d -c | xsel -i $opt 2>&1" $clipboard_data
         }
       } else {
         send_user "copy_to_clipboard: need handling for $OS"
@@ -154,7 +154,7 @@ proc download {default_file_name time_of_day} {
   expect {
     -re "(.*)(?:\[\\r\\n](?:$ANSI_RE_GENERAL)*|^)~DOWNLOAD_FILE_EOF" {
       append data $expect_out(1,string)
-      exec sh -c "printf '%s\n' \"\$0\" | openssl enc -base64 -d -out $outfile && chmod 600 $outfile" $data
+      exec sh -c "printf '%s\n' \"\$0\" | openssl enc -base64 -d | gzip -d -c > $outfile && chmod 600 $outfile" $data
       set l [file size $outfile]
       puts "downloaded to $outfile, $l bytes"
       return $l
@@ -180,12 +180,12 @@ proc paste_from_clipboard_in_vim {} {
   # encode the clipboard data and send it across the wire, decoding it on the
   # other end, and store it in the VIM_CLIPBOARD file.
   # Leading space before cat so as to not save it to history
-  send " cat << EOF | openssl enc -base64 -d > \$VIM_CLIPBOARD\r"
+  send " cat << EOF | openssl enc -base64 -d | gzip -d -c > \$VIM_CLIPBOARD\r"
   expect -re "> $"
   if { "$OS" == "Linux" } {
-    set buf [exec xsel -o -b | openssl enc -base64]
+    set buf [exec xsel -o -b | gzip -9 -c | openssl enc -base64]
   } elseif { "$OS" == "Darwin" } {
-    set buf [exec pbpaste | openssl enc -base64]
+    set buf [exec pbpaste | gzip -9 -c | openssl enc -base64]
   }
   foreach line [split $buf] {
     send $line\r
@@ -250,11 +250,11 @@ function copy_to_clipboard() {
   printf "%s:%s:" "~copy_to_clipboard" $(get_time_with_millis)
   if [ -n "$file_to_copy" ]; then
     # use perl to remove the last \n on the last line
-    perl -pe 'chomp if eof' "$file_to_copy" | openssl enc -base64
+    perl -pe 'chomp if eof' "$file_to_copy" | gzip -9 -c | openssl enc -base64
   else
     # copy stdin to clipboard
     # use perl to remove the last \n on the last line
-    perl -pe 'chomp if eof' -- - | openssl enc -base64
+    perl -pe 'chomp if eof' -- - | gzip -9 -c | openssl enc -base64
   fi
   # ending boundary
   printf "%s\n" "~copy_to_clipboard_EOF"
@@ -275,9 +275,9 @@ function download() {
   if [ "$ans" != y ]; then
     return
   fi
-  openssl enc -base64 -in $file
+  gzip -9 -c $file | openssl enc -base64
   # ending boundary
-  printf "%s:%s\n" "~DOWNLOAD_FILE_EOF" $file
+  printf "~%s:%s\n" "DOWNLOAD_FILE_EOF" $file
 }
 export -f download
 
@@ -823,10 +823,10 @@ if { $env(SSH_EXPECT) > 0 } {
     -o
     -nobuffer -re $PROMPT { main_prompt_checker interact_out }
     #
-    -re $COPY_TO_CLIPBOARD_BEGIN_RE {
+    -nobuffer -re $COPY_TO_CLIPBOARD_BEGIN_RE {
       copy_to_clipboard $interact_out(1,string)
     }
-    -re $DOWNLOAD_FILE_BEGIN_RE {
+    -nobuffer -re $DOWNLOAD_FILE_BEGIN_RE {
       download $interact_out(1,string) $interact_out(2,string)
     }
     #-re {(?:^|[\r\n](?:$ANSI_RE_GENERAL)*)~copy_to_clipboard_in_vim[^\w].*} {
@@ -843,16 +843,16 @@ if { $env(SSH_EXPECT) > 0 } {
         #-re {has changed since editing started.*\(L\)oad File: $} {}
       #}
     #}
-    -re [join { ~ paste_from_clipboard_in_vim} ""] {
+    -nobuffer -re [join { ~ paste_from_clipboard_in_vim} ""] {
       paste_from_clipboard_in_vim
     }
-    -re [join { ~ {LAUNCH_LDSUPPORT_LOGIN\|([^\|]+)\|([^\|]+)\|([^\|]+)\|} } ""] {
+    -nobuffer -re [join { ~ {LAUNCH_LDSUPPORT_LOGIN\|([^\|]+)\|([^\|]+)\|([^\|]+)\|} } ""] {
       set ld_url $interact_out(1,string)
       set enc_pass $interact_out(2,string)
       set time_of_day $interact_out(3,string)
       process_ldsupport_request $ld_url $enc_pass $time_of_day
     }
-    -re $LOAD_MYBASHPREFS_MARKER_RE {
+    -nobuffer -re $LOAD_MYBASHPREFS_MARKER_RE {
       #
       # We have a request to load bash prefs into the current shell, but we
       # only do that under certain conditions below. For example, "ssh
