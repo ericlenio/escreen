@@ -23,7 +23,7 @@ set ANSI_RE_TEXT_FORMATTING {\u001b\[(?:\d+;?)*[m]}
 set ANSI_RE_CURSOR_POSITIONING {\u001b\\\[\d+;\d+[Hf]}
 set ANSI_RE_GENERAL {\u001b\[[^a-zA-Z]*[a-zA-Z]}
 set ANSI_RE_SHOW_CURSOR {\u001b\[\?25h}
-set COPY_TO_CLIPBOARD_BEGIN_RE [join { ~ {copy_to_clipboard:([^:]+):} } "" ]
+set COPY_TO_CLIPBOARD_BEGIN_RE [join {\n ~ {copy_to_clipboard:([^:]+):} } "" ]
 set LOAD_MYBASHPREFS_MARKER "LOAD_MYBASHPREFS_MARKER"
 set LOAD_MYBASHPREFS_MARKER_RE [join [ list $LOAD_MYBASHPREFS_MARKER {:([^:]+):(\d+\.\d+):(\d+)} ] ""]
 set DOWNLOAD_FILE_BEGIN_RE [join { ~ {DOWNLOAD_FILE\|([^\|]+)\|([^\|]+)\|} } "" ]
@@ -81,17 +81,14 @@ proc copy_to_clipboard {time_of_day} {
   set max_clipboard_data_len 1000000
   log_user 1
   expect {
-    -re "(.*)(?:\[\\r\\n](?:$ANSI_RE_GENERAL)*|^)~copy_to_clipboard_EOF" {
+    -re [join {"(.*)(?:\[\\r\\n](?:$ANSI_RE_GENERAL)*|^)" ~ copy_to_clipboard_EOF} ""] {
       append clipboard_data $expect_out(1,string)
       #regsub -all \000 $clipboard_data "\n" clipboard_data
       #regsub -all {\033\[\d+C} $clipboard_data "" clipboard_data
       if { $OS == "Darwin" } {
         exec sh -c "printf '%s\n' \"\$0\" | openssl enc -base64 -d | gzip -d -c | pbcopy 2>&1" $clipboard_data
       } elseif { $OS == "Linux" } {
-        foreach opt {-b -p} {
-          # copy to main clipboard, and X windows primary selection
-          exec sh -c "printf '%s\n' \"\$0\" | openssl enc -base64 -d | gzip -d -c | xsel -i $opt 2>&1" $clipboard_data
-        }
+        exec sh -c "printf '%s\n' \"\$0\" | openssl enc -base64 -d | gzip -d -c | clipit" $clipboard_data
       } else {
         send_user "copy_to_clipboard: need handling for $OS"
         return
@@ -108,7 +105,7 @@ proc copy_to_clipboard {time_of_day} {
         exp_continue
       }
     }
-    timeout { send_user "copy_to_clipboard: timeout waiting for file!!" }
+    timeout { send_error "copy_to_clipboard: timeout waiting for file" }
   }
   log_user 1
 }
@@ -183,7 +180,7 @@ proc paste_from_clipboard_in_vim {} {
   send " cat << EOF | openssl enc -base64 -d | gzip -d -c > \$VIM_CLIPBOARD\r"
   expect -re "> $"
   if { "$OS" == "Linux" } {
-    set buf [exec xsel -o -b | gzip -9 -c | openssl enc -base64]
+    set buf [exec clipit -c | gzip -9 -c | openssl enc -base64]
   } elseif { "$OS" == "Darwin" } {
     set buf [exec pbpaste | gzip -9 -c | openssl enc -base64]
   }
@@ -257,7 +254,7 @@ function copy_to_clipboard() {
     perl -pe 'chomp if eof' -- - | gzip -9 -c | openssl enc -base64
   fi
   # ending boundary
-  printf "%s\n" "~copy_to_clipboard_EOF"
+  printf "~%s\n" "copy_to_clipboard_EOF"
 }
 export -f copy_to_clipboard
 
@@ -794,7 +791,7 @@ proc process_ldsupport_request {ld_url enc_pass time_of_day} {
     send " echo password is: $ld_support_pw\r"
     expect -re $PROMPT
     if { "$OS" == "Linux" } {
-      exec sh -c "printf '%s' \"\$0\" | xsel -i -b 2>&1" $ld_support_pw
+      exec sh -c "printf '%s' \"\$0\" | clipit 2>&1" $ld_support_pw
       system xdg-open $ld_url >/dev/null &
     } elseif { "$OS" == "Darwin" } {
       exec sh -c "printf '%s' \"\$0\" | pbcopy 2>&1" $ld_support_pw
