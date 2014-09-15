@@ -490,7 +490,7 @@ function get_ldsupport_pw() {
     echo $ld_url
     local enc_pass="$(eval $cmd)"
     # echo a string for expect to pick up and launch a browser session
-    echo "~LAUNCH_LDSUPPORT_LOGIN|$ld_url|$enc_pass|$(get_time_with_millis)|"
+    printf "~%s|%s|%s|%s|\n" LAUNCH_LDSUPPORT_LOGIN "$ld_url" "$enc_pass" $(get_time_with_millis)
     echo
   else
     local version=$(show-version)
@@ -587,7 +587,7 @@ export -f ssh
   } else {
     # Note the leading space so it is not saved in bash history
     send_user "sending bash preferences over the wire ... "
-    send " eval \"\$(base64 --decode << ' EOF' | gzip -d | sudo tee $mybashprefs_file >/dev/null\r"
+    send " touch $mybashprefs_file && chmod 666 $mybashprefs_file && eval \"\$(base64 --decode << ' EOF' | gzip -d | tee $mybashprefs_file >/dev/null\r"
     set lt_prompt "> (?:$ANSI_RE_TEXT_FORMATTING)*$"
     expect -re $lt_prompt
 
