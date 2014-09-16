@@ -288,6 +288,18 @@ function openssl_show_cert() {
 }
 export -f openssl_show_cert
 
+function openssl_s_client_showcerts() {
+  local hostport="$1"
+  local host=${hostport%%:[0-9]*}
+  local port=${hostport##*:}
+  if [ "$host" = "$hostport" -o "$port" = "$hostport" ]; then
+    echo "Usage: ${FUNCNAME[0]} host.example.com:port"
+    return
+  fi
+  echo | openssl s_client -showcerts -connect $host:$port
+}
+export -f openssl_s_client_showcerts
+
 function pathadd() {
   if [ -d "$1" ] && [[ ":$PATH:" != *":$1:"* ]]; then
     PATH="${PATH:+"$PATH:"}$1"
@@ -573,7 +585,7 @@ export -f ssh
   # using openssl's base64 for mac/linux compatibility; use grep to filter out
   # comment lines
   #set c [exec "bash" "-c" "echo \"\$0\" | grep -v -E '^\\s*#' | gzip -9 --stdout | openssl base64" $mybashprefs]
-  set c [exec "bash" "-c" "echo \"\$0\" | gzip -9 --stdout | openssl base64" $mybashprefs]
+  set c [exec "bash" "-c" "echo \"\$0\" | gzip -9 --stdout | openssl enc -base64" $mybashprefs]
   # append \n to $mybashprefs make the md5 comparison work
   set mybashprefs_hash [string tolower [md5::md5 -hex $mybashprefs\n]]
   set c_len [string length $c]
@@ -596,8 +608,9 @@ export -f ssh
     #send_user "loading $mybashprefs_file ... "
   } else {
     # Note the leading space so it is not saved in bash history
-    send_user "sending bash preferences over the wire ... "
-    send " touch $mybashprefs_file && chmod 666 $mybashprefs_file && eval \"\$(base64 --decode << ' EOF' | gzip -d | tee $mybashprefs_file >/dev/null\r"
+    send " \[ ! -e $mybashprefs_file ] && { touch $mybashprefs_file; chmod 666 $mybashprefs_file; }\r"
+    expect -re $PROMPT
+    send " eval \"\$(openssl enc -base64 -d << ' EOF' | gzip -d | tee $mybashprefs_file >/dev/null\r"
     set lt_prompt "> (?:$ANSI_RE_TEXT_FORMATTING)*$"
     expect -re $lt_prompt
 
@@ -876,10 +889,12 @@ if { $env(SSH_EXPECT) > 0 } {
         set load_mybashprefs_flag(SSH_EXPECT_CURR) $SSH_EXPECT_CURR
       }
     }
-    -nobuffer -re {\npsql .*Type "help" for help.*[#>] $} {
-      send "\\set PROMPT1 '%n@%m:%/: '\r"
-      expect -re ": $"
-      send "\\set PROMPT2 ': '\r"
+    -nobuffer -re {\npsql .*Type "help" for help(.*)[#>] $} {
+      if { [string first "\\set PROMPT1" $interact_out(1,string) ] < 0 } {
+        send "\\set PROMPT1 '%n@%m:%/> '\r"
+        expect -re "> $"
+        send "\\set PROMPT2 '> '\r"
+      }
     }
   }
 }
