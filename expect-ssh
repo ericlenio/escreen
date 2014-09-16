@@ -36,7 +36,7 @@ set HAS_BASH 0
 # TO DO: figure out why screen always translates "\033[9Xm" to
 # "\033[3Xm\033[9Xm" for X=0..9. It won't hurt us here because the 
 # marker is still in the PS1 string.
-set PS1_MARKER {\033[92m:$\033[0m }
+set PS1_MARKER {\033[32m:\033[7m$\033[0m }
 #set PROMPT "($ANSI_RE_TEXT_FORMATTING)*(?::(?:$ANSI_RE_TEXT_FORMATTING))*(#|\\\$)($ANSI_RE_TEXT_FORMATTING)* $"
 set PROMPT "(?:"
 append PROMPT "((?!:)(?:#|\\\$)(?:$ANSI_RE_TEXT_FORMATTING)* $)"
@@ -224,7 +224,7 @@ proc load_mybashprefs {SSH_EXPECT} {
   #append mybashprefs $PS1_MARKER
   #append mybashprefs " '\n"
   set mybashprefs "export MYBASHPREFS_FILE=$mybashprefs_file\n"
-  append mybashprefs {export PS1='${debian_chroot:+($debian_chroot)}\033[1;32m\u@\H\033[0m:\033[1;34m\w}
+  append mybashprefs {export PS1='${debian_chroot:+($debian_chroot)}\033[1;32m\u@\H:\033[0m\033[1;34m\w}
   append mybashprefs $PS1_MARKER
   append mybashprefs "'\n"
   append mybashprefs "export LOAD_MYBASHPREFS_MARKER='" $LOAD_MYBASHPREFS_MARKER "'\n"
