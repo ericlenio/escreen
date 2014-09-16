@@ -868,7 +868,7 @@ if { $env(SSH_EXPECT) > 0 } {
     }
     -nobuffer -re {\npsql .*Type "help" for help.*[#>] $} {
       send "\\set PROMPT1 '%n@%m:%/> '\r"
-      expect -re ": $"
+      expect -re "> $"
       send "\\set PROMPT2 '> '\r"
     }
   }
