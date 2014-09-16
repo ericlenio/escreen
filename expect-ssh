@@ -278,6 +278,16 @@ function download() {
 }
 export -f download
 
+function openssl_show_cert() {
+  local cert=$1
+  if [ -z "$cert" ]; then
+    # assume stdin
+    cert="-"
+  fi
+  openssl x509 -in $cert -noout -text
+}
+export -f openssl_show_cert
+
 function pathadd() {
   if [ -d "$1" ] && [[ ":$PATH:" != *":$1:"* ]]; then
     PATH="${PATH:+"$PATH:"}$1"
@@ -867,9 +877,9 @@ if { $env(SSH_EXPECT) > 0 } {
       }
     }
     -nobuffer -re {\npsql .*Type "help" for help.*[#>] $} {
-      send "\\set PROMPT1 '%n@%m:%/> '\r"
-      expect -re "> $"
-      send "\\set PROMPT2 '> '\r"
+      send "\\set PROMPT1 '%n@%m:%/: '\r"
+      expect -re ": $"
+      send "\\set PROMPT2 ': '\r"
     }
   }
 }
