@@ -627,7 +627,8 @@ export -f ssh
       #send_user "ans=[string length $bashline]\n"
       expect -re $lt_prompt
       incr n [string length $bashline]
-      send_user "$n/$c_len uploaded\n"
+      set precision [string length $c_len]
+      send_user [format "%*d/%*d uploaded\n" $precision $n $precision $c_len]
     }
     send_user "DONE with upload\n"
 
@@ -637,16 +638,23 @@ export -f ssh
   }
   set script [info script]
   # Be paranoid: do another md5 check before sourcing the commands.
-  set warning "WARNING: $script md5 hash check failed."
-  send " \x5b\x5b \"\$(openssl md5 $mybashprefs_file)\" == *$mybashprefs_hash ]] && source $mybashprefs_file || printf '$warning\\n'\r"
+  set warning "WARNING: load_mybashprefs md5 hash check failed."
+  log_user 0
+  send " rhash=\"\$(openssl md5 $mybashprefs_file)\" && rhash=\${rhash##* }\r"
+  expect -re $PROMPT
+  send " \[ \"\$rhash\" = \"$mybashprefs_hash\" ] && source $mybashprefs_file || printf '$warning rhash=%s\\n' \$rhash\r"
   set found_warning ""
   array unset expect_out
   expect {
-    -re "\\r\\n($warning)\\r\\n.*$PROMPT" { set found_warning $expect_out(1,string) }
+    -re "\\r\\n($warning) rhash=(\\w+)\\r\\n.*$PROMPT" {
+      set found_warning $expect_out(1,string)
+      set rhash $expect_out(2,string)
+    }
     -re $PROMPT
   }
   if { [string length $found_warning ] > 0 } {
-    send_user $found_warning\n
+    send_error $found_warning\n
+    send_error "Expected hash $mybashprefs_hash does not match computed hash of $rhash.\n"
   } else {
     log_user 1
     #send " clear && echo 'bash prefs loaded'\r"
