@@ -628,9 +628,9 @@ export -f ssh
       expect -re $lt_prompt
       incr n [string length $bashline]
       set precision [string length $c_len]
-      send_user [format "%*d/%*d uploaded\n" $precision $n $precision $c_len]
+      send_user [format "%*d/%*d uploaded\r" $precision $n $precision $c_len]
     }
-    send_user "DONE with upload\n"
+    send_user "\nDONE with upload\n"
 
     # Note the leading space so it is not saved in bash history
     send " EOF\r)\"\r"
@@ -660,9 +660,10 @@ export -f ssh
     #send " clear && echo 'bash prefs loaded'\r"
     #expect -re $PROMPT
   }
-  send \r
+  send_user "Press ENTER to continue\n"
+  gets stdin c
+  send clear\r
   #send_user "done ($c_len bytes/$count lines).\n"
-  expect -re $PROMPT
 }
 ### END of load_mybashprefs
 
