@@ -213,12 +213,15 @@ proc load_mybashprefs {SSH_EXPECT} {
     send_user "not a bash shell"
     return
   }
-  log_user 1
+  log_user 0
   # verify we are in bash
   send " echo 'test for bash'\r"
   expect {
     -re "\\r\\ntest for bash\\r\\n.*$PROMPT" {}
-    timeout { return }
+    timeout {
+      send_error "timeout in load_mybashprefs while testing for bash\n"
+      return
+    }
   }
   set mybashprefs_file /tmp/.mybashprefs
   set mybashprefs "export MYBASHPREFS_FILE=$mybashprefs_file\n"
@@ -598,15 +601,17 @@ export -f ssh
   send "TMP=\$(history|tail -1|awk '{print \$1}') && history -d \$TMP && HISTCONTROL=ignoreboth && export HISTIGNORE=' *' && unset TMP && export SSH_EXPECT=$SSH_EXPECT\r"
   expect -re $PROMPT
   #exp_internal -f /tmp/log 1
-  send " if test -f $mybashprefs_file; then openssl md5 $mybashprefs_file; else echo 'no file'; fi\r"
+  send " if test -f $mybashprefs_file; then openssl md5 $mybashprefs_file; else echo \"expect-ssh: no file $mybashprefs_file\"; fi\r"
   array unset expect_out
   expect -re "\\r\\n(?:.*?=\\s*)?(\\w.*?)\\r\\n.*(?:$PROMPT)"
   set check_hash [string tolower $expect_out(1,string)]
   #send_user "check_hash=$check_hash"
   #exp_internal 0
   if { $mybashprefs_hash eq $check_hash } {
+    send_user "MD5 hash for $mybashprefs_file is verified: $check_hash\n"
     #send_user "loading $mybashprefs_file ... "
   } else {
+    send_user "uploading $mybashprefs_file ...\n"
     # Note the leading space so it is not saved in bash history
     send " \[ ! -e $mybashprefs_file ] && { touch $mybashprefs_file; chmod 666 $mybashprefs_file; }\r"
     expect -re $PROMPT
@@ -616,11 +621,15 @@ export -f ssh
 
     # split into manageable chunks that will not exceed terminal driver
     # buf size
+    set n 0
     foreach bashline [regexp -all -inline {(?:.{0,254}\n){1,1}} "$c\n"] {
       send "$bashline"
       #send_user "ans=[string length $bashline]\n"
       expect -re $lt_prompt
+      incr n [string length $bashline]
+      send_user "$n/$c_len uploaded\n"
     }
+    send_user "DONE with upload\n"
 
     # Note the leading space so it is not saved in bash history
     send " EOF\r)\"\r"
@@ -643,9 +652,9 @@ export -f ssh
     #send " clear && echo 'bash prefs loaded'\r"
     #expect -re $PROMPT
   }
-  #send \r
+  send \r
   #send_user "done ($c_len bytes/$count lines).\n"
-  #expect -re $PROMPT
+  expect -re $PROMPT
 }
 ### END of load_mybashprefs
 
@@ -736,7 +745,7 @@ proc init_shell {} {
   if { $IS_INITIALIZED > 0 } { return }
   # Initialize the session
   set IS_INITIALIZED 1
-  log_user 1
+  log_user 0
   # test for bash shell
   send "echo =\$BASH=\r"
   expect -re "\\r\\n=(\[/\\w]*)=.*?$PROMPT"
