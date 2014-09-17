@@ -87,7 +87,7 @@ proc copy_to_clipboard {time_of_day} {
       #regsub -all \000 $clipboard_data "\n" clipboard_data
       #regsub -all {\033\[\d+C} $clipboard_data "" clipboard_data
       if { $OS == "Darwin" } {
-        exec sh -c "printf '%s\n' \"\$0\" | openssl enc -base64 -d | gzip -d -c | pbcopy 2>&1" $clipboard_data
+        exec sh -c "printf '%s\n' \"\$0\" | openssl enc -base64 -d | gzip -d -c | pbcopy" $clipboard_data
       } elseif { $OS == "Linux" } {
         exec sh -c "printf '%s\n' \"\$0\" | openssl enc -base64 -d | gzip -d -c | clipit" $clipboard_data
       } else {
@@ -248,14 +248,14 @@ function copy_to_clipboard() {
   local file_to_copy="$1"
   # boundary for expect-ssh to pick up the file:
   printf "%s:%s:" "~copy_to_clipboard" $(get_time_with_millis)
-  if [ -n "$file_to_copy" ]; then
-    # use perl to remove the last \n on the last line
-    perl -pe 'chomp if eof' "$file_to_copy" | gzip -9 -c | openssl enc -base64
-  else
+  if [ -z "$file_to_copy" ]; then
     # copy stdin to clipboard
-    # use perl to remove the last \n on the last line
-    perl -pe 'chomp if eof' -- - | gzip -9 -c | openssl enc -base64
+    file_to_copy="-"
   fi
+  # use perl to remove the last \n on the last line, and minimally set a hyphen
+  # character in the stream so as to not pass 0 bytes to clipit (which causes
+  # it to block)
+  perl -pe 'BEGIN{$n=0;}END{print "-" if $n==0}$n+=length($_);chomp if eof' -- "$file_to_copy" | gzip -9 -c | openssl enc -base64
   # ending boundary
   printf "~%s\n" "copy_to_clipboard_EOF"
 }
