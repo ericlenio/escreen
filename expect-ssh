@@ -112,12 +112,18 @@ proc copy_to_clipboard {time_of_day} {
 }
 
 proc get_download_filename {default_file_name} {
-  global PROMPT
+  global PROMPT OS
   set default_outfile "/tmp/$default_file_name"
   spawn /bin/bash
   set outfile ""
   expect -re $PROMPT
-  send " read -e -i '$default_outfile' -p 'Save downloaded file to: ' ans && echo ans=\$ans\r"
+  if { "$OS" == "Linux" } {
+    send " read -e -i '$default_outfile' -p 'Save downloaded file to: ' ans && echo ans=\$ans\r"
+  } elseif { "$OS" == "Darwin" } {
+    send " read -e -p 'Save downloaded file to: ' ans && echo ans=\$ans\r"
+    expect -ex :
+    send $default_outfile
+  }
   interact {
     -o
     -re "\\nans=(\[^\\r\\n]*).*$PROMPT" {
