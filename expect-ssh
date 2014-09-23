@@ -660,9 +660,9 @@ export -f ssh
     #send " clear && echo 'bash prefs loaded'\r"
     #expect -re $PROMPT
   }
-  send_user "Press ENTER to continue\n"
-  gets stdin c
-  send " clear\r"
+  #send_user "Press ENTER to continue\n"
+  #gets stdin c
+  #send " clear\r"
   #send_user "done ($c_len bytes/$count lines).\n"
 }
 ### END of load_mybashprefs
@@ -695,7 +695,7 @@ proc main_prompt_checker {arr} {
       set loaded($load_mybashprefs_flag(remote_hostname)) $load_mybashprefs_flag(time_of_day)
     }
   }
-  array set load_mybashprefs_flag {}
+  array unset load_mybashprefs_flag
 }
 
 #if {[catch {fconfigure stdin -mode}]} {
