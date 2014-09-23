@@ -40,9 +40,9 @@ set HAS_BASH 0
 set PS1_MARKER {:\033[7m$\033[0m }
 #set PROMPT "($ANSI_RE_TEXT_FORMATTING)*(?::(?:$ANSI_RE_TEXT_FORMATTING))*(#|\\\$)($ANSI_RE_TEXT_FORMATTING)* $"
 set PROMPT "(?:"
-append PROMPT "((?!:)(?:#|\\\$)(?:$ANSI_RE_TEXT_FORMATTING)* $)"
+append PROMPT "((?!:)(?:#|\\\$)(?:$ANSI_RE_TEXT_FORMATTING)* (?:$ANSI_RE_GENERAL)*$)"
 append PROMPT "|"
-append PROMPT "([regsub -all {([\$\[])} $PS1_MARKER [join { {\\} {\1} } {}]])$"
+append PROMPT "([regsub -all {([\$\[])} $PS1_MARKER [join { {\\} {\1} } {}]])(?:$ANSI_RE_GENERAL)*$"
 append PROMPT ")"
 set OS [exec uname -s]
 set LD_SUPPORT_BASIC_AUTH secret
