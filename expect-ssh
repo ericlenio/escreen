@@ -662,7 +662,7 @@ export -f ssh
   }
   send_user "Press ENTER to continue\n"
   gets stdin c
-  send clear\r
+  send " clear\r"
   #send_user "done ($c_len bytes/$count lines).\n"
 }
 ### END of load_mybashprefs
