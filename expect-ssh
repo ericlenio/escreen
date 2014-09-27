@@ -505,7 +505,7 @@ export -f s
 
 function screen_prompt() {
   # use printf instead of echo: works on macs
-  printf "\033k-${HOSTNAME}-\033\134"
+  printf "\033k${HOSTNAME}\033\134"
 }
 export -f screen_prompt
 
