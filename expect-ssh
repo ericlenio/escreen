@@ -241,8 +241,7 @@ proc load_mybashprefs {SSH_EXPECT} {
   append mybashprefs [regsub -all {\\033\[[^a-zA-Z]*[a-zA-Z]} $PS1_MARKER [join { {\[} {\0} {\]} } {}]]
   append mybashprefs "'\n"
   append mybashprefs "export LOAD_MYBASHPREFS_MARKER='" $LOAD_MYBASHPREFS_MARKER "'\n"
-  append mybashprefs "unset PROMPT_COMMAND\n"
-  append mybashprefs {
+  append mybashprefs {unset PROMPT_COMMAND
 export VIM_CLIPBOARD=$EXPECTSSH_TMPDIR/vim.clipboard.$USER
 touch $VIM_CLIPBOARD
 chmod 600 $VIM_CLIPBOARD || {
