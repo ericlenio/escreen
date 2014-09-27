@@ -25,9 +25,11 @@ set ANSI_RE_GENERAL {\u001b\[[^a-zA-Z]*[a-zA-Z]}
 set ANSI_RE_SHOW_CURSOR {\u001b\[\?25h}
 set COPY_TO_CLIPBOARD_BEGIN_RE [join {\n ~ {copy_to_clipboard:([^:]+):} } "" ]
 set LOAD_MYBASHPREFS_MARKER "LOAD_MYBASHPREFS_MARKER"
-set LOAD_MYBASHPREFS_MARKER_RE [join [ list $LOAD_MYBASHPREFS_MARKER {:([^:]+):(\d+\.\d+):(\d+)} ] ""]
+#set LOAD_MYBASHPREFS_MARKER_RE [join [ list $LOAD_MYBASHPREFS_MARKER {:([^:]+):(\d+\.\d+):(\d+)} ] ""]
+set LOAD_MYBASHPREFS_MARKER_RE [join [ list $LOAD_MYBASHPREFS_MARKER {:([\+/=\w]+)} ] ""]
 set DOWNLOAD_FILE_BEGIN_RE [join { ~ {DOWNLOAD_FILE\|([^\|]+)\|([^\|]+)\|} } "" ]
 set HAS_BASH 0
+set EXPECTSSH_TMPDIR /tmp/.expect-ssh
 # PS1_MARKER is a non-regexp marker in the normal PS1 prompt that we search for
 # in certain situations to see if we need to load bash prefs. Watch that it
 # works in regular bash, as well as inside a screen session because screen
@@ -36,13 +38,14 @@ set HAS_BASH 0
 # TO DO: figure out why screen always translates "\033[9Xm" to
 # "\033[3Xm\033[9Xm" for X=0..9. It won't hurt us here because the 
 # marker is still in the PS1 string.
-#set PS1_MARKER {\033[32m:\033[7m$\033[0m }
-set PS1_MARKER {:\033[7m$\033[0m }
+#set PS1_MARKER {:\033[7m$\033[0m }
+set PS1_MARKER {:\033[7m\$\033[0m }
 #set PROMPT "($ANSI_RE_TEXT_FORMATTING)*(?::(?:$ANSI_RE_TEXT_FORMATTING))*(#|\\\$)($ANSI_RE_TEXT_FORMATTING)* $"
 set PROMPT "(?:"
 append PROMPT "((?!:)(?:#|\\\$)(?:$ANSI_RE_TEXT_FORMATTING)* (?:$ANSI_RE_GENERAL)*$)"
 append PROMPT "|"
-append PROMPT "([regsub -all {([\$\[])} $PS1_MARKER [join { {\\} {\1} } {}]])(?:$ANSI_RE_GENERAL)*$"
+#append PROMPT "([regsub -all {([\$\[])} $PS1_MARKER [join { {\\} {\1} } {}]])(?:$ANSI_RE_GENERAL)*$"
+append PROMPT "([regsub -all {([\[])} $PS1_MARKER [join { {\\} {\1} } {}]])(?:$ANSI_RE_GENERAL)*$"
 append PROMPT ")"
 set OS [exec uname -s]
 set LD_SUPPORT_BASIC_AUTH secret
@@ -203,7 +206,7 @@ proc paste_from_clipboard_in_vim {} {
     timeout {send_error "TIMEOUT during paste, aborting"; return}
   }
   # read the file and put it in the unnamed register
-  send {:let @"=join(readfile($VIM_CLIPBOARD),"\n")}
+  send {:let @"=join(readfile($VIM_CLIPBOARD,"b"),"\n")}
   send "\r"
   expect {
     -re $ANSI_RE_SHOW_CURSOR {}
@@ -214,7 +217,7 @@ proc paste_from_clipboard_in_vim {} {
 }
 
 proc load_mybashprefs {SSH_EXPECT} {
-  global PROMPT HAS_BASH ANSI_RE_TEXT_FORMATTING PS1_MARKER LOAD_MYBASHPREFS_MARKER ANSI_RE_GENERAL
+  global PROMPT HAS_BASH ANSI_RE_TEXT_FORMATTING PS1_MARKER LOAD_MYBASHPREFS_MARKER ANSI_RE_GENERAL EXPECTSSH_TMPDIR
   if { $HAS_BASH == 0 } {
     send_user "not a bash shell"
     return
@@ -229,17 +232,18 @@ proc load_mybashprefs {SSH_EXPECT} {
       return
     }
   }
-  set mybashprefs_file /tmp/.mybashprefs
-  set mybashprefs "export MYBASHPREFS_FILE=$mybashprefs_file\n"
+  set mybashprefs_file $EXPECTSSH_TMPDIR/.mybashprefs
+  set mybashprefs "EXPECTSSH_TMPDIR=$EXPECTSSH_TMPDIR\n"
+  append mybashprefs "export MYBASHPREFS_FILE=$mybashprefs_file\n"
   append mybashprefs {export PS1='${debian_chroot:+($debian_chroot)}\u@\H:\[\033[1;32m\]\w}
   # NOTE: all non-printing characters in the prompt must be surrounded with \[ \]
   # otherwise the line spacing gets all weird when typing out long bash commands
   append mybashprefs [regsub -all {\\033\[[^a-zA-Z]*[a-zA-Z]} $PS1_MARKER [join { {\[} {\0} {\]} } {}]]
   append mybashprefs "'\n"
   append mybashprefs "export LOAD_MYBASHPREFS_MARKER='" $LOAD_MYBASHPREFS_MARKER "'\n"
+  append mybashprefs "unset PROMPT_COMMAND\n"
   append mybashprefs {
-unset PROMPT_COMMAND
-export VIM_CLIPBOARD=/tmp/vim.clipboard.$USER
+export VIM_CLIPBOARD=$EXPECTSSH_TMPDIR/vim.clipboard.$USER
 touch $VIM_CLIPBOARD
 chmod 600 $VIM_CLIPBOARD || {
   echo "WARNING: could not chmod on $VIM_CLIPBOARD, halting."
@@ -380,8 +384,11 @@ export -f get_time_with_millis
 
 function signal_load_mybashprefs() {
   # Mac does not support %N in date command, so use perl
-  local time=$(get_time_with_millis)
-  printf "$LOAD_MYBASHPREFS_MARKER:$(hostname):$time:$SSH_EXPECT" > $(tty)
+  local time_of_day=$(get_time_with_millis)
+  # Do an expression that is easily evaluated to a TCL array for args
+  local args=$(printf "remote_hostname %s time_of_day %s SSH_EXPECT_CURR %s PROMPT_COMMAND {%s}" \
+    $(hostname) $time_of_day $SSH_EXPECT "$PROMPT_COMMAND" | gzip -9 -c | openssl enc -base64 -A)
+  printf "%s:%s\n" $LOAD_MYBASHPREFS_MARKER "$args" > $(tty)
 }
 export -f signal_load_mybashprefs
 
@@ -469,8 +476,7 @@ bindkey "\032" stuff "\032"
 #caption always "%{= kw}%-w%{= BW}%n %t%{-}%+w %-= @%H - %LD %d %LM - %c:%s"
 caption always "%{= kw}%-w%{= BW}%n%t%{-}%+w %-= @%H %m/%d %c"
 shelltitle "$ |:"
-# use printf instead of echo: works on macs
-setenv PROMPT_COMMAND 'printf "\033k${HOSTNAME}\033\134"'
+setenv PROMPT_COMMAND 'screen_prompt'
 #shell $shell
 #screen rm $SCREENRC
 EOF
@@ -497,6 +503,12 @@ function s() {
   sudo -H -u $user -- /bin/bash
 }
 export -f s
+
+function screen_prompt() {
+  # use printf instead of echo: works on macs
+  printf "\033k-${HOSTNAME}-\033\134"
+}
+export -f screen_prompt
 
 function get_ldsupport_pw() {
   local app_context=$1
@@ -606,6 +618,8 @@ export -f ssh
   # history, including hiding this next command.
   send "TMP=\$(history|tail -1|awk '{print \$1}') && history -d \$TMP && HISTCONTROL=ignoreboth && export HISTIGNORE=' *' && unset TMP && export SSH_EXPECT=$SSH_EXPECT\r"
   expect -re $PROMPT
+  send " \[ ! -d $EXPECTSSH_TMPDIR ] && { mkdir $EXPECTSSH_TMPDIR; chmod 1777 $EXPECTSSH_TMPDIR; }\r"
+  expect -re $PROMPT
   #exp_internal -f /tmp/log 1
   send " if test -f $mybashprefs_file; then openssl md5 $mybashprefs_file; else echo \"expect-ssh: no file $mybashprefs_file\"; fi\r"
   array unset expect_out
@@ -614,7 +628,7 @@ export -f ssh
   #send_user "check_hash=$check_hash"
   #exp_internal 0
   if { $mybashprefs_hash eq $check_hash } {
-    send_user "MD5 hash for $mybashprefs_file is verified: $check_hash\n"
+    send_user "MD5 hash for $mybashprefs_file is verified: $check_hash"
     #send_user "loading $mybashprefs_file ... "
   } else {
     send_user "uploading $mybashprefs_file ...\n"
@@ -665,6 +679,7 @@ export -f ssh
     log_user 1
     #send " clear && echo 'bash prefs loaded'\r"
     #expect -re $PROMPT
+    send \r
   }
   #send_user "Press ENTER to continue\n"
   #gets stdin c
@@ -687,21 +702,27 @@ proc check_prompt_marker {arr} {
 }
 
 array set loaded {}
-array set load_mybashprefs_flag {}
+array set load_mybashprefs_args {}
 proc main_prompt_checker {arr} {
-  global stdin_buf IS_INITIALIZED interact_out expect_out loaded load_mybashprefs_flag
+  global stdin_buf IS_INITIALIZED interact_out expect_out loaded load_mybashprefs_args PROMPT
   #upvar $arr arr_ref
   set stdin_buf ""
   if { $IS_INITIALIZED == 0 } {
     init_shell
   }
-  if { [array size load_mybashprefs_flag] > 0 } {
+  if { [array size load_mybashprefs_args] > 0 } {
     if { [check_prompt_marker $arr] == 0 } {
-      load_mybashprefs [expr $load_mybashprefs_flag(SSH_EXPECT_CURR) + 1]
-      set loaded($load_mybashprefs_flag(remote_hostname)) $load_mybashprefs_flag(time_of_day)
+      load_mybashprefs [expr $load_mybashprefs_args(SSH_EXPECT_CURR) + 1]
+      if {[info exists load_mybashprefs_args(PROMPT_COMMAND)] > 0 && [string length $load_mybashprefs_args(PROMPT_COMMAND)] > 0 } {
+        send { export PROMPT_COMMAND='}
+        send $load_mybashprefs_args(PROMPT_COMMAND)
+        send "'\r"
+        expect -re $PROMPT
+      }
+      set loaded($load_mybashprefs_args(remote_hostname)) $load_mybashprefs_args(time_of_day)
     }
   }
-  array unset load_mybashprefs_flag
+  array unset load_mybashprefs_args
 }
 
 #if {[catch {fconfigure stdin -mode}]} {
@@ -903,14 +924,10 @@ if { $env(SSH_EXPECT) > 0 } {
       # localhost uname" should NOT trigger loading bash prefs, but "ssh
       # localhost" should.
       #
-      set remote_hostname $interact_out(1,string)
-      set time_of_day $interact_out(2,string)
-      set SSH_EXPECT_CURR $interact_out(3,string)
-      if { [info exists loaded($remote_hostname)] == 0 || $time_of_day > $loaded($remote_hostname) } {
+      array set load_mybashprefs_args [exec sh -c "printf '%s\n' \"\$0\" | openssl enc -base64 -d -A | gzip -d -c" $interact_out(1,string)]
+
+      if { [info exists loaded($load_mybashprefs_args(remote_hostname))] == 0 || $load_mybashprefs_args(time_of_day) > $loaded($load_mybashprefs_args(remote_hostname)) } {
         array unset expect_out
-        set load_mybashprefs_flag(remote_hostname) $remote_hostname
-        set load_mybashprefs_flag(time_of_day) $time_of_day
-        set load_mybashprefs_flag(SSH_EXPECT_CURR) $SSH_EXPECT_CURR
       }
     }
     -nobuffer -re {\npsql .*Type "help" for help(.*)[#>] $} {
