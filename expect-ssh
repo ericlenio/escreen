@@ -26,7 +26,7 @@ set ANSI_RE_SHOW_CURSOR {\u001b\[\?25h}
 set COPY_TO_CLIPBOARD_BEGIN_RE [join {\n ~ {copy_to_clipboard:([^:]+):} } "" ]
 set LOAD_MYBASHPREFS_MARKER "LOAD_MYBASHPREFS_MARKER"
 #set LOAD_MYBASHPREFS_MARKER_RE [join [ list $LOAD_MYBASHPREFS_MARKER {:([^:]+):(\d+\.\d+):(\d+)} ] ""]
-set LOAD_MYBASHPREFS_MARKER_RE [join [ list $LOAD_MYBASHPREFS_MARKER {:([\+/=\w]+)} ] ""]
+set LOAD_MYBASHPREFS_MARKER_RE [join [ list $LOAD_MYBASHPREFS_MARKER {:\r\n([^:]+):} ] ""]
 set DOWNLOAD_FILE_BEGIN_RE [join { ~ {DOWNLOAD_FILE\|([^\|]+)\|([^\|]+)\|} } "" ]
 set HAS_BASH 0
 set EXPECTSSH_TMPDIR /tmp/.expect-ssh
@@ -386,8 +386,8 @@ function signal_load_mybashprefs() {
   local time_of_day=$(get_time_with_millis)
   # Do an expression that is easily evaluated to a TCL array for args
   local args=$(printf "remote_hostname %s time_of_day %s SSH_EXPECT_CURR %s PROMPT_COMMAND {%s}" \
-    $(hostname) $time_of_day $SSH_EXPECT "$PROMPT_COMMAND" | gzip -9 -c | openssl enc -base64 -A)
-  printf "%s:%s\n" $LOAD_MYBASHPREFS_MARKER "$args" > $(tty)
+    $(hostname) $time_of_day $SSH_EXPECT "$PROMPT_COMMAND" | gzip -9 -c | openssl enc -base64)
+  printf "%s:\n%s:\n" $LOAD_MYBASHPREFS_MARKER "$args" > $(tty)
 }
 export -f signal_load_mybashprefs
 
@@ -664,6 +664,7 @@ export -f ssh
   send " \[ \"\$rhash\" = \"$mybashprefs_hash\" ] && source $mybashprefs_file || printf '$warning rhash=%s\\n' \$rhash\r"
   set found_warning ""
   array unset expect_out
+  set rc OK
   expect {
     -re "\\r\\n($warning) rhash=(\\w+)\\r\\n.*$PROMPT" {
       set found_warning $expect_out(1,string)
@@ -674,6 +675,7 @@ export -f ssh
   if { [string length $found_warning ] > 0 } {
     send_error $found_warning\n
     send_error "Expected hash $mybashprefs_hash does not match computed hash of $rhash.\n"
+    set rc "NOT OK"
   } else {
     log_user 1
     #send " clear && echo 'bash prefs loaded'\r"
@@ -684,6 +686,7 @@ export -f ssh
   #gets stdin c
   #send " clear\r"
   #send_user "done ($c_len bytes/$count lines).\n"
+  return $rc
 }
 ### END of load_mybashprefs
 
@@ -711,12 +714,14 @@ proc main_prompt_checker {arr} {
   }
   if { [array size load_mybashprefs_args] > 0 } {
     if { [check_prompt_marker $arr] == 0 } {
-      load_mybashprefs [expr $load_mybashprefs_args(SSH_EXPECT_CURR) + 1]
-      if {[info exists load_mybashprefs_args(PROMPT_COMMAND)] > 0 && [string length $load_mybashprefs_args(PROMPT_COMMAND)] > 0 } {
-        send { export PROMPT_COMMAND='}
-        send $load_mybashprefs_args(PROMPT_COMMAND)
-        send "'\r"
-        expect -re $PROMPT
+      set rc [load_mybashprefs [expr $load_mybashprefs_args(SSH_EXPECT_CURR) + 1]]
+      if { $rc == "OK" } {
+        if {[info exists load_mybashprefs_args(PROMPT_COMMAND)] > 0 && [string length $load_mybashprefs_args(PROMPT_COMMAND)] > 0 } {
+          send { export PROMPT_COMMAND='}
+          send $load_mybashprefs_args(PROMPT_COMMAND)
+          send "'\r"
+          expect -re $PROMPT
+        }
       }
       set loaded($load_mybashprefs_args(remote_hostname)) $load_mybashprefs_args(time_of_day)
     }
@@ -923,10 +928,11 @@ if { $env(SSH_EXPECT) > 0 } {
       # localhost uname" should NOT trigger loading bash prefs, but "ssh
       # localhost" should.
       #
-      array set load_mybashprefs_args [exec sh -c "printf '%s\n' \"\$0\" | openssl enc -base64 -d -A | gzip -d -c" $interact_out(1,string)]
-
+      array set load_mybashprefs_args [exec sh -c "printf '%s\n' \"\$0\" | openssl enc -base64 -d | gzip -d -c" $interact_out(1,string)]
       if { [info exists loaded($load_mybashprefs_args(remote_hostname))] == 0 || $load_mybashprefs_args(time_of_day) > $loaded($load_mybashprefs_args(remote_hostname)) } {
         array unset expect_out
+      } else {
+        array unset load_mybashprefs_args
       }
     }
     -nobuffer -re {\npsql .*Type "help" for help(.*)[#>] $} {
