@@ -24,9 +24,9 @@ set ANSI_RE_CURSOR_POSITIONING {\u001b\\\[\d+;\d+[Hf]}
 set ANSI_RE_GENERAL {\u001b\[[^a-zA-Z]*[a-zA-Z]}
 set ANSI_RE_SHOW_CURSOR {\u001b\[\?25h}
 set COPY_TO_CLIPBOARD_BEGIN_RE [join {\n ~ {copy_to_clipboard:([^:]+):} } "" ]
-set LOAD_MYBASHPREFS_MARKER "LOAD_MYBASHPREFS_MARKER"
+set LOAD_MYBASHPREFS_MARKER "~@01:"
 #set LOAD_MYBASHPREFS_MARKER_RE [join [ list $LOAD_MYBASHPREFS_MARKER {:([^:]+):(\d+\.\d+):(\d+)} ] ""]
-set LOAD_MYBASHPREFS_MARKER_RE [join [ list $LOAD_MYBASHPREFS_MARKER {:\r\n([^:]+):} ] ""]
+#set LOAD_MYBASHPREFS_MARKER_RE [join [ list $LOAD_MYBASHPREFS_MARKER {:\r\n([^:]+):} ] ""]
 set DOWNLOAD_FILE_BEGIN_RE [join { ~ {DOWNLOAD_FILE\|([^\|]+)\|([^\|]+)\|} } "" ]
 set HAS_BASH 0
 set EXPECTSSH_TMPDIR /tmp/.expect-ssh
@@ -90,9 +90,9 @@ proc copy_to_clipboard {time_of_day} {
       #regsub -all \000 $clipboard_data "\n" clipboard_data
       #regsub -all {\033\[\d+C} $clipboard_data "" clipboard_data
       if { $OS == "Darwin" } {
-        exec sh -c "printf '%s\n' \"\$0\" | openssl enc -base64 -d | gzip -d -c | pbcopy" $clipboard_data
+        exec sh -c "printf '%s\n' \"\$0\" | /usr/bin/openssl enc -base64 -d | gzip -d -c | pbcopy" $clipboard_data
       } elseif { $OS == "Linux" } {
-        exec sh -c "printf '%s\n' \"\$0\" | openssl enc -base64 -d | gzip -d -c | clipit" $clipboard_data
+        exec sh -c "printf '%s\n' \"\$0\" | /usr/bin/openssl enc -base64 -d | gzip -d -c | clipit" $clipboard_data
       } else {
         send_user "copy_to_clipboard: need handling for $OS"
         return
@@ -161,7 +161,7 @@ proc download {default_file_name time_of_day} {
   expect {
     -re "(.*)(?:\[\\r\\n](?:$ANSI_RE_GENERAL)*|^)~DOWNLOAD_FILE_EOF" {
       append data $expect_out(1,string)
-      exec sh -c "printf '%s\n' \"\$0\" | openssl enc -base64 -d | gzip -d -c > $outfile && chmod 600 $outfile" $data
+      exec sh -c "printf '%s\n' \"\$0\" | /usr/bin/openssl enc -base64 -d | gzip -d -c > $outfile && chmod 600 $outfile" $data
       set l [file size $outfile]
       puts "downloaded to $outfile, $l bytes"
       return $l
@@ -187,12 +187,12 @@ proc paste_from_clipboard_in_vim {} {
   # encode the clipboard data and send it across the wire, decoding it on the
   # other end, and store it in the VIM_CLIPBOARD file.
   # Leading space before cat so as to not save it to history
-  send " cat << EOF | openssl enc -base64 -d | gzip -d -c > \$VIM_CLIPBOARD\r"
+  send " cat << EOF | /usr/bin/openssl enc -base64 -d | gzip -d -c > \$VIM_CLIPBOARD\r"
   expect -re "> $"
   if { "$OS" == "Linux" } {
-    set buf [exec clipit -c | gzip -9 -c | openssl enc -base64]
+    set buf [exec clipit -c | gzip -9 -c | /usr/bin/openssl enc -base64]
   } elseif { "$OS" == "Darwin" } {
-    set buf [exec pbpaste | gzip -9 -c | openssl enc -base64]
+    set buf [exec pbpaste | gzip -9 -c | /usr/bin/openssl enc -base64]
   }
   foreach line [split $buf] {
     send $line\r
@@ -216,22 +216,22 @@ proc paste_from_clipboard_in_vim {} {
   send "P"
 }
 
-proc load_mybashprefs {SSH_EXPECT} {
+proc load_mybashprefs {SSH_EXPECT {skip_tests 0}} {
   global PROMPT HAS_BASH ANSI_RE_TEXT_FORMATTING PS1_MARKER LOAD_MYBASHPREFS_MARKER ANSI_RE_GENERAL EXPECTSSH_TMPDIR
   if { $HAS_BASH == 0 } {
     send_user "not a bash shell"
     return
   }
-  log_user 0
+  log_user 1
   # verify we are in bash
-  send " echo 'test for bash'\r"
-  expect {
-    -re "\\r\\ntest for bash\\r\\n.*$PROMPT" {}
-    timeout {
-      send_error "timeout in load_mybashprefs while testing for bash\n"
-      return
-    }
-  }
+  #send " echo 'test for bash'\r"
+  #expect {
+    #-re "\ntest for bash\r.*$PROMPT" {}
+    #timeout {
+      #send_error "timeout in load_mybashprefs while testing for bash\n"
+      #return
+    #}
+  #}
   set mybashprefs_file $EXPECTSSH_TMPDIR/.mybashprefs
   set mybashprefs "EXPECTSSH_TMPDIR=$EXPECTSSH_TMPDIR\n"
   append mybashprefs "export MYBASHPREFS_FILE=$mybashprefs_file\n"
@@ -242,6 +242,7 @@ proc load_mybashprefs {SSH_EXPECT} {
   append mybashprefs "'\n"
   append mybashprefs "export LOAD_MYBASHPREFS_MARKER='" $LOAD_MYBASHPREFS_MARKER "'\n"
   append mybashprefs {unset PROMPT_COMMAND
+export HISTIGNORE=' *'
 export VIM_CLIPBOARD=$EXPECTSSH_TMPDIR/vim.clipboard.$USER
 touch $VIM_CLIPBOARD
 chmod 600 $VIM_CLIPBOARD || {
@@ -376,18 +377,19 @@ function pg_terminate_backend() {
 export -f pg_terminate_backend
 
 function get_time_with_millis() {
+  # Mac does not support %N in date command, so use perl
   local time=$(perl -MTime::HiRes -e "printf(qq(%.3f\n),Time::HiRes::time())")
   echo -n $time
 }
 export -f get_time_with_millis
 
 function signal_load_mybashprefs() {
-  # Mac does not support %N in date command, so use perl
+  local extra_params="$@"
   local time_of_day=$(get_time_with_millis)
   # Do an expression that is easily evaluated to a TCL array for args
-  local args=$(printf "remote_hostname %s time_of_day %s SSH_EXPECT_CURR %s PROMPT_COMMAND {%s}" \
-    $(hostname) $time_of_day $SSH_EXPECT "$PROMPT_COMMAND" | gzip -9 -c | openssl enc -base64)
-  printf "%s:\n%s:\n" $LOAD_MYBASHPREFS_MARKER "$args" > $(tty)
+  local args=$(printf "remote_hostname %s time_of_day %s SSH_EXPECT_CURR %s PROMPT_COMMAND {%s} %s" \
+    $(hostname) $time_of_day $SSH_EXPECT "$PROMPT_COMMAND" "$extra_params" | gzip -9 -c | openssl enc -base64)
+  printf "%s\n%s:\n" $LOAD_MYBASHPREFS_MARKER "$args" > $(tty)
 }
 export -f signal_load_mybashprefs
 
@@ -498,7 +500,7 @@ function s() {
     user=root
   fi
   id -u "$user" >/dev/null 2>&1 || { echo "No such user \"$user\"."; return; }
-  signal_load_mybashprefs
+  signal_load_mybashprefs skip_tests 1
   sudo -H -u $user -- /bin/bash
 }
 export -f s
@@ -605,7 +607,7 @@ export -f ssh
   # using openssl's base64 for mac/linux compatibility; use grep to filter out
   # comment lines
   #set c [exec "bash" "-c" "echo \"\$0\" | grep -v -E '^\\s*#' | gzip -9 --stdout | openssl base64" $mybashprefs]
-  set c [exec "bash" "-c" "echo \"\$0\" | gzip -9 --stdout | openssl enc -base64" $mybashprefs]
+  set c [exec "bash" "-c" "echo \"\$0\" | gzip -9 --stdout | /usr/bin/openssl enc -base64" $mybashprefs]
   # append \n to $mybashprefs make the md5 comparison work
   set mybashprefs_hash [string tolower [md5::md5 -hex $mybashprefs\n]]
   set c_len [string length $c]
@@ -615,34 +617,37 @@ export -f ssh
 
   # Set HISTIGNORE to not save commands that begin with a space in bash
   # history, including hiding this next command.
-  send "TMP=\$(history|tail -1|awk '{print \$1}') && history -d \$TMP && HISTCONTROL=ignoreboth && export HISTIGNORE=' *' && unset TMP && export SSH_EXPECT=$SSH_EXPECT\r"
-  expect -re $PROMPT
-  send " \[ ! -d $EXPECTSSH_TMPDIR ] && { mkdir $EXPECTSSH_TMPDIR; chmod 1777 $EXPECTSSH_TMPDIR; }\r"
-  expect -re $PROMPT
+  if { $skip_tests == 0 } {
+    send "TMP=\$(history|tail -1|awk '{print \$1}') && history -d \$TMP && HISTCONTROL=ignoreboth && export HISTIGNORE=' *' && unset TMP && export SSH_EXPECT=$SSH_EXPECT\r"
+    expect -re $PROMPT
+    send " \[ ! -d $EXPECTSSH_TMPDIR ] && { mkdir $EXPECTSSH_TMPDIR; chmod 1777 $EXPECTSSH_TMPDIR; }\r"
+    expect -re $PROMPT
+  }
   #exp_internal -f /tmp/log 1
-  send " if test -f $mybashprefs_file; then openssl md5 $mybashprefs_file; else echo \"expect-ssh: no file $mybashprefs_file\"; fi\r"
+  send " if \[ -f $mybashprefs_file ]; then /usr/bin/openssl md5 $mybashprefs_file; else echo \"expect-ssh: no file $mybashprefs_file\"; fi\r"
   array unset expect_out
   expect -re "\\r\\n(?:.*?=\\s*)?(\\w.*?)\\r\\n.*(?:$PROMPT)"
   set check_hash [string tolower $expect_out(1,string)]
   #send_user "check_hash=$check_hash"
   #exp_internal 0
   if { $mybashprefs_hash eq $check_hash } {
-    send_user "MD5 hash for $mybashprefs_file is verified: $check_hash"
+    #send_user "MD5 hash for $mybashprefs_file is verified: $check_hash"
     #send_user "loading $mybashprefs_file ... "
   } else {
-    send_user "uploading $mybashprefs_file ...\n"
+    #send_user "uploading $mybashprefs_file ...\n"
     # Note the leading space so it is not saved in bash history
     send " \[ ! -e $mybashprefs_file ] && { touch $mybashprefs_file; chmod 666 $mybashprefs_file; }\r"
     expect -re $PROMPT
-    send " eval \"\$(openssl enc -base64 -d << ' EOF' | gzip -d | tee $mybashprefs_file >/dev/null\r"
+    send " /usr/bin/openssl enc -base64 -d << EOF | gzip -d | tee $mybashprefs_file >/dev/null\r"
     set lt_prompt "> (?:$ANSI_RE_TEXT_FORMATTING)*$"
     expect -re $lt_prompt
 
     # split into manageable chunks that will not exceed terminal driver
     # buf size
-    set n 0
+    set n -1 
+    log_user 0
     foreach bashline [regexp -all -inline {(?:.{0,254}\n){1,1}} "$c\n"] {
-      send "$bashline"
+      send $bashline
       #send_user "ans=[string length $bashline]\n"
       expect -re $lt_prompt
       incr n [string length $bashline]
@@ -651,15 +656,14 @@ export -f ssh
     }
     send_user "\nDONE with upload\n"
 
-    # Note the leading space so it is not saved in bash history
-    send " EOF\r)\"\r"
-    expect -re "$PROMPT"
+    send "EOF\r"
+    log_user 1
+    expect -re $PROMPT
   }
-  set script [info script]
   # Be paranoid: do another md5 check before sourcing the commands.
   set warning "WARNING: load_mybashprefs md5 hash check failed."
-  log_user 0
-  send " rhash=\"\$(openssl md5 $mybashprefs_file)\" && rhash=\${rhash##* }\r"
+  log_user 1
+  send " rhash=\"\$(/usr/bin/openssl md5 $mybashprefs_file)\" && rhash=\${rhash##* }\r"
   expect -re $PROMPT
   send " \[ \"\$rhash\" = \"$mybashprefs_hash\" ] && source $mybashprefs_file || printf '$warning rhash=%s\\n' \$rhash\r"
   set found_warning ""
@@ -680,7 +684,8 @@ export -f ssh
     log_user 1
     #send " clear && echo 'bash prefs loaded'\r"
     #expect -re $PROMPT
-    send \r
+    #send \r
+    #expect -re $PROMPT
   }
   #send_user "Press ENTER to continue\n"
   #gets stdin c
@@ -691,6 +696,7 @@ export -f ssh
 ### END of load_mybashprefs
 
 set is_marker_prompt 0
+# See if the custom prompt is in effect
 proc check_prompt_marker {arr} {
   global is_marker_prompt PS1_MARKER
   upvar $arr arr_ref
@@ -714,12 +720,10 @@ proc main_prompt_checker {arr} {
   }
   if { [array size load_mybashprefs_args] > 0 } {
     if { [check_prompt_marker $arr] == 0 } {
-      set rc [load_mybashprefs [expr $load_mybashprefs_args(SSH_EXPECT_CURR) + 1]]
+      set rc [load_mybashprefs [expr $load_mybashprefs_args(SSH_EXPECT_CURR) + 1] [info exists load_mybashprefs_args(skip_tests)]]
       if { $rc == "OK" } {
         if {[info exists load_mybashprefs_args(PROMPT_COMMAND)] > 0 && [string length $load_mybashprefs_args(PROMPT_COMMAND)] > 0 } {
-          send { export PROMPT_COMMAND='}
-          send $load_mybashprefs_args(PROMPT_COMMAND)
-          send "'\r"
+          send " export PROMPT_COMMAND='$load_mybashprefs_args(PROMPT_COMMAND)'\r\n"
           expect -re $PROMPT
         }
       }
@@ -886,6 +890,9 @@ if { $env(SSH_EXPECT) > 0 } {
   }
 } else {
   interact {
+    # "If two or more patterns can match the same output, only one action will
+    # be executed. The action corresponds to the pattern that appears first in
+    # the command."
     -re "." { process_keystroke $interact_out(0,string) }
     # "All the patterns before the -o apply to the user keystrokes. All the
     # patterns after the -o apply to the spawned process."
@@ -912,6 +919,22 @@ if { $env(SSH_EXPECT) > 0 } {
         #-re {has changed since editing started.*\(L\)oad File: $} {}
       #}
     #}
+    -nobuffer -re \n$LOAD_MYBASHPREFS_MARKER {
+      #
+      # We have a request to load bash prefs into the current shell, but we
+      # only do that under certain conditions below. For example, "ssh
+      # localhost uname" should NOT trigger loading bash prefs, but "ssh
+      # localhost" should.
+      #
+      expect -re "\n(\[^:]+):" {
+        array set load_mybashprefs_args [exec sh -c "printf '%s\n' \"\$0\" | /usr/bin/openssl enc -base64 -d | gzip -d -c" $expect_out(1,string)]
+        if { [info exists loaded($load_mybashprefs_args(remote_hostname))] == 0 || $load_mybashprefs_args(time_of_day) > $loaded($load_mybashprefs_args(remote_hostname)) } {
+          array unset expect_out
+        } else {
+          array unset load_mybashprefs_args
+        }
+      }
+    }
     -nobuffer -re [join { ~ paste_from_clipboard_in_vim} ""] {
       paste_from_clipboard_in_vim
     }
@@ -921,27 +944,13 @@ if { $env(SSH_EXPECT) > 0 } {
       set time_of_day $interact_out(3,string)
       process_ldsupport_request $ld_url $enc_pass $time_of_day
     }
-    -nobuffer -re $LOAD_MYBASHPREFS_MARKER_RE {
-      #
-      # We have a request to load bash prefs into the current shell, but we
-      # only do that under certain conditions below. For example, "ssh
-      # localhost uname" should NOT trigger loading bash prefs, but "ssh
-      # localhost" should.
-      #
-      array set load_mybashprefs_args [exec sh -c "printf '%s\n' \"\$0\" | openssl enc -base64 -d | gzip -d -c" $interact_out(1,string)]
-      if { [info exists loaded($load_mybashprefs_args(remote_hostname))] == 0 || $load_mybashprefs_args(time_of_day) > $loaded($load_mybashprefs_args(remote_hostname)) } {
-        array unset expect_out
-      } else {
-        array unset load_mybashprefs_args
-      }
-    }
-    -nobuffer -re {\npsql .*Type "help" for help(.*)[#>] $} {
-      if { [string first "\\set PROMPT1" $interact_out(1,string) ] < 0 } {
-        send "\\set PROMPT1 '%n@%m:%/> '\r"
-        expect -re "> $"
-        send "\\set PROMPT2 '> '\r"
-      }
-    }
+    #-nobuffer -re {\npsql .*Type "help" for help(.*)[#>] $} {
+      #if { [string first "\\set PROMPT1" $interact_out(1,string) ] < 0 } {
+        #send "\\set PROMPT1 '%n@%m:%/> '\r"
+        #expect -re "> $"
+        #send "\\set PROMPT2 '> '\r"
+      #}
+    #}
   }
 }
 EXPECT_EOF
