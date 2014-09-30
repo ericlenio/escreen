@@ -28,7 +28,6 @@ set LOAD_MYBASHPREFS_MARKER "~@01:"
 #set LOAD_MYBASHPREFS_MARKER_RE [join [ list $LOAD_MYBASHPREFS_MARKER {:([^:]+):(\d+\.\d+):(\d+)} ] ""]
 #set LOAD_MYBASHPREFS_MARKER_RE [join [ list $LOAD_MYBASHPREFS_MARKER {:\r\n([^:]+):} ] ""]
 set DOWNLOAD_FILE_BEGIN_RE [join { ~ {DOWNLOAD_FILE\|([^\|]+)\|([^\|]+)\|} } "" ]
-set HAS_BASH 0
 set EXPECTSSH_TMPDIR /tmp/.expect-ssh
 # PS1_MARKER is a non-regexp marker in the normal PS1 prompt that we search for
 # in certain situations to see if we need to load bash prefs. Watch that it
@@ -61,7 +60,6 @@ if {[info exists env(SSH_EXPECT)] == 1} {
   set env(SSH_EXPECT) 0
 }
 
-set IS_INITIALIZED 0
 set CTRL_Z \032
 set LOGFILE "/tmp/ssh.log"
 match_max 10000
@@ -216,12 +214,8 @@ proc paste_from_clipboard_in_vim {} {
   send "P"
 }
 
-proc load_mybashprefs {SSH_EXPECT {skip_tests 0}} {
-  global PROMPT HAS_BASH ANSI_RE_TEXT_FORMATTING PS1_MARKER LOAD_MYBASHPREFS_MARKER ANSI_RE_GENERAL EXPECTSSH_TMPDIR
-  if { $HAS_BASH == 0 } {
-    send_user "not a bash shell"
-    return
-  }
+proc load_mybashprefs {SSH_EXPECT {level 0}} {
+  global PROMPT ANSI_RE_TEXT_FORMATTING PS1_MARKER LOAD_MYBASHPREFS_MARKER ANSI_RE_GENERAL EXPECTSSH_TMPDIR MYBASHPREFS_PASSWORD
   log_user 1
   # verify we are in bash
   #send " echo 'test for bash'\r"
@@ -500,7 +494,7 @@ function s() {
     user=root
   fi
   id -u "$user" >/dev/null 2>&1 || { echo "No such user \"$user\"."; return; }
-  signal_load_mybashprefs skip_tests 1
+  signal_load_mybashprefs
   sudo -H -u $user -- /bin/bash
 }
 export -f s
@@ -595,7 +589,6 @@ function ssh() {
   return $?
 }
 export -f ssh
-
 }
   #exp_internal -f /tmp/log 0
 
@@ -607,94 +600,64 @@ export -f ssh
   # MAX_INPUT
   # "getconf -a|grep MAX_INPUT" may help determine this value
   #
-  # using openssl's base64 for mac/linux compatibility; use grep to filter out
-  # comment lines
-  #set c [exec "bash" "-c" "echo \"\$0\" | grep -v -E '^\\s*#' | gzip -9 --stdout | openssl base64" $mybashprefs]
-  set c [exec "bash" "-c" "echo \"\$0\" | gzip -9 --stdout | /usr/bin/openssl enc -base64" $mybashprefs]
-  # append \n to $mybashprefs make the md5 comparison work
-  set mybashprefs_hash [string tolower [md5::md5 -hex $mybashprefs\n]]
-  set c_len [string length $c]
-  #send_user "mybashprefs_hash=$mybashprefs_hash,len=[string length $mybashprefs]"
-  #send "eval \"\$(base64 --decode << EOF | gzip -d\r$c\rEOF\r)\"\r"
-  #expect -re "$PROMPT"
+  set mybashprefs_hash [string tolower [md5::md5 -hex $mybashprefs]]
+  # Combine my password with md5 hash for the password to encrypt the data,
+  # with the md5 in the password we can trigger a re-upload of bash prefs
+  # should they change.
+  set pass "$MYBASHPREFS_PASSWORD-$mybashprefs_hash"
+  send " c=\"\$(openssl enc -a -d -aes256 -in $mybashprefs_file)\" && eval \"\$c\"; unset c\r"
+  expect {
+    -re "password:$" {
+      send $pass\r
+      exp_continue
+    }
+    -re "(?:bad magic number|error reading input file|No such file or directory).*$PROMPT" {
+      if { $level > 0 } {
+        return "NOT OK"
+      }
+      send "TMP=\$(history|tail -1|awk '{print \$1}') && history -d \$TMP && HISTCONTROL=ignoreboth && export HISTIGNORE=' *' && unset TMP\r"
+      expect -re $PROMPT
+      send " \[ ! -d $EXPECTSSH_TMPDIR ] && { mkdir $EXPECTSSH_TMPDIR; chmod 1777 $EXPECTSSH_TMPDIR; }\r"
+      expect -re $PROMPT
+      #send_user "uploading $mybashprefs_file ...\n"
+      # Note the leading space so it is not saved in bash history
+      send " \[ ! -e $mybashprefs_file ] && { touch $mybashprefs_file; chmod 666 $mybashprefs_file; }\r"
+      expect -re $PROMPT
+      send " openssl enc -d -base64 << EOF | gzip -d -c | openssl enc -a -aes256 -out $mybashprefs_file\r"
+      set lt_prompt "> (?:$ANSI_RE_TEXT_FORMATTING)*$"
+      expect -re $lt_prompt
 
-  # Set HISTIGNORE to not save commands that begin with a space in bash
-  # history, including hiding this next command.
-  if { $skip_tests == 0 } {
-    send "TMP=\$(history|tail -1|awk '{print \$1}') && history -d \$TMP && HISTCONTROL=ignoreboth && export HISTIGNORE=' *' && unset TMP && export SSH_EXPECT=$SSH_EXPECT\r"
-    expect -re $PROMPT
-    send " \[ ! -d $EXPECTSSH_TMPDIR ] && { mkdir $EXPECTSSH_TMPDIR; chmod 1777 $EXPECTSSH_TMPDIR; }\r"
-    expect -re $PROMPT
+      # split into manageable chunks that will not exceed terminal driver
+      # buf size
+      set n -1 
+      log_user 0
+      set mybashprefs_enc [exec "bash" "-c" "echo -n \"\$0\" | gzip -9 -c | openssl enc -base64" $mybashprefs]
+      set c_len [string length $mybashprefs_enc]
+      foreach line [regexp -all -inline {(?:.{0,254}\n){1,1}} "$mybashprefs_enc\n"] {
+        send $line
+        #send_user "ans=[string length $line]\n"
+        expect -re $lt_prompt
+        incr n [string length $line]
+        set precision [string length $c_len]
+        send_user [format "%*d/%*d uploaded\r" $precision $n $precision $c_len]
+      }
+      send_user "\nDONE with upload\n"
+
+      send "EOF\r"
+      log_user 1
+      expect -re password:
+      send $pass\r
+      expect -re password:
+      send $pass\r
+      expect -re $PROMPT
+      return [load_mybashprefs $SSH_EXPECT 1]
+    }
+    -ex "bad decrypt" { return "NOT OK" }
+    -re $PROMPT {}
+    timeout { send_error "TIMEOUT in proc load_mybashprefs"; return "NOT OK" }
   }
   #exp_internal -f /tmp/log 1
-  send " if \[ -f $mybashprefs_file ]; then /usr/bin/openssl md5 $mybashprefs_file; else echo \"expect-ssh: no file $mybashprefs_file\"; fi\r"
-  array unset expect_out
-  expect -re "\\r\\n(?:.*?=\\s*)?(\\w.*?)\\r\\n.*(?:$PROMPT)"
-  set check_hash [string tolower $expect_out(1,string)]
-  #send_user "check_hash=$check_hash"
-  #exp_internal 0
-  if { $mybashprefs_hash eq $check_hash } {
-    #send_user "MD5 hash for $mybashprefs_file is verified: $check_hash"
-    #send_user "loading $mybashprefs_file ... "
-  } else {
-    #send_user "uploading $mybashprefs_file ...\n"
-    # Note the leading space so it is not saved in bash history
-    send " \[ ! -e $mybashprefs_file ] && { touch $mybashprefs_file; chmod 666 $mybashprefs_file; }\r"
-    expect -re $PROMPT
-    send " /usr/bin/openssl enc -base64 -d << EOF | gzip -d | tee $mybashprefs_file >/dev/null\r"
-    set lt_prompt "> (?:$ANSI_RE_TEXT_FORMATTING)*$"
-    expect -re $lt_prompt
-
-    # split into manageable chunks that will not exceed terminal driver
-    # buf size
-    set n -1 
-    log_user 0
-    foreach bashline [regexp -all -inline {(?:.{0,254}\n){1,1}} "$c\n"] {
-      send $bashline
-      #send_user "ans=[string length $bashline]\n"
-      expect -re $lt_prompt
-      incr n [string length $bashline]
-      set precision [string length $c_len]
-      send_user [format "%*d/%*d uploaded\r" $precision $n $precision $c_len]
-    }
-    send_user "\nDONE with upload\n"
-
-    send "EOF\r"
-    log_user 1
-    expect -re $PROMPT
-  }
-  # Be paranoid: do another md5 check before sourcing the commands.
-  set warning "WARNING: load_mybashprefs md5 hash check failed."
-  log_user 1
-  send " rhash=\"\$(/usr/bin/openssl md5 $mybashprefs_file)\" && rhash=\${rhash##* }\r"
-  expect -re $PROMPT
-  send " \[ \"\$rhash\" = \"$mybashprefs_hash\" ] && source $mybashprefs_file || printf '$warning rhash=%s\\n' \$rhash\r"
-  set found_warning ""
-  array unset expect_out
-  set rc OK
-  expect {
-    -re "\\r\\n($warning) rhash=(\\w+)\\r\\n.*$PROMPT" {
-      set found_warning $expect_out(1,string)
-      set rhash $expect_out(2,string)
-    }
-    -re $PROMPT
-  }
-  if { [string length $found_warning ] > 0 } {
-    send_error $found_warning\n
-    send_error "Expected hash $mybashprefs_hash does not match computed hash of $rhash.\n"
-    set rc "NOT OK"
-  } else {
-    log_user 1
-    #send " clear && echo 'bash prefs loaded'\r"
-    #expect -re $PROMPT
-    #send \r
-    #expect -re $PROMPT
-  }
-  #send_user "Press ENTER to continue\n"
-  #gets stdin c
-  #send " clear\r"
-  #send_user "done ($c_len bytes/$count lines).\n"
-  return $rc
+  return "OK"
 }
 ### END of load_mybashprefs
 
@@ -715,15 +678,12 @@ proc check_prompt_marker {arr} {
 array set loaded {}
 array set load_mybashprefs_args {}
 proc main_prompt_checker {arr} {
-  global stdin_buf IS_INITIALIZED interact_out expect_out loaded load_mybashprefs_args PROMPT
+  global stdin_buf interact_out expect_out loaded load_mybashprefs_args PROMPT
   #upvar $arr arr_ref
   set stdin_buf ""
-  if { $IS_INITIALIZED == 0 } {
-    init_shell
-  }
   if { [array size load_mybashprefs_args] > 0 } {
     if { [check_prompt_marker $arr] == 0 } {
-      set rc [load_mybashprefs [expr $load_mybashprefs_args(SSH_EXPECT_CURR) + 1] [info exists load_mybashprefs_args(skip_tests)]]
+      set rc [load_mybashprefs [expr $load_mybashprefs_args(SSH_EXPECT_CURR) + 1]]
       if { $rc == "OK" } {
         if {[info exists load_mybashprefs_args(PROMPT_COMMAND)] > 0 && [string length $load_mybashprefs_args(PROMPT_COMMAND)] > 0 } {
           send " export PROMPT_COMMAND='$load_mybashprefs_args(PROMPT_COMMAND)'\r\n"
@@ -772,42 +732,10 @@ foreach arg $argv {
     lappend argv2 "$arg"
   }
 }
-if { $local_shell_only == 1 } {
-  eval [list spawn -noecho] /bin/bash
-} else {
-  eval [list spawn -noecho] /usr/bin/ssh $argv2
-}
-# spawn command above will set spawn_out
-set spawn_out_slave_name $spawn_out(slave,name)
-
 
 trap {
   resize_handler
 } WINCH
-# force-resize: needed if on Mac in terminal full screen mode
-resize_handler
-
-proc init_shell {} {
-  global IS_INITIALIZED PROMPT HAS_BASH stdin_buf env
-  if { $IS_INITIALIZED > 0 } { return }
-  # Initialize the session
-  set IS_INITIALIZED 1
-  log_user 0
-  # test for bash shell
-  send "echo =\$BASH=\r"
-  expect -re "\\r\\n=(\[/\\w]*)=.*?$PROMPT"
-  if { [string length $expect_out(1,string)] > 0 } {
-    set HAS_BASH 1
-    # Set HISTIGNORE to not save commands that begin with a space in bash
-    # history, including hiding this next command, and the previous echo
-    # command that was used to test for $BASH.
-    send "TMP=\$(history|tail -1|awk '{print \$1}') && history -d \$TMP && history -d \$((\$TMP-1)) && HISTCONTROL=ignoreboth && HISTIGNORE=' *' && unset TMP\r"
-    expect -re $PROMPT
-  }
-
-  log_user 1
-  load_mybashprefs $env(SSH_EXPECT)
-}
 
 proc process_keystroke {c} {
   # monitor keyboard input for ~i immediately following a bash prompt, and load
@@ -880,6 +808,17 @@ proc process_ldsupport_request {ld_url enc_pass time_of_day} {
     send_error "ERROR: could not read ldsupport password: further info: $ld_support_pw"
   }
 }
+
+if { $local_shell_only == 1 } {
+  eval [list spawn -noecho] /bin/bash
+} else {
+  eval [list spawn -noecho] /usr/bin/ssh $argv2
+}
+# spawn command above will set spawn_out
+set spawn_out_slave_name $spawn_out(slave,name)
+# force-resize: needed if on Mac in terminal full screen mode
+resize_handler
+load_mybashprefs $env(SSH_EXPECT)
 
 if { $env(SSH_EXPECT) > 0 } {
   # the caller of this script is already a session of this script ... just
