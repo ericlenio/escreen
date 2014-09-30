@@ -378,11 +378,10 @@ function get_time_with_millis() {
 export -f get_time_with_millis
 
 function signal_load_mybashprefs() {
-  local extra_params="$@"
   local time_of_day=$(get_time_with_millis)
   # Do an expression that is easily evaluated to a TCL array for args
-  local args=$(printf "remote_hostname %s time_of_day %s SSH_EXPECT_CURR %s PROMPT_COMMAND {%s} %s" \
-    $(hostname) $time_of_day $SSH_EXPECT "$PROMPT_COMMAND" "$extra_params" | gzip -9 -c | openssl enc -base64)
+  local args=$(printf "remote_hostname %s time_of_day %s SSH_EXPECT_CURR %s PROMPT_COMMAND {%s}" \
+    $(hostname) $time_of_day $SSH_EXPECT "$PROMPT_COMMAND" | gzip -9 -c | openssl enc -base64)
   printf "%s\n%s:\n" $LOAD_MYBASHPREFS_MARKER "$args" > $(tty)
 }
 export -f signal_load_mybashprefs
@@ -605,13 +604,13 @@ export -f ssh
   # with the md5 in the password we can trigger a re-upload of bash prefs
   # should they change.
   set pass "$MYBASHPREFS_PASSWORD-$mybashprefs_hash"
-  send " c=\"\$(openssl enc -a -d -aes256 -in $mybashprefs_file)\" && eval \"\$c\"; unset c\r"
+  send " c=\"\$(openssl enc -a -d -aes256 -in $mybashprefs_file)\" && eval \"\$c\"; unset c; export SSH_EXPECT=$SSH_EXPECT\r"
   expect {
     -re "password:$" {
       send $pass\r
       exp_continue
     }
-    -re "(?:bad magic number|error reading input file|No such file or directory).*$PROMPT" {
+    -re "(?:bad decrypt|bad magic number|error reading input file|No such file or directory).*$PROMPT" {
       if { $level > 0 } {
         return "NOT OK"
       }
@@ -652,7 +651,6 @@ export -f ssh
       expect -re $PROMPT
       return [load_mybashprefs $SSH_EXPECT 1]
     }
-    -ex "bad decrypt" { return "NOT OK" }
     -re $PROMPT {}
     timeout { send_error "TIMEOUT in proc load_mybashprefs"; return "NOT OK" }
   }
