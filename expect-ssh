@@ -429,15 +429,8 @@ function tomcatlog() {
     esac
   done
   if [ "$op" = "edit" ]; then
-    # old sudo construct
-    #sudo -E -H -u $tomcat_user -- /bin/bash -c 'false
-#eval "$(base64 --decode << EOF
-#'"$(declare -f vim |base64)"'
-#EOF
-#)"
-
-    # unset DISPLAY to avoid "No protocol specified" warning from vim
-    sudo -E -H -u $tomcat_user -- /bin/bash -c "source $MYBASHPREFS_FILE && unset DISPLAY && vim -n -i NONE $logfile"
+    signal_load_mybashprefs
+    sudo -E -H -u $tomcat_user -- /bin/bash -c "unset DISPLAY && vim -n -i NONE $logfile"
   elif [ "$op" = "clear" ]; then
     sudo truncate --no-create --size 0 $logfile
     echo "$logfile was truncated."
