@@ -3,7 +3,7 @@
 #
 # Drop in replacement script for ssh. Run with -help to see arguments.
 
-if [ ! -t 0 ]; then
+if [ ! -t 0 -o -n "$SSH_EXPECT" ]; then
   exec /usr/bin/ssh "$@"
 fi
 
@@ -664,7 +664,7 @@ export -f ssh
     }
     -re $PROMPT {
       # sometimes the prompt can be detected BEFORE we have had a chance to get
-      # to openssl's password prompt
+      # to openssl's password prompt ...
       if { $password_was_entered == 0 } { exp_continue }
     }
     timeout { send_error "TIMEOUT in proc load_mybashprefs"; return "NOT OK" }
