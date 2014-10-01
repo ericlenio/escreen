@@ -1,7 +1,7 @@
 #!/bin/bash
 # vim:filetype=expect
-#
-# Drop in replacement script for ssh. Run with -help to see arguments.
+# Drop in replacement script for ssh, with helpful integrations to use bash,
+# sudo, screen, and vim more effectively. Run with -help to see arguments.
 
 if [ ! -t 0 -o -n "$SSH_EXPECT" ]; then
   exec /usr/bin/ssh "$@"
