@@ -593,7 +593,8 @@ export -f ssh
 
   # unset $c, set below
   append mybashprefs "unset c\n"
-  # set SSH_EXPECT, this must be the last part of mybashprefs
+  # set SSH_EXPECT, this must be the last part of mybashprefs, as we paste the
+  # value for SSH_EXPECT below in the send statement
   append mybashprefs "export SSH_EXPECT="
 
   #exp_internal -f /tmp/log 0
@@ -604,18 +605,13 @@ export -f ssh
   # with the md5 in the password we can trigger a re-upload of bash prefs
   # should they change.
   set pass "$MYBASHPREFS_PASSWORD-$mybashprefs_hash"
-  send " c=\"\$(openssl enc -a -d -aes256 -in $mybashprefs_file)\" && eval \"\${c}$SSH_EXPECT\n\"\r"
+  send " c=\"\$(openssl enc -a -d -aes256 -in $mybashprefs_file)\" && eval \"\${c}$SSH_EXPECT\"\r"
   set password_was_entered 0
   expect {
     -re "password:$" {
       send $pass\r
       set password_was_entered 1
       exp_continue
-    }
-    -re $PROMPT {
-      # sometimes the prompt can be detected BEFORE we have had a chance to get
-      # to openssl's password prompt
-      if { $password_was_entered == 0 } { exp_continue }
     }
     -re "(?:bad decrypt|bad magic number|error reading input file|No such file or directory).*$PROMPT" {
       if { $nest_level > 0 } {
@@ -665,6 +661,11 @@ export -f ssh
       send $pass\r
       expect -re $PROMPT
       return [load_mybashprefs $SSH_EXPECT 1]
+    }
+    -re $PROMPT {
+      # sometimes the prompt can be detected BEFORE we have had a chance to get
+      # to openssl's password prompt
+      if { $password_was_entered == 0 } { exp_continue }
     }
     timeout { send_error "TIMEOUT in proc load_mybashprefs"; return "NOT OK" }
   }
