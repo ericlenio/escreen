@@ -214,7 +214,7 @@ proc paste_from_clipboard_in_vim {} {
   send "P"
 }
 
-proc load_mybashprefs {SSH_EXPECT {level 0}} {
+proc load_mybashprefs {SSH_EXPECT {nest_level 0}} {
   global PROMPT ANSI_RE_TEXT_FORMATTING PS1_MARKER LOAD_MYBASHPREFS_MARKER ANSI_RE_GENERAL EXPECTSSH_TMPDIR MYBASHPREFS_PASSWORD
   log_user 1
   # verify we are in bash
@@ -588,32 +588,47 @@ function ssh() {
   return $?
 }
 export -f ssh
+
 }
+
+  # unset $c, set below
+  append mybashprefs "unset c\n"
+  # set SSH_EXPECT, this must be the last part of mybashprefs
+  append mybashprefs "export SSH_EXPECT="
+
   #exp_internal -f /tmp/log 0
 
-  # compress all the bash commands, base64 encode, pass over the wire, base64
-  # decode, and uncompress and eval on the remote end ...  but watch out if
-  # this base64 string exceeds 4096 bytes (1024 for mac) which seems to be the
-  # terminal driver limit (http://expect.sourceforge.net/FAQ.html#q76)
-  # "terminal input queue" "typeahead buffer"
-  # MAX_INPUT
-  # "getconf -a|grep MAX_INPUT" may help determine this value
   #
   set mybashprefs_hash [string tolower [md5::md5 -hex $mybashprefs]]
   # Combine my password with md5 hash for the password to encrypt the data,
   # with the md5 in the password we can trigger a re-upload of bash prefs
   # should they change.
   set pass "$MYBASHPREFS_PASSWORD-$mybashprefs_hash"
-  send " c=\"\$(openssl enc -a -d -aes256 -in $mybashprefs_file)\" && eval \"\$c\"; unset c; export SSH_EXPECT=$SSH_EXPECT\r"
+  send " c=\"\$(openssl enc -a -d -aes256 -in $mybashprefs_file)\" && eval \"\${c}$SSH_EXPECT\n\"\r"
+  set password_was_entered 0
   expect {
     -re "password:$" {
       send $pass\r
+      set password_was_entered 1
       exp_continue
     }
+    -re $PROMPT {
+      # sometimes the prompt can be detected BEFORE we have had a chance to get
+      # to openssl's password prompt
+      if { $password_was_entered == 0 } { exp_continue }
+    }
     -re "(?:bad decrypt|bad magic number|error reading input file|No such file or directory).*$PROMPT" {
-      if { $level > 0 } {
+      if { $nest_level > 0 } {
+        # do not get in recursive loop attempting to upload + write out bash prefs
         return "NOT OK"
       }
+      # compress all the bash commands, base64 encode, pass over the wire,
+      # base64 decode, uncompress, then encrypt + base64 encode and write to
+      # disk ... but watch out if this base64 string exceeds 4096 bytes (1024
+      # for mac) which seems to be the terminal driver limit
+      # (http://expect.sourceforge.net/FAQ.html#q76) "terminal input queue"
+      # "typeahead buffer" MAX_INPUT
+      # "getconf -a|grep MAX_INPUT" may help determine this value
       send "TMP=\$(history|tail -1|awk '{print \$1}') && history -d \$TMP && HISTCONTROL=ignoreboth && export HISTIGNORE=' *' && unset TMP\r"
       expect -re $PROMPT
       send " \[ ! -d $EXPECTSSH_TMPDIR ] && { mkdir $EXPECTSSH_TMPDIR; chmod 1777 $EXPECTSSH_TMPDIR; }\r"
@@ -651,7 +666,6 @@ export -f ssh
       expect -re $PROMPT
       return [load_mybashprefs $SSH_EXPECT 1]
     }
-    -re $PROMPT {}
     timeout { send_error "TIMEOUT in proc load_mybashprefs"; return "NOT OK" }
   }
   #exp_internal -f /tmp/log 1
