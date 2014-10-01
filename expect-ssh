@@ -7,7 +7,11 @@ if [ ! -t 0 -o -n "$SSH_EXPECT" ]; then
   exec /usr/bin/ssh "$@"
 fi
 
-export EXP_FILE=/tmp/ssh.expect.$USER
+export EXPECTSSH_TMPDIR=/tmp/.expect-ssh
+export EXP_FILE=$EXPECTSSH_TMPDIR/ssh.expect.$USER
+
+[ ! -d $EXPECTSSH_TMPDIR ] && { mkdir $EXPECTSSH_TMPDIR; chmod 1777 $EXPECTSSH_TMPDIR; }
+
 cat > $EXP_FILE << 'EXPECT_EOF' && exec /usr/bin/expect -c "set EXEC $(basename $0)" -f $EXP_FILE -- "$@"
 # apt-get install tcllib
 package require md5
@@ -28,7 +32,7 @@ set LOAD_MYBASHPREFS_MARKER "~@01:"
 #set LOAD_MYBASHPREFS_MARKER_RE [join [ list $LOAD_MYBASHPREFS_MARKER {:([^:]+):(\d+\.\d+):(\d+)} ] ""]
 #set LOAD_MYBASHPREFS_MARKER_RE [join [ list $LOAD_MYBASHPREFS_MARKER {:\r\n([^:]+):} ] ""]
 set DOWNLOAD_FILE_BEGIN_RE [join { ~ {DOWNLOAD_FILE\|([^\|]+)\|([^\|]+)\|} } "" ]
-set EXPECTSSH_TMPDIR /tmp/.expect-ssh
+set EXPECTSSH_TMPDIR $env(EXPECTSSH_TMPDIR)
 # PS1_MARKER is a non-regexp marker in the normal PS1 prompt that we search for
 # in certain situations to see if we need to load bash prefs. Watch that it
 # works in regular bash, as well as inside a screen session because screen
@@ -227,7 +231,7 @@ proc load_mybashprefs {SSH_EXPECT {nest_level 0}} {
     #}
   #}
   set mybashprefs_file $EXPECTSSH_TMPDIR/.mybashprefs
-  set mybashprefs "EXPECTSSH_TMPDIR=$EXPECTSSH_TMPDIR\n"
+  set mybashprefs "export EXPECTSSH_TMPDIR=$EXPECTSSH_TMPDIR\n"
   append mybashprefs "export MYBASHPREFS_FILE=$mybashprefs_file\n"
   append mybashprefs {export PS1='${debian_chroot:+($debian_chroot)}\u@\H:\[\033[1;32m\]\w}
   # NOTE: all non-printing characters in the prompt must be surrounded with \[ \]
@@ -446,13 +450,13 @@ function tomcatlog() {
 export -f tomcatlog
 
 function screen() {
-  local shell=/tmp/.bash.screen.$USER
+  local shell=$EXPECTSSH_TMPDIR/.bash.screen.$USER
   #printf 'exec /bin/bash --norc --noprofile "$@"\n' > $shell
   # why exec bash via perl here? because Mac OSX bash will munge PS1 otherwise
   printf '#!/usr/bin/perl\n' > $shell
   printf 'exec qw(/bin/bash --norc --noprofile),@ARGV;\n' >> $shell
   chmod 755 $shell
-  local SCREENRC=/tmp/.screenrc.$USER
+  local SCREENRC=$EXPECTSSH_TMPDIR/.screenrc.$USER
   # Set up a little macro so that ^a% will dump the current screen to a file,
   # then edit it in vim.
   local printscreen_macro=/tmp/.screenrc.$USER.printscreen
@@ -461,7 +465,6 @@ function screen() {
   export SCREENRC
   cat > $SCREENRC << 'EOF'
 startup_message off
-escape ^ee
 bind " " windowlist -b
 vbell on
 vbell_msg DING
@@ -483,7 +486,11 @@ hardcopy $hardcopy_file
 screen vim $hardcopy_file
 EOF
 
-  /usr/bin/screen -s $shell "$@"
+  local esc='^Ee'
+  if [ "$SSH_EXPECT" = 0 ]; then
+    esc='^Aa'
+  fi
+  /usr/bin/screen -e$esc -s $shell "$@"
 }
 export -f screen
 
