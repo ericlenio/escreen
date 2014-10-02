@@ -452,8 +452,8 @@ function screen() {
   local SCREENRC=$EXPECTSSH_TMPDIR/.screenrc.$USER
   # Set up a little macro so that ^a% will dump the current screen to a file,
   # then edit it in vim.
-  local printscreen_macro=/tmp/.screenrc.$USER.printscreen
-  local hardcopy_file=/tmp/.screenrc.$USER.hardcopy
+  local printscreen_macro=$EXPECTSSH_TMPDIR/.screenrc.$USER.printscreen
+  local hardcopy_file=$EXPECTSSH_TMPDIR/.screenrc.$USER.hardcopy
   touch $SCREENRC
   export SCREENRC
   cat > $SCREENRC << 'EOF'
