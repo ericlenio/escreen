@@ -448,13 +448,14 @@ function screen() {
   # why exec bash via perl here? because Mac OSX bash will munge PS1 otherwise
   printf '#!/usr/bin/perl\n' > $shell
   printf 'exec qw(/bin/bash --norc --noprofile),@ARGV;\n' >> $shell
-  chmod 755 $shell
+  chmod 700 $shell
   local SCREENRC=$EXPECTSSH_TMPDIR/.screenrc.$USER
   # Set up a little macro so that ^a% will dump the current screen to a file,
   # then edit it in vim.
   local printscreen_macro=$EXPECTSSH_TMPDIR/.screenrc.$USER.printscreen
   local hardcopy_file=$EXPECTSSH_TMPDIR/.screenrc.$USER.hardcopy
-  touch $SCREENRC
+  touch $SCREENRC $printscreen_macro $hardcopy_file
+  chmod 600 $SCREENRC $printscreen_macro $hardcopy_file
   export SCREENRC
   cat > $SCREENRC << 'EOF'
 startup_message off
