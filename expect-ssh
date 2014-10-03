@@ -444,13 +444,13 @@ function tomcatlog() {
 export -f tomcatlog
 
 function screen() {
-  # see if -r was passed, if so just invoke screen with the current arg list "as is"
+  # see if -r or -R was passed, if so just invoke screen with the current arg list "as is"
   local origArgs=("$@")
-  local OPTS=$(getopt -q -o dDrR -- "$@")
+  local OPTS=$(getopt -q -o rR -- "$@")
   eval set -- "$OPTS"
   while true; do
     case "$1" in
-      -r) /usr/bin/screen "${origArgs[@]}"; return ;;
+      -r|-R) /usr/bin/screen "${origArgs[@]}"; return ;;
       --) shift; break ;;
       *) shift ;;
     esac
