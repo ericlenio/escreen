@@ -163,7 +163,7 @@ proc download {default_file_name time_of_day} {
   expect {
     -re "(.*)(?:\[\\r\\n](?:$ANSI_RE_GENERAL)*|^)~DOWNLOAD_FILE_EOF" {
       append data $expect_out(1,string)
-      exec sh -c "printf '%s\n' \"\$0\" | /usr/bin/openssl enc -base64 -d | gzip -d -c > $outfile && chmod 600 $outfile" $data
+      exec sh -c "printf '%s\n' \"\$0\" | /usr/bin/openssl enc -base64 -d | gzip -d -c > '$outfile' && chmod 600 '$outfile'" $data
       set l [file size $outfile]
       puts "downloaded to $outfile, $l bytes"
       return $l
@@ -276,16 +276,17 @@ function download() {
     echo "Error: no such file: $file"
     return
   fi
-  printf "%s|%s|%s|" "~DOWNLOAD_FILE" $(basename $file) $(get_time_with_millis)
+  local locfile=$(basename "$file")
+  printf "%s|%s|%s|" "~DOWNLOAD_FILE" "$locfile" $(get_time_with_millis)
   local ans
   # Only continue if a valid download filename was picked in get_download_filename
   read -p "Continue? " ans
   if [ "$ans" != y ]; then
     return
   fi
-  gzip -9 -c $file | openssl enc -base64
+  gzip -9 -c "$file" | openssl enc -base64
   # ending boundary
-  printf "~%s:%s\n" "DOWNLOAD_FILE_EOF" $file
+  printf "~%s:%s\n" "DOWNLOAD_FILE_EOF" "$file"
 }
 export -f download
 
