@@ -444,6 +444,18 @@ function tomcatlog() {
 export -f tomcatlog
 
 function screen() {
+  # see if -r was passed, if so just invoke screen with the current arg list "as is"
+  local origArgs=("$@")
+  local OPTS=$(getopt -q -o dDrR -- "$@")
+  eval set -- "$OPTS"
+  while true; do
+    case "$1" in
+      -r) /usr/bin/screen "${origArgs[@]}"; return ;;
+      --) shift; break ;;
+      *) shift ;;
+    esac
+  done
+
   local shell=$EXPECTSSH_TMPDIR/.bash.screen.$USER
   #printf 'exec /bin/bash --norc --noprofile "$@"\n' > $shell
   # why exec bash via perl here? because Mac OSX bash will munge PS1 otherwise
@@ -485,7 +497,7 @@ EOF
   if [ "$SSH_EXPECT" = 0 ]; then
     esc='^Aa'
   fi
-  /usr/bin/screen -e$esc -s $shell "$@"
+  /usr/bin/screen -e$esc -s $shell "${origArgs[@]}"
 }
 export -f screen
 
