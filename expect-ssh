@@ -33,6 +33,8 @@ set GENERIC_MARKER "~@(\[0-9]\[0-9]):"
 array set MARKER {
   LOAD_MYBASHPREFS 01
   COPY_TO_CLIPBOARD 02
+  DOWNLOAD_DEFAULT_FILE 03
+  DOWNLOAD_DATA 04
 }
 
 proc get_marker {marker_type} {
@@ -42,7 +44,9 @@ proc get_marker {marker_type} {
 
 set LOAD_MYBASHPREFS_MARKER [get_marker LOAD_MYBASHPREFS]
 set COPY_TO_CLIPBOARD_MARKER [get_marker COPY_TO_CLIPBOARD]
-set DOWNLOAD_FILE_BEGIN_RE [join { ~ {DOWNLOAD_FILE\|([^\|]+)\|([^\|]+)\|} } "" ]
+set DOWNLOAD_DEFAULT_FILE_MARKER [get_marker DOWNLOAD_DEFAULT_FILE]
+set DOWNLOAD_DATA_MARKER [get_marker DOWNLOAD_DATA]
+
 set EXPECTSSH_TMPDIR $env(EXPECTSSH_TMPDIR)
 # PS1_MARKER is a non-regexp marker in the normal PS1 prompt that we search for
 # in certain situations to see if we need to load bash prefs. Watch that it
@@ -115,6 +119,8 @@ proc get_download_filename {default_file_name} {
     send " read -e -p 'Save downloaded file to: ' ans && echo ans=\$ans\r"
     expect -ex :
     send $default_outfile
+  } else {
+    send_error "get_download_filename: need support for OS=$OS"
   }
   interact {
     -o
@@ -126,46 +132,12 @@ proc get_download_filename {default_file_name} {
   return $outfile
 }
 
-array set download_processed {}
-proc download {default_file_name time_of_day} {
-  global PROMPT OS ANSI_RE_GENERAL download_processed
-  if { [info exists download_processed($time_of_day)] == 1} {
-    # This download request was already processed
-    return
-  }
-  set download_processed($time_of_day) 1
-  set outfile [get_download_filename $default_file_name]
-  if { $outfile == "" } {
-    # discontinue downloading
-    send "NO\r"
-    return
-  } else {
-    send "y\r"
-    expect -ex \n
-  }
-
-  set data ""
-  set max_clipboard_data_len 1000000
+proc download {outfile encoded_data} {
   log_user 1
-  expect {
-    -re "(.*)(?:\[\\r\\n](?:$ANSI_RE_GENERAL)*|^)~DOWNLOAD_FILE_EOF" {
-      append data $expect_out(1,string)
-      exec sh -c "printf '%s\n' \"\$0\" | /usr/bin/openssl enc -base64 -d | gzip -d -c > '$outfile' && chmod 600 '$outfile'" $data
-      set l [file size $outfile]
-      puts "downloaded to $outfile, $l bytes"
-      return $l
-    }
-    -re "(.{1,255})" {
-      append data $expect_out(1,string)
-      if { [string length $data] > $max_clipboard_data_len } {
-        # safety net: probably something is wrong
-        send_user "MAX LENGTH EXCEEDED ($max_clipboard_data_len) for download"
-      } else {
-        exp_continue
-      }
-    }
-    timeout { send_user "download: timeout waiting for file!!" }
-  }
+  exec sh -c "printf '%s\n' \"\$0\" | /usr/bin/openssl enc -base64 -d | gzip -d -c > '$outfile' && chmod 600 '$outfile'" $encoded_data
+  set l [file size $outfile]
+  puts "downloaded to $outfile, $l bytes"
+  return $l
   log_user 1
 }
 
@@ -207,7 +179,7 @@ proc paste_from_clipboard_in_vim {} {
 
 proc load_mybashprefs {SSH_EXPECT {nest_level 0}} {
   global PROMPT ANSI_RE_TEXT_FORMATTING PS1_MARKER ANSI_RE_GENERAL EXPECTSSH_TMPDIR MYBASHPREFS_PASSWORD
-  global LOAD_MYBASHPREFS_MARKER COPY_TO_CLIPBOARD_MARKER
+  global LOAD_MYBASHPREFS_MARKER COPY_TO_CLIPBOARD_MARKER DOWNLOAD_DEFAULT_FILE_MARKER DOWNLOAD_DATA_MARKER
   log_user 1
   # verify we are in bash
   #send " echo 'test for bash'\r"
@@ -243,15 +215,39 @@ proc load_mybashprefs {SSH_EXPECT {nest_level 0}} {
   # minimally set a hyphen character in the stream so as to not pass 0 bytes to
   # clipit (which causes it to block)
   append mybashprefs {local file_to_copy="$1"
-printf "%s\010.\n" "$marker"
-if [ -z "$file_to_copy" ]; then
-  file_to_copy="-"
-fi
-perl -pe 'BEGIN{$n=0;}END{print "-" if $n==0}$n+=length($_);chomp if eof' -- "$file_to_copy" | gzip -9 -c | openssl enc -base64
-printf ".\n" "copy_to_clipboard_EOF"
-}
+    printf "%s\010.\n" "$marker"
+    if [ -z "$file_to_copy" ]; then
+      file_to_copy="-"
+    fi
+    perl -pe 'BEGIN{$n=0;}END{print "-" if $n==0}$n+=length($_);chomp if eof' -- "$file_to_copy" | gzip -9 -c | openssl enc -base64
+    printf ".\n" "copy_to_clipboard_EOF"
+  }
   append mybashprefs "}\n"
   append mybashprefs "export -f copy_to_clipboard\n"
+
+  append mybashprefs "function download() { local marker1=$DOWNLOAD_DEFAULT_FILE_MARKER\n"
+  append mybashprefs "local marker2=$DOWNLOAD_DATA_MARKER\n"
+  append mybashprefs {local file="$1"
+    if [ ! -e "$file" ]; then
+      echo "Error: no such file: $file"
+      return
+    fi
+    local locfile=$(basename "$file")
+    local args=$(printf "default_file_name {%s}" "$locfile" | gzip -9 -c | openssl enc -base64)
+    printf "%s\010.\n%s.\n" "$marker1" "$args"
+    local ans
+    # Only continue if a valid download filename was picked in get_download_filename
+    read -p "Continue? " ans
+    if [ "$ans" != y ]; then
+      return
+    fi
+    printf "%s\010.\n" "$marker2"
+    gzip -9 -c "$file" | openssl enc -base64
+    printf ".\n"
+  }
+  append mybashprefs "}\n"
+  append mybashprefs "export -f download\n"
+
   
   append mybashprefs {unset PROMPT_COMMAND
 export HISTIGNORE=' *'
@@ -265,27 +261,6 @@ chmod 600 $VIM_CLIPBOARD || {
 export VIMINIT='map <c-v> :echon "~" "paste_from_clipboard_in_vim"<cr>|vnoremap <C-c> y:call writefile(split(@","\n","b"),$VIM_CLIPBOARD)<cr>:!copy_to_clipboard $VIM_CLIPBOARD<cr>|colorscheme elflord|syntax enable|set noswapfile number hlsearch incsearch sw=2 ignorecase wrap nocompatible ruler ai showmatch modeline modelines=5 nobackup nowritebackup textwidth=0 expandtab formatoptions=croql wildignore=*.class path=.,,**|autocmd Filetype java setlocal omnifunc=javacomplete#Complete'
 export EDITOR=/usr/bin/vim
 export FCEDIT=$EDITOR
-
-function download() {
-  local file="$1"
-  # boundary for expect-ssh to pick up the file:
-  if [ ! -e "$file" ]; then
-    echo "Error: no such file: $file"
-    return
-  fi
-  local locfile=$(basename "$file")
-  printf "%s|%s|%s|" "~DOWNLOAD_FILE" "$locfile" $(get_time_with_millis)
-  local ans
-  # Only continue if a valid download filename was picked in get_download_filename
-  read -p "Continue? " ans
-  if [ "$ans" != y ]; then
-    return
-  fi
-  gzip -9 -c "$file" | openssl enc -base64
-  # ending boundary
-  printf "~%s:%s\n" "DOWNLOAD_FILE_EOF" "$file"
-}
-export -f download
 
 function openssl_show_cert() {
   local cert=$1
@@ -854,9 +829,6 @@ if { $env(SSH_EXPECT) > 0 } {
     -o
     -nobuffer -re $PROMPT { main_prompt_checker interact_out }
     #
-    -nobuffer -re $DOWNLOAD_FILE_BEGIN_RE {
-      download $interact_out(1,string) $interact_out(2,string)
-    }
     #-re {(?:^|[\r\n](?:$ANSI_RE_GENERAL)*)~copy_to_clipboard_in_vim[^\w].*} {
       #send ":!copy_to_clipboard \$VIM_CLIPBOARD\r"
       #expect -re $COPY_TO_CLIPBOARD_BEGIN_RE
@@ -894,6 +866,18 @@ if { $env(SSH_EXPECT) > 0 } {
 	array set load_mybashprefs_args [exec sh -c "printf '%s\n' \"\$0\" | /usr/bin/openssl enc -base64 -d | gzip -d -c" $encoded_args]
       } elseif { $marker_type == $MARKER(COPY_TO_CLIPBOARD) } {
 	copy_to_clipboard $encoded_args
+      } elseif { $marker_type == $MARKER(DOWNLOAD_DEFAULT_FILE) } {
+	array set args [exec sh -c "printf '%s\n' \"\$0\" | /usr/bin/openssl enc -base64 -d | gzip -d -c" $encoded_args]
+	set outfile [get_download_filename $args(default_file_name)]
+	if { $outfile == "" } {
+	  # discontinue downloading
+	  send "NO\r"
+	} else {
+	  send "y\r"
+	  expect -ex \n
+	}
+      } elseif { $marker_type == $MARKER(DOWNLOAD_DATA) } {
+	download $outfile $encoded_args
       }
     }
     -nobuffer -re [join { ~ paste_from_clipboard_in_vim} ""] {
