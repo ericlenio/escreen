@@ -3,7 +3,7 @@
 # Drop in replacement script for ssh, with helpful integrations to use bash,
 # sudo, screen, and vim more effectively. Run with -help to see arguments.
 
-if [ ! -t 0 -o -n "$SSH_EXPECT" ]; then
+if [ ! -t 0 -o -n "$EXPECT_SSH" ]; then
   exec /usr/bin/ssh "$@"
 fi
 
@@ -73,10 +73,10 @@ if {[file exists $rcfile]} {
   source $rcfile
 }
 
-if {[info exists env(SSH_EXPECT)] == 1} {
-  set env(SSH_EXPECT) [expr $env(SSH_EXPECT) + 1]
+if {[info exists env(EXPECT_SSH)] == 1} {
+  set env(EXPECT_SSH) [expr $env(EXPECT_SSH) + 1]
 } else {
-  set env(SSH_EXPECT) 0
+  set env(EXPECT_SSH) 0
 }
 
 set CTRL_Z \032
@@ -177,7 +177,7 @@ proc paste_from_clipboard_in_vim {} {
   send "P"
 }
 
-proc load_mybashprefs {SSH_EXPECT {nest_level 0}} {
+proc load_mybashprefs {EXPECT_SSH {nest_level 0}} {
   global PROMPT ANSI_RE_TEXT_FORMATTING PS1_MARKER ANSI_RE_GENERAL EXPECTSSH_TMPDIR MYBASHPREFS_PASSWORD
   global LOAD_MYBASHPREFS_MARKER COPY_TO_CLIPBOARD_MARKER DOWNLOAD_DEFAULT_FILE_MARKER DOWNLOAD_DATA_MARKER
   log_user 1
@@ -201,7 +201,7 @@ proc load_mybashprefs {SSH_EXPECT {nest_level 0}} {
   # signal_load_mybashprefs:
   # Do an expression that is easily evaluated to a TCL array for args;
   append mybashprefs "function signal_load_mybashprefs() { local marker=$LOAD_MYBASHPREFS_MARKER\n"
-  append mybashprefs {local args=$(printf "SSH_EXPECT_CURR %s PROMPT_COMMAND {%s}" $SSH_EXPECT "$PROMPT_COMMAND" | gzip -9 -c | openssl enc -base64)}
+  append mybashprefs {local args=$(printf "EXPECT_SSH %s PROMPT_COMMAND {%s}" $EXPECT_SSH "$PROMPT_COMMAND" | gzip -9 -c | openssl enc -base64)}
   append mybashprefs "\n"
   # pass a \010 (backspace) character to erase last character of the pattern so
   # that expect only processes this signal 1 time ... else when inside screen
@@ -457,7 +457,7 @@ screen vim $hardcopy_file
 EOF
 
   local esc='^Ee'
-  if [ "$SSH_EXPECT" = 0 ]; then
+  if [ "$EXPECT_SSH" = 0 ]; then
     esc='^Aa'
   fi
   /usr/bin/screen -e$esc -s $shell "${origArgs[@]}"
@@ -570,9 +570,9 @@ export -f ssh
 
   # unset $c, set below
   append mybashprefs "unset c\n"
-  # set SSH_EXPECT, this must be the last part of mybashprefs, as we paste the
-  # value for SSH_EXPECT below in the send statement
-  append mybashprefs "export SSH_EXPECT="
+  # set EXPECT_SSH, this must be the last part of mybashprefs, as we paste the
+  # value for EXPECT_SSH below in the send statement
+  append mybashprefs "export EXPECT_SSH="
 
   #exp_internal -f /tmp/log 0
 
@@ -582,7 +582,7 @@ export -f ssh
   # with the md5 in the password we can trigger a re-upload of bash prefs
   # should they change.
   set pass "$MYBASHPREFS_PASSWORD-$mybashprefs_hash"
-  send " c=\"\$(openssl enc -a -d -aes256 -in $mybashprefs_file)\" && eval \"\${c}$SSH_EXPECT\"\r"
+  send " c=\"\$(openssl enc -a -d -aes256 -in $mybashprefs_file)\" && eval \"\${c}$EXPECT_SSH\"\r"
   set password_was_entered 0
   expect {
     -re "password:$" {
@@ -637,7 +637,7 @@ export -f ssh
       expect -re password:
       send $pass\r
       expect -re $PROMPT
-      return [load_mybashprefs $SSH_EXPECT 1]
+      return [load_mybashprefs $EXPECT_SSH 1]
     }
     -re $PROMPT {
       # sometimes the prompt can be detected BEFORE we have had a chance to get
@@ -672,7 +672,7 @@ proc main_prompt_checker {arr} {
   set stdin_buf ""
   if { [array size load_mybashprefs_args] > 0 } {
     if { [check_prompt_marker $arr] == 0 } {
-      set rc [load_mybashprefs [expr $load_mybashprefs_args(SSH_EXPECT_CURR) + 1]]
+      set rc [load_mybashprefs [expr $load_mybashprefs_args(EXPECT_SSH) + 1]]
       if { $rc == "OK" } {
         if {[info exists load_mybashprefs_args(PROMPT_COMMAND)] > 0 && [string length $load_mybashprefs_args(PROMPT_COMMAND)] > 0 } {
           send " export PROMPT_COMMAND='$load_mybashprefs_args(PROMPT_COMMAND)'\r\n"
@@ -734,7 +734,7 @@ proc process_keystroke {c} {
   append stdin_buf $c
   set buflen [string length $stdin_buf]
   if { $stdin_buf == "~i" } {
-    load_mybashprefs $env(SSH_EXPECT)
+    load_mybashprefs $env(EXPECT_SSH)
     set stdin_buf ""
   } elseif { $stdin_buf == "~k" } {
     # useful when screen was launched remotely, and you want to take it
@@ -806,96 +806,84 @@ if { $local_shell_only == 1 } {
 set spawn_out_slave_name $spawn_out(slave,name)
 # force-resize: needed if on Mac in terminal full screen mode
 resize_handler
-load_mybashprefs $env(SSH_EXPECT)
+load_mybashprefs $env(EXPECT_SSH)
 
-if { $env(SSH_EXPECT) > 0 } {
-  # the caller of this script is already a session of this script ... just
-  # initialize the shell and interact so that copy/paste commands always get
-  # intercepted by parent script
-  interact {
-    # "All the patterns before the -o apply to the user keystrokes. All the
-    # patterns after the -o apply to the spawned process."
-    -o
-    -nobuffer -re "${PROMPT}" { main_prompt_checker interact_out }
-  }
-} else {
-  interact {
-    # "If two or more patterns can match the same output, only one action will
-    # be executed. The action corresponds to the pattern that appears first in
-    # the command."
-    -re "." { process_keystroke $interact_out(0,string) }
-    # "All the patterns before the -o apply to the user keystrokes. All the
-    # patterns after the -o apply to the spawned process."
-    -o
-    -nobuffer -re $PROMPT { main_prompt_checker interact_out }
-    #
-    #-re {(?:^|[\r\n](?:$ANSI_RE_GENERAL)*)~copy_to_clipboard_in_vim[^\w].*} {
-      #send ":!copy_to_clipboard \$VIM_CLIPBOARD\r"
-      #expect -re $COPY_TO_CLIPBOARD_BEGIN_RE
-      #set n [copy_to_clipboard]
-      #expect {
-        #-re {Press ENTER or type command to continue.*$} {
-          #send "\r"
-          #expect -re "$ANSI_RE_SHOW_CURSOR$"
-          #send ":echon \"$n characters were copied to clipboard\"\r"
-          #expect -re "$ANSI_RE_SHOW_CURSOR$"
-        #}
-        #-re {has changed since editing started.*\(L\)oad File: $} {}
+interact {
+  # "If two or more patterns can match the same output, only one action will
+  # be executed. The action corresponds to the pattern that appears first in
+  # the command."
+  -re "." { process_keystroke $interact_out(0,string) }
+  # "All the patterns before the -o apply to the user keystrokes. All the
+  # patterns after the -o apply to the spawned process."
+  -o
+  -nobuffer -re $PROMPT { main_prompt_checker interact_out }
+  #
+  #-re {(?:^|[\r\n](?:$ANSI_RE_GENERAL)*)~copy_to_clipboard_in_vim[^\w].*} {
+    #send ":!copy_to_clipboard \$VIM_CLIPBOARD\r"
+    #expect -re $COPY_TO_CLIPBOARD_BEGIN_RE
+    #set n [copy_to_clipboard]
+    #expect {
+      #-re {Press ENTER or type command to continue.*$} {
+	#send "\r"
+	#expect -re "$ANSI_RE_SHOW_CURSOR$"
+	#send ":echon \"$n characters were copied to clipboard\"\r"
+	#expect -re "$ANSI_RE_SHOW_CURSOR$"
       #}
+      #-re {has changed since editing started.*\(L\)oad File: $} {}
     #}
-    -nobuffer -re \n$GENERIC_MARKER {
-      set marker_type $interact_out(1,string)
-      set encoded_args ""
-      expect \n
-      expect {
-	-re "(\[^:]*)\\." {
-	  append encoded_args $expect_out(1,string)
-	}
-	-re "(\[^:]{1,255})" {
-	  append encoded_args $expect_out(1,string)
-	  exp_continue
-	}
+  #}
+  -nobuffer -re \n$GENERIC_MARKER {
+    set marker_type $interact_out(1,string)
+    set encoded_args ""
+    expect \n
+    expect {
+      -re "(\[^:]*)\\." {
+	append encoded_args $expect_out(1,string)
       }
-      if { $marker_type == $MARKER(LOAD_MYBASHPREFS) } {
-	#
-	# We have a request to load bash prefs into the current shell, but we
-	# only do that under certain conditions below. For example, "ssh
-	# localhost uname" should NOT trigger loading bash prefs, but "ssh
-	# localhost" should.
-	#
-	array set load_mybashprefs_args [exec sh -c "printf '%s\n' \"\$0\" | /usr/bin/openssl enc -base64 -d | gzip -d -c" $encoded_args]
-      } elseif { $marker_type == $MARKER(COPY_TO_CLIPBOARD) } {
-	copy_to_clipboard $encoded_args
-      } elseif { $marker_type == $MARKER(DOWNLOAD_DEFAULT_FILE) } {
-	array set args [exec sh -c "printf '%s\n' \"\$0\" | /usr/bin/openssl enc -base64 -d | gzip -d -c" $encoded_args]
-	set outfile [get_download_filename $args(default_file_name)]
-	if { $outfile == "" } {
-	  # discontinue downloading
-	  send "NO\r"
-	} else {
-	  send "y\r"
-	  expect -ex \n
-	}
-      } elseif { $marker_type == $MARKER(DOWNLOAD_DATA) } {
-	download $outfile $encoded_args
+      -re "(\[^:]{1,255})" {
+	append encoded_args $expect_out(1,string)
+	exp_continue
       }
     }
-    -nobuffer -re [join { ~ paste_from_clipboard_in_vim} ""] {
-      paste_from_clipboard_in_vim
+    if { $marker_type == $MARKER(LOAD_MYBASHPREFS) } {
+      #
+      # We have a request to load bash prefs into the current shell, but we
+      # only do that under certain conditions below. For example, "ssh
+      # localhost uname" should NOT trigger loading bash prefs, but "ssh
+      # localhost" should.
+      #
+      array set load_mybashprefs_args [exec sh -c "printf '%s\n' \"\$0\" | /usr/bin/openssl enc -base64 -d | gzip -d -c" $encoded_args]
+    } elseif { $marker_type == $MARKER(COPY_TO_CLIPBOARD) } {
+      copy_to_clipboard $encoded_args
+    } elseif { $marker_type == $MARKER(DOWNLOAD_DEFAULT_FILE) } {
+      array set args [exec sh -c "printf '%s\n' \"\$0\" | /usr/bin/openssl enc -base64 -d | gzip -d -c" $encoded_args]
+      set outfile [get_download_filename $args(default_file_name)]
+      if { $outfile == "" } {
+	# discontinue downloading
+	send "NO\r"
+      } else {
+	send "y\r"
+	expect -ex \n
+      }
+    } elseif { $marker_type == $MARKER(DOWNLOAD_DATA) } {
+      download $outfile $encoded_args
     }
-    -nobuffer -re [join { ~ {LAUNCH_LDSUPPORT_LOGIN\|([^\|]+)\|([^\|]+)\|([^\|]+)\|} } ""] {
-      set ld_url $interact_out(1,string)
-      set enc_pass $interact_out(2,string)
-      set time_of_day $interact_out(3,string)
-      process_ldsupport_request $ld_url $enc_pass $time_of_day
-    }
-    #-nobuffer -re {\npsql .*Type "help" for help(.*)[#>] $} {
-      #if { [string first "\\set PROMPT1" $interact_out(1,string) ] < 0 } {
-        #send "\\set PROMPT1 '%n@%m:%/> '\r"
-        #expect -re "> $"
-        #send "\\set PROMPT2 '> '\r"
-      #}
-    #}
   }
+  -nobuffer -re [join { ~ paste_from_clipboard_in_vim} ""] {
+    paste_from_clipboard_in_vim
+  }
+  -nobuffer -re [join { ~ {LAUNCH_LDSUPPORT_LOGIN\|([^\|]+)\|([^\|]+)\|([^\|]+)\|} } ""] {
+    set ld_url $interact_out(1,string)
+    set enc_pass $interact_out(2,string)
+    set time_of_day $interact_out(3,string)
+    process_ldsupport_request $ld_url $enc_pass $time_of_day
+  }
+  #-nobuffer -re {\npsql .*Type "help" for help(.*)[#>] $} {
+    #if { [string first "\\set PROMPT1" $interact_out(1,string) ] < 0 } {
+      #send "\\set PROMPT1 '%n@%m:%/> '\r"
+      #expect -re "> $"
+      #send "\\set PROMPT2 '> '\r"
+    #}
+  #}
 }
 EXPECT_EOF
