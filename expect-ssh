@@ -27,10 +27,21 @@ set ANSI_RE_TEXT_FORMATTING {\u001b\[(?:\d+;?)*[m]}
 set ANSI_RE_CURSOR_POSITIONING {\u001b\\\[\d+;\d+[Hf]}
 set ANSI_RE_GENERAL {\u001b\[[^a-zA-Z]*[a-zA-Z]}
 set ANSI_RE_SHOW_CURSOR {\u001b\[\?25h}
-set COPY_TO_CLIPBOARD_BEGIN_RE [join {\n ~ {copy_to_clipboard:([^:]+):} } "" ]
-set LOAD_MYBASHPREFS_MARKER "~@01:"
-#set LOAD_MYBASHPREFS_MARKER_RE [join [ list $LOAD_MYBASHPREFS_MARKER {:([^:]+):(\d+\.\d+):(\d+)} ] ""]
-#set LOAD_MYBASHPREFS_MARKER_RE [join [ list $LOAD_MYBASHPREFS_MARKER {:\r\n([^:]+):} ] ""]
+#set COPY_TO_CLIPBOARD_BEGIN_RE [join {\n ~ {copy_to_clipboard:([^:]+):} } "" ]
+
+set GENERIC_MARKER "~@(\[0-9]\[0-9]):"
+array set MARKER {
+  LOAD_MYBASHPREFS 01
+  COPY_TO_CLIPBOARD 02
+}
+
+proc get_marker {marker_type} {
+  global GENERIC_MARKER MARKER
+  return [regsub $GENERIC_MARKER ~@00: "~@$MARKER($marker_type):"]
+}
+
+set LOAD_MYBASHPREFS_MARKER [get_marker LOAD_MYBASHPREFS]
+set COPY_TO_CLIPBOARD_MARKER [get_marker COPY_TO_CLIPBOARD]
 set DOWNLOAD_FILE_BEGIN_RE [join { ~ {DOWNLOAD_FILE\|([^\|]+)\|([^\|]+)\|} } "" ]
 set EXPECTSSH_TMPDIR $env(EXPECTSSH_TMPDIR)
 # PS1_MARKER is a non-regexp marker in the normal PS1 prompt that we search for
@@ -76,44 +87,20 @@ proc resize_handler {} {
   stty rows $rows columns $cols < $spawn_out_slave_name
 }
 
-array set clipboard_processed {}
-proc copy_to_clipboard {time_of_day} {
-  global PROMPT OS ANSI_RE_GENERAL clipboard_processed
-  if { [info exists clipboard_processed($time_of_day)] == 1 } {
-    return
-  }
-  set clipboard_processed($time_of_day) 1
-  set clipboard_data ""
+proc copy_to_clipboard {clipboard_data} {
+  global PROMPT OS ANSI_RE_GENERAL
   set max_clipboard_data_len 1000000
   log_user 1
-  expect {
-    -re [join {"(.*)(?:\[\\r\\n](?:$ANSI_RE_GENERAL)*|^)" ~ copy_to_clipboard_EOF} ""] {
-      append clipboard_data $expect_out(1,string)
-      #regsub -all \000 $clipboard_data "\n" clipboard_data
-      #regsub -all {\033\[\d+C} $clipboard_data "" clipboard_data
-      if { $OS == "Darwin" } {
-        exec sh -c "printf '%s\n' \"\$0\" | /usr/bin/openssl enc -base64 -d | gzip -d -c | pbcopy" $clipboard_data
-      } elseif { $OS == "Linux" } {
-        exec sh -c "printf '%s\n' \"\$0\" | /usr/bin/openssl enc -base64 -d | gzip -d -c | clipit" $clipboard_data
-      } else {
-        send_user "copy_to_clipboard: need handling for $OS"
-        return
-      }
-      set l [string length $clipboard_data]
-      return $l
-    }
-    -re "(.{1,255})" {
-      append clipboard_data $expect_out(1,string)
-      if { [string length $clipboard_data] > $max_clipboard_data_len } {
-        # safety net: probably something is wrong
-        send_user "MAX LENGTH EXCEEDED ($max_clipboard_data_len) for copy_to_clipboard"
-      } else {
-        exp_continue
-      }
-    }
-    timeout { send_error "copy_to_clipboard: timeout waiting for file" }
+  if { $OS == "Darwin" } {
+    exec sh -c "printf '%s\n' \"\$0\" | /usr/bin/openssl enc -base64 -d | gzip -d -c | pbcopy" $clipboard_data
+  } elseif { $OS == "Linux" } {
+    exec sh -c "printf '%s\n' \"\$0\" | /usr/bin/openssl enc -base64 -d | gzip -d -c | clipit" $clipboard_data
+  } else {
+    send_error "copy_to_clipboard: need handling for $OS"
+    return
   }
-  log_user 1
+  set l [string length $clipboard_data]
+  return $l
 }
 
 proc get_download_filename {default_file_name} {
@@ -219,7 +206,8 @@ proc paste_from_clipboard_in_vim {} {
 }
 
 proc load_mybashprefs {SSH_EXPECT {nest_level 0}} {
-  global PROMPT ANSI_RE_TEXT_FORMATTING PS1_MARKER LOAD_MYBASHPREFS_MARKER ANSI_RE_GENERAL EXPECTSSH_TMPDIR MYBASHPREFS_PASSWORD
+  global PROMPT ANSI_RE_TEXT_FORMATTING PS1_MARKER ANSI_RE_GENERAL EXPECTSSH_TMPDIR MYBASHPREFS_PASSWORD
+  global LOAD_MYBASHPREFS_MARKER COPY_TO_CLIPBOARD_MARKER
   log_user 1
   # verify we are in bash
   #send " echo 'test for bash'\r"
@@ -238,7 +226,33 @@ proc load_mybashprefs {SSH_EXPECT {nest_level 0}} {
   # otherwise the line spacing gets all weird when typing out long bash commands
   append mybashprefs [regsub -all {\\033\[[^a-zA-Z]*[a-zA-Z]} $PS1_MARKER [join { {\[} {\0} {\]} } {}]]
   append mybashprefs "'\n"
-  append mybashprefs "export LOAD_MYBASHPREFS_MARKER='" $LOAD_MYBASHPREFS_MARKER "'\n"
+  # signal_load_mybashprefs:
+  # Do an expression that is easily evaluated to a TCL array for args;
+  append mybashprefs "function signal_load_mybashprefs() { local marker=$LOAD_MYBASHPREFS_MARKER\n"
+  append mybashprefs {local args=$(printf "SSH_EXPECT_CURR %s PROMPT_COMMAND {%s}" $SSH_EXPECT "$PROMPT_COMMAND" | gzip -9 -c | openssl enc -base64)}
+  append mybashprefs "\n"
+  # pass a \010 (backspace) character to erase last character of the pattern so
+  # that expect only processes this signal 1 time ... else when inside screen
+  # it would potentially get re-executed from a resumed session.
+  append mybashprefs {printf "%s\010.\n%s.\n" "$marker" "$args" > $(tty)}
+  append mybashprefs "\n}\n"
+  append mybashprefs "export -f signal_load_mybashprefs\n"
+
+  append mybashprefs "function copy_to_clipboard() { local marker=$COPY_TO_CLIPBOARD_MARKER\n"
+  # copy_to_clipboard: use perl to remove the last \n on the last line, and
+  # minimally set a hyphen character in the stream so as to not pass 0 bytes to
+  # clipit (which causes it to block)
+  append mybashprefs {local file_to_copy="$1"
+printf "%s\010.\n" "$marker"
+if [ -z "$file_to_copy" ]; then
+  file_to_copy="-"
+fi
+perl -pe 'BEGIN{$n=0;}END{print "-" if $n==0}$n+=length($_);chomp if eof' -- "$file_to_copy" | gzip -9 -c | openssl enc -base64
+printf ".\n" "copy_to_clipboard_EOF"
+}
+  append mybashprefs "}\n"
+  append mybashprefs "export -f copy_to_clipboard\n"
+  
   append mybashprefs {unset PROMPT_COMMAND
 export HISTIGNORE=' *'
 export VIM_CLIPBOARD=$EXPECTSSH_TMPDIR/vim.clipboard.$USER
@@ -251,23 +265,6 @@ chmod 600 $VIM_CLIPBOARD || {
 export VIMINIT='map <c-v> :echon "~" "paste_from_clipboard_in_vim"<cr>|vnoremap <C-c> y:call writefile(split(@","\n","b"),$VIM_CLIPBOARD)<cr>:!copy_to_clipboard $VIM_CLIPBOARD<cr>|colorscheme elflord|syntax enable|set noswapfile number hlsearch incsearch sw=2 ignorecase wrap nocompatible ruler ai showmatch modeline modelines=5 nobackup nowritebackup textwidth=0 expandtab formatoptions=croql wildignore=*.class path=.,,**|autocmd Filetype java setlocal omnifunc=javacomplete#Complete'
 export EDITOR=/usr/bin/vim
 export FCEDIT=$EDITOR
-
-function copy_to_clipboard() {
-  local file_to_copy="$1"
-  # boundary for expect-ssh to pick up the file:
-  printf "%s:%s:" "~copy_to_clipboard" $(get_time_with_millis)
-  if [ -z "$file_to_copy" ]; then
-    # copy stdin to clipboard
-    file_to_copy="-"
-  fi
-  # use perl to remove the last \n on the last line, and minimally set a hyphen
-  # character in the stream so as to not pass 0 bytes to clipit (which causes
-  # it to block)
-  perl -pe 'BEGIN{$n=0;}END{print "-" if $n==0}$n+=length($_);chomp if eof' -- "$file_to_copy" | gzip -9 -c | openssl enc -base64
-  # ending boundary
-  printf "~%s\n" "copy_to_clipboard_EOF"
-}
-export -f copy_to_clipboard
 
 function download() {
   local file="$1"
@@ -381,15 +378,6 @@ function get_time_with_millis() {
   echo -n $time
 }
 export -f get_time_with_millis
-
-function signal_load_mybashprefs() {
-  local time_of_day=$(get_time_with_millis)
-  # Do an expression that is easily evaluated to a TCL array for args
-  local args=$(printf "remote_hostname %s time_of_day %s SSH_EXPECT_CURR %s PROMPT_COMMAND {%s}" \
-    $(hostname) $time_of_day $SSH_EXPECT "$PROMPT_COMMAND" | gzip -9 -c | openssl enc -base64)
-  printf "%s\n%s:\n" $LOAD_MYBASHPREFS_MARKER "$args" > $(tty)
-}
-export -f signal_load_mybashprefs
 
 function jargrep() {
   for f in $(find . -name '*.jar'); do
@@ -702,10 +690,9 @@ proc check_prompt_marker {arr} {
   return $is_marker_prompt
 }
 
-array set loaded {}
 array set load_mybashprefs_args {}
 proc main_prompt_checker {arr} {
-  global stdin_buf interact_out expect_out loaded load_mybashprefs_args PROMPT
+  global stdin_buf interact_out expect_out load_mybashprefs_args PROMPT
   #upvar $arr arr_ref
   set stdin_buf ""
   if { [array size load_mybashprefs_args] > 0 } {
@@ -717,7 +704,6 @@ proc main_prompt_checker {arr} {
           expect -re $PROMPT
         }
       }
-      set loaded($load_mybashprefs_args(remote_hostname)) $load_mybashprefs_args(time_of_day)
     }
   }
   array unset load_mybashprefs_args
@@ -868,9 +854,6 @@ if { $env(SSH_EXPECT) > 0 } {
     -o
     -nobuffer -re $PROMPT { main_prompt_checker interact_out }
     #
-    -nobuffer -re $COPY_TO_CLIPBOARD_BEGIN_RE {
-      copy_to_clipboard $interact_out(1,string)
-    }
     -nobuffer -re $DOWNLOAD_FILE_BEGIN_RE {
       download $interact_out(1,string) $interact_out(2,string)
     }
@@ -888,20 +871,29 @@ if { $env(SSH_EXPECT) > 0 } {
         #-re {has changed since editing started.*\(L\)oad File: $} {}
       #}
     #}
-    -nobuffer -re \n$LOAD_MYBASHPREFS_MARKER {
-      #
-      # We have a request to load bash prefs into the current shell, but we
-      # only do that under certain conditions below. For example, "ssh
-      # localhost uname" should NOT trigger loading bash prefs, but "ssh
-      # localhost" should.
-      #
-      expect -re "\n(\[^:]+):" {
-        array set load_mybashprefs_args [exec sh -c "printf '%s\n' \"\$0\" | /usr/bin/openssl enc -base64 -d | gzip -d -c" $expect_out(1,string)]
-        if { [info exists loaded($load_mybashprefs_args(remote_hostname))] == 0 || $load_mybashprefs_args(time_of_day) > $loaded($load_mybashprefs_args(remote_hostname)) } {
-          array unset expect_out
-        } else {
-          array unset load_mybashprefs_args
-        }
+    -nobuffer -re \n$GENERIC_MARKER {
+      set marker_type $interact_out(1,string)
+      set encoded_args ""
+      expect \n
+      expect {
+	-re "(\[^:]*)\\." {
+	  append encoded_args $expect_out(1,string)
+	}
+	-re "(\[^:]{1,255})" {
+	  append encoded_args $expect_out(1,string)
+	  exp_continue
+	}
+      }
+      if { $marker_type == $MARKER(LOAD_MYBASHPREFS) } {
+	#
+	# We have a request to load bash prefs into the current shell, but we
+	# only do that under certain conditions below. For example, "ssh
+	# localhost uname" should NOT trigger loading bash prefs, but "ssh
+	# localhost" should.
+	#
+	array set load_mybashprefs_args [exec sh -c "printf '%s\n' \"\$0\" | /usr/bin/openssl enc -base64 -d | gzip -d -c" $encoded_args]
+      } elseif { $marker_type == $MARKER(COPY_TO_CLIPBOARD) } {
+	copy_to_clipboard $encoded_args
       }
     }
     -nobuffer -re [join { ~ paste_from_clipboard_in_vim} ""] {
