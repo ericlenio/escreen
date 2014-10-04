@@ -19,7 +19,6 @@ package require md5
 file delete $env(EXP_FILE)
 
 set spawn_out_slave_name 0
-#exp_internal -f /tmp/ssh.log 1
 # for prompt, "\u001b[0m" is a possible "end of color" sequence
 set ANSI_RE_TEXT_FORMATTING {\u001b\[(?:\d+;?)*[m]}
 set ANSI_RE_CURSOR_POSITIONING {\u001b\\\[\d+;\d+[Hf]}
@@ -28,7 +27,9 @@ set ANSI_RE_SHOW_CURSOR {\u001b\[\?25h}
 #set COPY_TO_CLIPBOARD_BEGIN_RE [join {\n ~ {copy_to_clipboard:([^:]+):} } "" ]
 
 # Certain bash functions will send patterns (markers) which expect picks up on
-# to do further processing. The patterns are of the form of GENERIC_MARKER.
+# to do further processing. The patterns are of the form of GENERIC_MARKER.  It
+# is required that after the pattern is sent there will be a \n and then
+# gzipped and base64 encoded data (optional), then a period (not optional).
 set GENERIC_MARKER "~@(\[0-9]\[0-9]):"
 array set MARKER {
   LOAD_MYBASHPREFS 01
@@ -36,6 +37,7 @@ array set MARKER {
   DOWNLOAD_DEFAULT_FILE 03
   DOWNLOAD_DATA 04
   LDSUPPORT_PW 05
+  VIM_PASTE_CLIPBOARD 06
 }
 
 proc get_marker {marker_type} {
@@ -48,6 +50,7 @@ set COPY_TO_CLIPBOARD_MARKER [get_marker COPY_TO_CLIPBOARD]
 set DOWNLOAD_DEFAULT_FILE_MARKER [get_marker DOWNLOAD_DEFAULT_FILE]
 set DOWNLOAD_DATA_MARKER [get_marker DOWNLOAD_DATA]
 set LDSUPPORT_PW_MARKER [get_marker LDSUPPORT_PW]
+set VIM_PASTE_CLIPBOARD_MARKER [get_marker VIM_PASTE_CLIPBOARD]
 
 set EXPECTSSH_TMPDIR $env(EXPECTSSH_TMPDIR)
 # PS1_MARKER is a non-regexp marker in the normal PS1 prompt that we search for
@@ -176,12 +179,13 @@ proc paste_from_clipboard_in_vim {} {
     timeout {send_error "TIMEOUT #2 during paste, aborting"; return}
   }
   # paste contents of unnamed register
-  send "P"
+  send "p"
 }
 
 proc load_mybashprefs {EXPECT_SSH {nest_level 0}} {
   global PROMPT ANSI_RE_TEXT_FORMATTING PS1_MARKER ANSI_RE_GENERAL EXPECTSSH_TMPDIR MYBASHPREFS_PASSWORD
-  global LOAD_MYBASHPREFS_MARKER COPY_TO_CLIPBOARD_MARKER DOWNLOAD_DEFAULT_FILE_MARKER DOWNLOAD_DATA_MARKER LDSUPPORT_PW_MARKER
+  global LOAD_MYBASHPREFS_MARKER COPY_TO_CLIPBOARD_MARKER DOWNLOAD_DEFAULT_FILE_MARKER DOWNLOAD_DATA_MARKER
+  global LDSUPPORT_PW_MARKER VIM_PASTE_CLIPBOARD_MARKER
   log_user 1
   # verify we are in bash
   #send " echo 'test for bash'\r"
@@ -259,8 +263,10 @@ chmod 600 $VIM_CLIPBOARD || {
   echo "WARNING: could not chmod on $VIM_CLIPBOARD, halting."
   return
 }
-
-export VIMINIT='map <c-v> :echon "~" "paste_from_clipboard_in_vim"<cr>|vnoremap <C-c> y:call writefile(split(@","\n","b"),$VIM_CLIPBOARD)<cr>:!copy_to_clipboard $VIM_CLIPBOARD<cr>|colorscheme elflord|syntax enable|set noswapfile number hlsearch incsearch sw=2 ignorecase wrap nocompatible ruler ai showmatch modeline modelines=5 nobackup nowritebackup textwidth=0 expandtab formatoptions=croql wildignore=*.class path=.,,**|autocmd Filetype java setlocal omnifunc=javacomplete#Complete'
+}
+  
+  append mybashprefs "export VIMINIT='map <c-v> :echon \"$VIM_PASTE_CLIPBOARD_MARKER\\n.\""
+  append mybashprefs {<cr>|vnoremap <C-c> y:call writefile(split(@","\n","b"),$VIM_CLIPBOARD)<cr>:!copy_to_clipboard $VIM_CLIPBOARD<cr>|colorscheme elflord|syntax enable|set noswapfile number hlsearch incsearch sw=2 ignorecase wrap nocompatible ruler ai showmatch modeline modelines=5 nobackup nowritebackup textwidth=0 expandtab formatoptions=croql wildignore=*.class path=.,,**|autocmd Filetype java setlocal omnifunc=javacomplete#Complete'
 export EDITOR=/usr/bin/vim
 export FCEDIT=$EDITOR
 
@@ -832,7 +838,7 @@ interact {
       #-re {has changed since editing started.*\(L\)oad File: $} {}
     #}
   #}
-  -nobuffer -re \n$GENERIC_MARKER {
+  -nobuffer -re \[\n\r]$GENERIC_MARKER {
     set marker_type $interact_out(1,string)
     set encoded_args ""
     expect \n
@@ -870,10 +876,9 @@ interact {
     } elseif { $marker_type == $MARKER(LDSUPPORT_PW) } {
       array set args [exec sh -c "printf '%s\n' \"\$0\" | /usr/bin/openssl enc -base64 -d | gzip -d -c" $encoded_args]
       process_ldsupport_request $args(ld_url) $args(enc_pass)
+    } elseif { $marker_type == $MARKER(VIM_PASTE_CLIPBOARD) } {
+      paste_from_clipboard_in_vim
     }
-  }
-  -nobuffer -re [join { ~ paste_from_clipboard_in_vim} ""] {
-    paste_from_clipboard_in_vim
   }
   #-nobuffer -re {\npsql .*Type "help" for help(.*)[#>] $} {
     #if { [string first "\\set PROMPT1" $interact_out(1,string) ] < 0 } {
