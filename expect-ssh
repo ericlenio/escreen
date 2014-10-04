@@ -18,8 +18,6 @@ package require md5
 
 file delete $env(EXP_FILE)
 
-#set mybashprefs "$env(HOME)/.remoteadmin/bashrc"
-#send_error "Running $argv0\n"
 set spawn_out_slave_name 0
 #exp_internal -f /tmp/ssh.log 1
 # for prompt, "\u001b[0m" is a possible "end of color" sequence
@@ -29,6 +27,8 @@ set ANSI_RE_GENERAL {\u001b\[[^a-zA-Z]*[a-zA-Z]}
 set ANSI_RE_SHOW_CURSOR {\u001b\[\?25h}
 #set COPY_TO_CLIPBOARD_BEGIN_RE [join {\n ~ {copy_to_clipboard:([^:]+):} } "" ]
 
+# Certain bash functions will send patterns (markers) which expect picks up on
+# to do further processing. The patterns are of the form of GENERIC_MARKER.
 set GENERIC_MARKER "~@(\[0-9]\[0-9]):"
 array set MARKER {
   LOAD_MYBASHPREFS 01
