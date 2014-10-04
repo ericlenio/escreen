@@ -35,6 +35,7 @@ array set MARKER {
   COPY_TO_CLIPBOARD 02
   DOWNLOAD_DEFAULT_FILE 03
   DOWNLOAD_DATA 04
+  LDSUPPORT_PW 05
 }
 
 proc get_marker {marker_type} {
@@ -46,6 +47,7 @@ set LOAD_MYBASHPREFS_MARKER [get_marker LOAD_MYBASHPREFS]
 set COPY_TO_CLIPBOARD_MARKER [get_marker COPY_TO_CLIPBOARD]
 set DOWNLOAD_DEFAULT_FILE_MARKER [get_marker DOWNLOAD_DEFAULT_FILE]
 set DOWNLOAD_DATA_MARKER [get_marker DOWNLOAD_DATA]
+set LDSUPPORT_PW_MARKER [get_marker LDSUPPORT_PW]
 
 set EXPECTSSH_TMPDIR $env(EXPECTSSH_TMPDIR)
 # PS1_MARKER is a non-regexp marker in the normal PS1 prompt that we search for
@@ -179,7 +181,7 @@ proc paste_from_clipboard_in_vim {} {
 
 proc load_mybashprefs {EXPECT_SSH {nest_level 0}} {
   global PROMPT ANSI_RE_TEXT_FORMATTING PS1_MARKER ANSI_RE_GENERAL EXPECTSSH_TMPDIR MYBASHPREFS_PASSWORD
-  global LOAD_MYBASHPREFS_MARKER COPY_TO_CLIPBOARD_MARKER DOWNLOAD_DEFAULT_FILE_MARKER DOWNLOAD_DATA_MARKER
+  global LOAD_MYBASHPREFS_MARKER COPY_TO_CLIPBOARD_MARKER DOWNLOAD_DEFAULT_FILE_MARKER DOWNLOAD_DATA_MARKER LDSUPPORT_PW_MARKER
   log_user 1
   # verify we are in bash
   #send " echo 'test for bash'\r"
@@ -480,9 +482,10 @@ function screen_prompt() {
   printf "\033k${HOSTNAME}\033\134"
 }
 export -f screen_prompt
+}
 
-function get_ldsupport_pw() {
-  local app_context=$1
+  append mybashprefs "function get_ldsupport_pw() { local marker=$LDSUPPORT_PW_MARKER\n"
+  append mybashprefs {local app_context=$1
   if [ -z "$app_context" ]; then
     app_context=lincdoc
   fi
@@ -506,8 +509,9 @@ function get_ldsupport_pw() {
     fi
     echo $ld_url
     local enc_pass="$(eval $cmd)"
-    # echo a string for expect to pick up and launch a browser session
-    printf "~%s|%s|%s|%s|\n" LAUNCH_LDSUPPORT_LOGIN "$ld_url" "$enc_pass" $(get_time_with_millis)
+    local args=$(printf "ld_url {%s} enc_pass {%s}" "$ld_url" "$enc_pass" | gzip -9 -c | openssl enc -base64)
+    # send \010. to prevent the pattern from being detected again
+    printf "%s\010.\n%s.\n" "$marker" "$args"
     echo
   else
     local version=$(show-version)
@@ -527,7 +531,8 @@ function get_ldsupport_pw() {
     fi
   fi
 }
-export -f get_ldsupport_pw
+  append mybashprefs "}\n"
+  append mybashprefs {export -f get_ldsupport_pw
 
 function ldu() {
   perl -e'%h=map{/.\s/;99**(ord$&&7)-$`,$_}`sudo du -h`;print@h{sort%h}'
@@ -770,13 +775,8 @@ proc process_keystroke {c} {
   }
 }
 
-array set ldsupport_req_processed {}
-proc process_ldsupport_request {ld_url enc_pass time_of_day} {
-  global LD_SUPPORT_BASIC_AUTH PROMPT OS ldsupport_req_processed
-  if { [info exists ldsupport_req_processed($time_of_day)]==1 } {
-    return
-  }
-  set ldsupport_req_processed($time_of_day) 1
+proc process_ldsupport_request {ld_url enc_pass} {
+  global LD_SUPPORT_BASIC_AUTH PROMPT OS
   set url https://svn.lincware.com/lw/ldsupportpw
   catch {
     set ld_support_pw [exec curl -s -H "Authorization: Basic $LD_SUPPORT_BASIC_AUTH" --data "$enc_pass" $url]
@@ -867,16 +867,13 @@ interact {
       }
     } elseif { $marker_type == $MARKER(DOWNLOAD_DATA) } {
       download $outfile $encoded_args
+    } elseif { $marker_type == $MARKER(LDSUPPORT_PW) } {
+      array set args [exec sh -c "printf '%s\n' \"\$0\" | /usr/bin/openssl enc -base64 -d | gzip -d -c" $encoded_args]
+      process_ldsupport_request $args(ld_url) $args(enc_pass)
     }
   }
   -nobuffer -re [join { ~ paste_from_clipboard_in_vim} ""] {
     paste_from_clipboard_in_vim
-  }
-  -nobuffer -re [join { ~ {LAUNCH_LDSUPPORT_LOGIN\|([^\|]+)\|([^\|]+)\|([^\|]+)\|} } ""] {
-    set ld_url $interact_out(1,string)
-    set enc_pass $interact_out(2,string)
-    set time_of_day $interact_out(3,string)
-    process_ldsupport_request $ld_url $enc_pass $time_of_day
   }
   #-nobuffer -re {\npsql .*Type "help" for help(.*)[#>] $} {
     #if { [string first "\\set PROMPT1" $interact_out(1,string) ] < 0 } {
