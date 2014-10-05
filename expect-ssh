@@ -24,7 +24,6 @@ set ANSI_RE_TEXT_FORMATTING {\u001b\[(?:\d+;?)*[m]}
 set ANSI_RE_CURSOR_POSITIONING {\u001b\\\[\d+;\d+[Hf]}
 set ANSI_RE_GENERAL {\u001b\[[^a-zA-Z]*[a-zA-Z]}
 set ANSI_RE_SHOW_CURSOR {\u001b\[\?25h}
-#set COPY_TO_CLIPBOARD_BEGIN_RE [join {\n ~ {copy_to_clipboard:([^:]+):} } "" ]
 
 # Certain bash functions will send patterns (markers) which expect picks up on
 # to do further processing. The patterns are of the form of GENERIC_MARKER.  It
@@ -211,7 +210,10 @@ proc load_mybashprefs {EXPECT_SSH {nest_level 0}} {
   # signal_load_mybashprefs:
   # Do an expression that is easily evaluated to a TCL array for args;
   append mybashprefs "function signal_load_mybashprefs() { local marker=$LOAD_MYBASHPREFS_MARKER\n"
-  append mybashprefs {local args=$(printf "EXPECT_SSH %s PROMPT_COMMAND {%s}" $EXPECT_SSH "$PROMPT_COMMAND" | gzip -9 -c | openssl enc -base64)}
+  append mybashprefs "local in_screen=0\n"
+  append mybashprefs {if [ -n "$STY" -o -n "$EXPECTSSH_IN_SCREEN" ]; then in_screen=1; fi}
+  append mybashprefs "\n"
+  append mybashprefs {local args=$(printf "EXPECT_SSH %s EXPECTSSH_IN_SCREEN {%s}" $EXPECT_SSH "$in_screen" | gzip -9 -c | openssl enc -base64)}
   append mybashprefs "\n"
   # pass a \010 (backspace) character to erase last character of the pattern so
   # that expect only processes this signal 1 time ... else when inside screen
@@ -455,7 +457,7 @@ bindkey "\032" stuff "\032"
 caption always "%{= kw}%-w%{= BW}%n%t%{-}%+w %-= @%H %m/%d %c"
 shelltitle "$ |:"
 defmonitor on
-setenv PROMPT_COMMAND 'screen_prompt'
+#setenv PROMPT_COMMAND 'screen_prompt'
 #shell $shell
 #screen rm $SCREENRC
 EOF
@@ -489,7 +491,8 @@ export -f s
 
 function screen_prompt() {
   # use printf instead of echo: works on macs
-  printf "\033k${HOSTNAME}\033\134"
+  #printf "\033k${HOSTNAME}\033\134"
+  false
 }
 export -f screen_prompt
 }
@@ -577,6 +580,9 @@ unset OLD_LD_BIN
 function ssh() {
   signal_load_mybashprefs
   /usr/bin/ssh "$@"
+  if [ "$EXPECTSSH_IN_SCREEN" = 1 -o -n "$STY" ]; then
+    printf "\033k${HOSTNAME}\033\134"
+  fi
   return $?
 }
 export -f ssh
@@ -683,14 +689,17 @@ proc check_prompt_marker {arr} {
 array set load_mybashprefs_args {}
 proc main_prompt_checker {arr} {
   global stdin_buf interact_out expect_out load_mybashprefs_args PROMPT
-  #upvar $arr arr_ref
   set stdin_buf ""
   if { [array size load_mybashprefs_args] > 0 } {
     if { [check_prompt_marker $arr] == 0 } {
       set rc [load_mybashprefs [expr $load_mybashprefs_args(EXPECT_SSH) + 1]]
       if { $rc == "OK" } {
-        if {[info exists load_mybashprefs_args(PROMPT_COMMAND)] > 0 && [string length $load_mybashprefs_args(PROMPT_COMMAND)] > 0 } {
-          send " export PROMPT_COMMAND='$load_mybashprefs_args(PROMPT_COMMAND)'\r\n"
+        if { [info exists load_mybashprefs_args(EXPECTSSH_IN_SCREEN)] > 0 && $load_mybashprefs_args(EXPECTSSH_IN_SCREEN)==1 } {
+          #send " export PROMPT_COMMAND='$load_mybashprefs_args(PROMPT_COMMAND)'\r\n"
+          send "export EXPECTSSH_IN_SCREEN=1\r"
+          expect -re $PROMPT
+          send {printf "\033k${HOSTNAME}\033\134"}
+          send \r
           expect -re $PROMPT
         }
       }
