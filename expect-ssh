@@ -623,7 +623,7 @@ export -f ssh
       # (http://expect.sourceforge.net/FAQ.html#q76) "terminal input queue"
       # "typeahead buffer" MAX_INPUT
       # "getconf -a|grep MAX_INPUT" may help determine this value
-      send "TMP=\$(history|tail -1|awk '{print \$1}') && history -d \$TMP && HISTCONTROL=ignoreboth && export HISTIGNORE=' *' && unset TMP\r"
+      send "TMP=\$(history|tail -1|awk '{print \$1}') && history -d \$TMP && history -d \$((\$TMP-1)) && HISTCONTROL=ignoreboth && export HISTIGNORE=' *' && unset TMP\r"
       expect -re $PROMPT
       send " \[ ! -d $EXPECTSSH_TMPDIR ] && { mkdir $EXPECTSSH_TMPDIR; chmod 1777 $EXPECTSSH_TMPDIR; }\r"
       expect -re $PROMPT
@@ -638,7 +638,7 @@ export -f ssh
       # Delimit the input with a space, and after each line is sent send \r so
       # the terminal does not scroll
       send { while true; do read -d' ' l; [ "$l" = . ] && break; printf "%s\n" $l; printf "\015" >$tty; done}
-      send "| openssl enc -d -base64 | gzip -d -c | openssl enc -a -aes256 -pass fd:3 -out $mybashprefs_file; exec 3<&-\r"
+      send "| openssl enc -d -base64 | gzip -d -c | openssl enc -a -aes256 -pass fd:3 -out $mybashprefs_file; exec 3<&-; unset tty\r"
       expect -re \r\n$
       # split into manageable chunks that will not exceed terminal driver
       # buf size
@@ -698,9 +698,9 @@ proc main_prompt_checker {arr} {
       if { $rc == "OK" } {
         if { [info exists load_mybashprefs_args(EXPECTSSH_IN_SCREEN)] > 0 && $load_mybashprefs_args(EXPECTSSH_IN_SCREEN)==1 } {
           #send " export PROMPT_COMMAND='$load_mybashprefs_args(PROMPT_COMMAND)'\r\n"
-          send "export EXPECTSSH_IN_SCREEN=1\r"
+          send " export EXPECTSSH_IN_SCREEN=1\r"
           expect -re $PROMPT
-          send {printf "\033k${HOSTNAME}\033\134"}
+          send { printf "\033k${HOSTNAME}\033\134"}
           send \r
           expect -re $PROMPT
         }
