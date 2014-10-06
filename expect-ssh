@@ -522,7 +522,7 @@ export -f screen_prompt
     fi
     echo $ld_url
     local enc_pass="$(eval $cmd)"
-    local args=$(printf "ld_url {%s} enc_pass {%s}" "$ld_url" "$enc_pass" | gzip -9 -c | openssl enc -base64)
+    local args="$(printf "ld_url {%s} enc_pass {%s}" "$ld_url" "$enc_pass" | gzip -9 -c | openssl enc -base64)"
     # send \010. to prevent the pattern from being detected again
     printf "%s\010.\n%s.\n" "$marker" "$args"
     echo
@@ -857,10 +857,10 @@ interact {
     set encoded_args ""
     expect \n
     expect {
-      -re "(\[^:]*)\\." {
+      -re "(\[^\\.]*)\\." {
 	append encoded_args $expect_out(1,string)
       }
-      -re "(\[^:]{1,255})" {
+      -re "(\[^\\.]{1,255})" {
 	append encoded_args $expect_out(1,string)
 	exp_continue
       }
