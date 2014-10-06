@@ -655,7 +655,7 @@ export -f ssh
         set precision [string length $c_len]
         send_user [format "%*d/%*d uploaded" $precision $n $precision $c_len]
       }
-      send_user " ... DONE with upload\r"
+      send_user " ... DONE with upload\r\n"
       send ". "
       expect ". "
       log_user 1
