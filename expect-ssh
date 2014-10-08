@@ -699,13 +699,12 @@ proc main_prompt_checker {arr} {
       set rc [load_mybashprefs [expr $load_mybashprefs_args(EXPECT_SSH) + 1]]
       if { $rc == "OK" } {
         if { [info exists load_mybashprefs_args(EXPECTSSH_IN_SCREEN)] > 0 && $load_mybashprefs_args(EXPECTSSH_IN_SCREEN)==1 } {
-          send " export EXPECTSSH_IN_SCREEN=1\r"
-          expect -re $PROMPT
-          send { printf "\033k${HOSTNAME}\033\134"}
+          send " export EXPECTSSH_IN_SCREEN=1 && "
+          send {printf "\033k${HOSTNAME}\033\134" >$(tty)}
           send \r
           expect -re $PROMPT
         }
-        if { [info exists load_mybashprefs_args(CMD_ARRAY)] > 0 } {
+        if { [info exists load_mybashprefs_args(CMD_ARRAY)] > 0 && $load_mybashprefs_args(CMD_ARRAY) != "declare -a CMD_ARRAY='()'" } {
           send " $load_mybashprefs_args(CMD_ARRAY) && eval \"\${CMD_ARRAY\[@]}\"\r"
         }
       }
