@@ -700,7 +700,7 @@ proc main_prompt_checker {arr} {
       if { $rc == "OK" } {
         if { [info exists load_mybashprefs_args(EXPECTSSH_IN_SCREEN)] > 0 && $load_mybashprefs_args(EXPECTSSH_IN_SCREEN)==1 } {
           send " export EXPECTSSH_IN_SCREEN=1 && "
-          send {printf "\033k${HOSTNAME}\033\134" >$(tty)}
+          send {printf "\033k${HOSTNAME}\033\134"}
           send \r
           expect -re $PROMPT
         }
