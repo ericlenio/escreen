@@ -213,12 +213,14 @@ proc load_mybashprefs {EXPECT_SSH {nest_level 0}} {
   append mybashprefs "local in_screen=0\n"
   append mybashprefs {if [ -n "$STY" -o -n "$EXPECTSSH_IN_SCREEN" ]; then in_screen=1; fi}
   append mybashprefs "\n"
-  append mybashprefs {local args=$(printf "EXPECT_SSH %s EXPECTSSH_IN_SCREEN {%s}" $EXPECT_SSH "$in_screen" | gzip -9 -c | openssl enc -base64)}
+  append mybashprefs {local CMD_ARRAY=("$@")}
+  append mybashprefs "\n"
+  append mybashprefs {local args=$(printf "EXPECT_SSH %s EXPECTSSH_IN_SCREEN {%s} CMD_ARRAY {%s}" $EXPECT_SSH "$in_screen" "$(declare -p CMD_ARRAY)" | gzip -9 -c | openssl enc -base64)}
   append mybashprefs "\n"
   # pass a \010 (backspace) character to erase last character of the pattern so
   # that expect only processes this signal 1 time ... else when inside screen
   # it would potentially get re-executed from a resumed session.
-  append mybashprefs {printf "%s\010.\n%s.\n" "$marker" "$args" > $(tty)}
+  append mybashprefs {printf "%s\010.\n%s.\n" "$marker" "$args"}
   append mybashprefs "\n}\n"
   append mybashprefs "export -f signal_load_mybashprefs\n"
 
@@ -407,13 +409,13 @@ function tomcatlog() {
     esac
   done
   if [ "$op" = "edit" ]; then
-    signal_load_mybashprefs
-    sudo -E -H -u $tomcat_user -- /bin/bash -c "unset DISPLAY && vim -n -i NONE $logfile"
+    signal_load_mybashprefs "unset DISPLAY && vim -n -i NONE $logfile; exit"
+    sudo -H -u $tomcat_user /bin/bash
   elif [ "$op" = "clear" ]; then
     sudo truncate --no-create --size 0 $logfile
     echo "$logfile was truncated."
   elif [ "$op" = "exceptions" ]; then
-    sudo -u $tomcat_user grep Exception $logfile | less
+    sudo -u $tomcat_user grep Exception $logfile
   else
     sudo -E -H -u $tomcat_user multitail -f -c $logfile
   fi
@@ -697,12 +699,14 @@ proc main_prompt_checker {arr} {
       set rc [load_mybashprefs [expr $load_mybashprefs_args(EXPECT_SSH) + 1]]
       if { $rc == "OK" } {
         if { [info exists load_mybashprefs_args(EXPECTSSH_IN_SCREEN)] > 0 && $load_mybashprefs_args(EXPECTSSH_IN_SCREEN)==1 } {
-          #send " export PROMPT_COMMAND='$load_mybashprefs_args(PROMPT_COMMAND)'\r\n"
           send " export EXPECTSSH_IN_SCREEN=1\r"
           expect -re $PROMPT
           send { printf "\033k${HOSTNAME}\033\134"}
           send \r
           expect -re $PROMPT
+        }
+        if { [info exists load_mybashprefs_args(CMD_ARRAY)] > 0 } {
+          send " $load_mybashprefs_args(CMD_ARRAY) && eval \"\${CMD_ARRAY\[@]}\"\r"
         }
       }
     }
