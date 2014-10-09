@@ -138,7 +138,8 @@ proc get_download_filename {default_file_name} {
 
 proc download {outfile encoded_data} {
   log_user 1
-  exec sh -c "printf '%s\n' \"\$0\" | /usr/bin/openssl enc -base64 -d | gzip -d -c > '$outfile' && chmod 600 '$outfile'" $encoded_data
+  send_error ">>>[string length $encoded_data]<<<"
+  exec sh -c "printf '%s\n' \"\$0\" | /usr/bin/openssl enc -base64 -d | gzip -d -c > \"\$1\" && chmod 600 \"\$1\"" $encoded_data $outfile
   set l [file size $outfile]
   puts "downloaded to $outfile, $l bytes"
   return $l
@@ -210,6 +211,9 @@ proc load_mybashprefs {EXPECT_SSH {nest_level 0}} {
   # signal_load_mybashprefs:
   # Do an expression that is easily evaluated to a TCL array for args;
   append mybashprefs "function signal_load_mybashprefs() { local marker=$LOAD_MYBASHPREFS_MARKER\n"
+  # EXPECTSSH_IN_SCREEN is a flag to know if current shell is (ultimately)
+  # inside a screen session, and if so when ssh-ing to a new host we can update
+  # the screen window title with the new hostname.
   append mybashprefs "local in_screen=0\n"
   append mybashprefs {if [ -n "$STY" -o -n "$EXPECTSSH_IN_SCREEN" ]; then in_screen=1; fi}
   append mybashprefs "\n"
@@ -218,8 +222,8 @@ proc load_mybashprefs {EXPECT_SSH {nest_level 0}} {
   append mybashprefs {local args=$(printf "EXPECT_SSH %s EXPECTSSH_IN_SCREEN {%s} CMD_ARRAY {%s}" $EXPECT_SSH "$in_screen" "$(declare -p CMD_ARRAY)" | gzip -9 -c | openssl enc -base64)}
   append mybashprefs "\n"
   # pass a \010 (backspace) character to erase last character of the pattern so
-  # that expect only processes this signal 1 time ... else when inside screen
-  # it would potentially get re-executed from a resumed session.
+  # that expect-ssh only processes this signal 1 time ... else when inside
+  # screen it would potentially get re-executed from a resumed session.
   append mybashprefs {printf "%s\010.\n%s.\n" "$marker" "$args"}
   append mybashprefs "\n}\n"
   append mybashprefs "export -f signal_load_mybashprefs\n"
@@ -256,7 +260,10 @@ proc load_mybashprefs {EXPECT_SSH {nest_level 0}} {
       return
     fi
     printf "%s\010.\n" "$marker2"
-    gzip -9 -c "$file" | openssl enc -base64
+    for l in $(gzip -9 -c "$file" | openssl enc -base64); do
+      printf "%s" $l
+      printf "\015"
+    done
     printf ".\n"
   }
   append mybashprefs "}\n"
@@ -437,7 +444,8 @@ function screen() {
 
   local shell=$EXPECTSSH_TMPDIR/.bash.screen.$USER
   #printf 'exec /bin/bash --norc --noprofile "$@"\n' > $shell
-  # why exec bash via perl here? because Mac OSX bash will munge PS1 otherwise
+  # why exec bash via perl here? because bash will munge PS1 otherwise
+  # on Macs
   printf '#!/usr/bin/perl\n' > $shell
   printf 'exec qw(/bin/bash --norc --noprofile),@ARGV;\n' >> $shell
   chmod 700 $shell
@@ -861,13 +869,16 @@ interact {
     expect \n
     expect {
       -re "(\[^\\.]*)\\." {
+	#append encoded_args [regsub -all "\015" $expect_out(1,string) "\n"]
 	append encoded_args $expect_out(1,string)
       }
       -re "(\[^\\.]{1,255})" {
 	append encoded_args $expect_out(1,string)
+	#append encoded_args [regsub -all "\015" $expect_out(1,string) "\n"]
 	exp_continue
       }
     }
+    regsub -all "\015" $encoded_args "\n" encoded_args
     if { $marker_type == $MARKER(LOAD_MYBASHPREFS) } {
       #
       # We have a request to load bash prefs into the current shell, but we
