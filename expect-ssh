@@ -138,7 +138,6 @@ proc get_download_filename {default_file_name} {
 
 proc download {outfile encoded_data} {
   log_user 1
-  send_error ">>>[string length $encoded_data]<<<"
   exec sh -c "printf '%s\n' \"\$0\" | /usr/bin/openssl enc -base64 -d | gzip -d -c > \"\$1\" && chmod 600 \"\$1\"" $encoded_data $outfile
   set l [file size $outfile]
   puts "downloaded to $outfile, $l bytes"
@@ -869,15 +868,14 @@ interact {
     expect \n
     expect {
       -re "(\[^\\.]*)\\." {
-	#append encoded_args [regsub -all "\015" $expect_out(1,string) "\n"]
 	append encoded_args $expect_out(1,string)
       }
       -re "(\[^\\.]{1,255})" {
 	append encoded_args $expect_out(1,string)
-	#append encoded_args [regsub -all "\015" $expect_out(1,string) "\n"]
 	exp_continue
       }
     }
+    # convert all \015 back to \n
     regsub -all "\015" $encoded_args "\n" encoded_args
     if { $marker_type == $MARKER(LOAD_MYBASHPREFS) } {
       #
