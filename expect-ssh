@@ -114,7 +114,7 @@ proc copy_to_clipboard {clipboard_data} {
 proc get_download_filename {default_file_name} {
   global PROMPT OS
   set default_outfile "/tmp/$default_file_name"
-  spawn /bin/bash
+  spawn -noecho /bin/bash
   set outfile ""
   expect -re $PROMPT
   if { "$OS" == "Linux" } {
@@ -130,19 +130,21 @@ proc get_download_filename {default_file_name} {
     -o
     -re "\\nans=(\[^\\r\\n]*).*$PROMPT" {
       set outfile $interact_out(1,string)
-      send "exit\r"
+      close
+      return $outfile
     }
   }
-  return $outfile
 }
 
 proc download {outfile encoded_data} {
-  log_user 1
-  exec sh -c "printf '%s\n' \"\$0\" | /usr/bin/openssl enc -base64 -d | gzip -d -c > \"\$1\" && chmod 600 \"\$1\"" $encoded_data $outfile
+  set chan [open "|/usr/bin/openssl enc -base64 -d | gzip -d -c > \"$outfile\"" w]
+  fconfigure $chan -translation binary -encoding binary
+  puts $chan $encoded_data
+  flush $chan
+  close $chan
   set l [file size $outfile]
-  puts "downloaded to $outfile, $l bytes"
+  send_user "DONE...downloaded to $outfile, $l bytes"
   return $l
-  log_user 1
 }
 
 proc paste_from_clipboard_in_vim {} {
