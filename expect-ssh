@@ -238,8 +238,11 @@ proc load_mybashprefs {EXPECT_SSH {nest_level 0}} {
     if [ -z "$file_to_copy" ]; then
       file_to_copy="-"
     fi
-    perl -pe 'BEGIN{$n=0;}END{print "-" if $n==0}$n+=length($_);chomp if eof' -- "$file_to_copy" | gzip -9 -c | openssl enc -base64
-    printf ".\n" "copy_to_clipboard_EOF"
+    for l in $(perl -pe 'BEGIN{$n=0;}END{print "-" if $n==0}$n+=length($_);chomp if eof' -- "$file_to_copy" | gzip -9 -c | openssl enc -base64); do
+      printf "%s" $l
+      printf "\015"
+    done
+    printf ".\n"
   }
   append mybashprefs "}\n"
   append mybashprefs "export -f copy_to_clipboard\n"
