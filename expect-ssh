@@ -101,13 +101,15 @@ proc copy_to_clipboard {clipboard_data} {
   log_user 1
   if { $OS == "Darwin" } {
     exec sh -c "printf '%s\n' \"\$0\" | /usr/bin/openssl enc -base64 -d | gzip -d -c | pbcopy" $clipboard_data
+    set l [exec pbpaste | wc --bytes]
   } elseif { $OS == "Linux" } {
     exec sh -c "printf '%s\n' \"\$0\" | /usr/bin/openssl enc -base64 -d | gzip -d -c | clipit" $clipboard_data
+    set l [exec clipit -c | wc --bytes]
   } else {
     send_error "copy_to_clipboard: need handling for $OS"
     return
   }
-  set l [string length $clipboard_data]
+  send_user "DONE...$l bytes copied to the clipboard"
   return $l
 }
 
@@ -154,20 +156,24 @@ proc paste_from_clipboard_in_vim {} {
   # encode the clipboard data and send it across the wire, decoding it on the
   # other end, and store it in the VIM_CLIPBOARD file.
   # Leading space before cat so as to not save it to history
-  send " cat << EOF | /usr/bin/openssl enc -base64 -d | gzip -d -c > \$VIM_CLIPBOARD\r"
-  expect -re "> $"
+  send " tty=\$(tty)\r"
+  expect -re $PROMPT
+  send { while true; do read -d' ' l; [ "$l" = . ] && break; printf "%s\n" $l; printf "\015" >$tty; done}
+  send " | /usr/bin/openssl enc -base64 -d | gzip -d -c > \$VIM_CLIPBOARD\r"
+  expect -re \r\n$
   if { "$OS" == "Linux" } {
     set buf [exec clipit -c | gzip -9 -c | /usr/bin/openssl enc -base64]
   } elseif { "$OS" == "Darwin" } {
     set buf [exec pbpaste | gzip -9 -c | /usr/bin/openssl enc -base64]
   }
   foreach line [split $buf] {
-    send $line\r
-    expect -re "> $"
+    send "[string trimright $line] "
+    expect -re "\x0d$"
   }
-  send "EOF\r"
+  send ". "
+  expect ". "
   expect -re $PROMPT
-  send "exit\r"
+  send " exit\r"
   expect {
     -re $ANSI_RE_SHOW_CURSOR {
       # read the file and put it in the unnamed register
@@ -237,6 +243,9 @@ proc load_mybashprefs {EXPECT_SSH {nest_level 0}} {
     printf "%s\010.\n" "$marker"
     if [ -z "$file_to_copy" ]; then
       file_to_copy="-"
+    elif [ ! -e "$file_to_copy" ]; then
+      echo "Error: no such file: $file_to_copy"
+      file_to_copy=/dev/null
     fi
     for l in $(perl -pe 'BEGIN{$n=0;}END{print "-" if $n==0}$n+=length($_);chomp if eof' -- "$file_to_copy" | gzip -9 -c | openssl enc -base64); do
       printf "%s" $l
@@ -662,7 +671,6 @@ export -f ssh
       set c_len [string length $mybashprefs_enc]
       foreach line [regexp -all -inline {(?:.{0,80}){1,1}\n} "$mybashprefs_enc\n"] {
         send "[string trimright $line] "
-        #send_user "ans=[string length $line]\n"
         expect -re "\x0d$"
         if { $n > -1 } { send_user \r }
         incr n [string length $line]
