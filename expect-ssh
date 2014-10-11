@@ -209,6 +209,10 @@ proc load_mybashprefs {EXPECT_SSH {nest_level 0}} {
   #}
   set mybashprefs_file $EXPECTSSH_TMPDIR/.mybashprefs
   set mybashprefs "export EXPECTSSH_TMPDIR=$EXPECTSSH_TMPDIR\n"
+  append mybashprefs "export HISTCONTROL=ignoreboth:erasedups\n"
+  # see if previous command in history was the line to decode bashprefs, and if so delete it from history
+  append mybashprefs {history -p '!!'|grep -q ^' c=' && TMP=$(history|tail -1|awk '{print $1}') && history -d $TMP && unset TMP}
+  append mybashprefs \n
   append mybashprefs "export MYBASHPREFS_FILE=$mybashprefs_file\n"
   append mybashprefs {export PS1='${debian_chroot:+($debian_chroot)}\u@\H:\[\033[1;32m\]\w}
   # NOTE: all non-printing characters in the prompt must be surrounded with \[ \]
@@ -646,7 +650,7 @@ export -f ssh
       # (http://expect.sourceforge.net/FAQ.html#q76) "terminal input queue"
       # "typeahead buffer" MAX_INPUT
       # "getconf -a|grep MAX_INPUT" may help determine this value
-      send "TMP=\$(history|tail -1|awk '{print \$1}') && history -d \$TMP && history -d \$((\$TMP-1)) && HISTCONTROL=ignoreboth && export HISTIGNORE=' *' && unset TMP\r"
+      send "TMP=\$(history|tail -1|awk '{print \$1}') && history -d \$TMP && history -d \$((\$TMP-1)) && HISTCONTROL=ignoreboth:erasedups && unset TMP\r"
       expect -re $PROMPT
       send " \[ ! -d $EXPECTSSH_TMPDIR ] && { mkdir $EXPECTSSH_TMPDIR; chmod 1777 $EXPECTSSH_TMPDIR; }\r"
       expect -re $PROMPT
