@@ -138,6 +138,71 @@ proc get_download_filename {default_file_name} {
   }
 }
 
+proc upload_file {} {
+  global PROMPT OS spawn_id
+  set bashscript {function get_upload_file() {
+    local f
+    local yn
+    read -e -p 'Choose a file to be uploaded: ' f
+    if [ ! -e "$f" ]; then
+      echo "No such file \"$f\", stop."
+      return 1
+    fi
+    read -p "Confirm: upload \"$f\" (y/n, default y): " yn
+    [ -z "$yn" ] && yn=y
+    [ "$yn" != y ] && return
+    echo "File to be uploaded: $f"
+    local outfile=/tmp/$(basename "$f")
+    echo "Will be uploaded to: $outfile"
+    }
+    # execute the function
+    get_upload_file
+  }
+  set main_spawn_id $spawn_id
+  spawn -noecho /bin/bash --norc --noprofile -c "eval \"\$0\"" $bashscript
+  set upload_file ""
+  interact {
+    -o -nobuffer -re "File to be uploaded: (.*)\r\nWill be uploaded to: (.*)\r" {
+      set upload_file $interact_out(1,string)
+      set outfile $interact_out(2,string)
+    }
+  }
+  set spawn_id $main_spawn_id
+  if { [file exists $upload_file] == 0 } {
+    return
+  }
+  # Delimit the input with a space, and after each line is sent send \r so
+  # the terminal does not scroll
+  send " \[ ! -w \"$outfile\" ] && echo '$outfile is not writable, aborting upload.'\r"
+  expect {
+    -re "\n.*aborting" {
+      return
+    }
+    -re $PROMPT
+  }
+  send { tty=$(tty); while true; do read -d' ' l; [ "$l" = . ] && break; printf "%s\n" $l; printf "\015" >$tty; done}
+  send "| openssl enc -d -base64 | gzip -d -c > \"$outfile\"; unset tty\r"
+  # split into manageable chunks that will not exceed terminal driver
+  # buf size
+  set n -1 
+  log_user 1
+  set upload_file_enc [exec "bash" "-c" "gzip -9 -c \"$upload_file\" | openssl enc -base64"]
+  set c_len [string length $upload_file_enc]
+  foreach line [regexp -all -inline {(?:.{0,80}){1,1}\n} "$upload_file_enc\n"] {
+    send "[string trimright $line] "
+    expect -re "\x0d$"
+    if { $n > -1 } { send_user \r }
+    incr n [string length $line]
+    set precision [string length $c_len]
+    send_user [format "%*d/%*d uploaded" $precision $n $precision $c_len]
+  }
+  send_user " ... DONE with upload to $outfile\r\n"
+  send ". "
+  expect ". "
+  log_user 1
+  expect -re $PROMPT
+}
+
 proc download {outfile encoded_data} {
   set chan [open "|/usr/bin/openssl enc -base64 -d | gzip -d -c > \"$outfile\"" w]
   fconfigure $chan -translation binary -encoding binary
@@ -259,6 +324,16 @@ proc load_mybashprefs {EXPECT_SSH {nest_level 0}} {
   }
   append mybashprefs "}\n"
   append mybashprefs "export -f copy_to_clipboard\n"
+
+  append mybashprefs {
+    function receive_uploaded_file() {
+      local outfile="$1"
+      local tty=$(tty)
+      while true; do read -d' ' l; [ "$l" = . ] && break; printf "%s\n" $l; printf "\015" >$tty; done \
+      | openssl enc -d -base64 | gzip -d -c > "$outfile"
+    }
+    export -f receive_uploaded_file
+  }
 
   append mybashprefs "function download() { local marker1=$DOWNLOAD_DEFAULT_FILE_MARKER\n"
   append mybashprefs "local marker2=$DOWNLOAD_DATA_MARKER\n"
@@ -812,6 +887,9 @@ proc process_keystroke {c} {
     }
     set stdin_buf ""
     send \r
+  } elseif { $stdin_buf == "~u" } {
+    upload_file
+    set stdin_buf ""
   } else {
     if { $buflen == 1 } {
       if { $c != "~" } { send -- $c }
