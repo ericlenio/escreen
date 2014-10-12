@@ -173,7 +173,7 @@ proc upload_file {} {
   }
   # Delimit the input with a space, and after each line is sent send \r so
   # the terminal does not scroll
-  send " \[ ! -w \"$outfile\" ] && echo '$outfile is not writable, aborting upload.'\r"
+  send " \[ -e \"$outfile\" -a ! -w \"$outfile\" ] && echo '$outfile is not writable, aborting upload.'\r"
   expect {
     -re "\n.*aborting" {
       return
