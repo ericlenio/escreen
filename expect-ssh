@@ -144,6 +144,8 @@ proc upload_file {} {
     local f
     local yn
     read -e -p 'Choose a file to be uploaded: ' f
+    # canonicalize f: must do tilde expansion
+    f=${f/#~/$HOME}
     if [ ! -e "$f" ]; then
       echo "No such file \"$f\", stop."
       return 1
@@ -204,14 +206,17 @@ proc upload_file {} {
 }
 
 proc download {outfile encoded_data} {
-  set chan [open "|/usr/bin/openssl enc -base64 -d | gzip -d -c > \"$outfile\"" w]
-  fconfigure $chan -translation binary -encoding binary
-  puts $chan $encoded_data
-  flush $chan
-  close $chan
-  set l [file size $outfile]
-  send_user "DONE...downloaded to $outfile, $l bytes"
-  return $l
+  catch {
+    set chan [open "|/usr/bin/openssl enc -base64 -d | gzip -d -c > \"$outfile\"" w]
+    fconfigure $chan -translation binary -encoding binary
+    puts $chan $encoded_data
+    flush $chan
+    close $chan
+    set l [file size $outfile]
+    send_user "DONE...downloaded to $outfile, $l bytes"
+    return $l
+  } err
+  send_error "ERROR in proc download: $err"
 }
 
 proc paste_from_clipboard_in_vim {} {
