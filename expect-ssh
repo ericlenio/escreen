@@ -224,12 +224,11 @@ proc paste_from_clipboard_in_vim {} {
   send ":shell\r"
   expect -re $PROMPT
   # encode the clipboard data and send it across the wire, decoding it on the
-  # other end, and store it in the VIM_CLIPBOARD file.
-  # Leading space before cat so as to not save it to history
-  send " tty=\$(tty)\r"
-  expect -re $PROMPT
-  send { while true; do read -d' ' l; [ "$l" = . ] && break; printf "%s\n" $l; printf "\015" >$tty; done}
-  send " | /usr/bin/openssl enc -base64 -d | gzip -d -c > \$VIM_CLIPBOARD\r"
+  # other end, and store it in the VIM_CLIPBOARD file. Leading space before
+  # commands so as to not save them to history
+  send " exec 3> >(/usr/bin/openssl enc -base64 -d | gzip -d -c > \$VIM_CLIPBOARD)\r"
+  send { while true; do read -d' ' l; [ "$l" = . ] && break; printf "%s\n" $l >&3; printf "\015"; done; exec 3>&-}
+  send \r
   expect -re \r\n$
   if { "$OS" == "Linux" } {
     set buf [exec clipit -c | gzip -9 -c | /usr/bin/openssl enc -base64]
@@ -238,7 +237,10 @@ proc paste_from_clipboard_in_vim {} {
   }
   foreach line [split $buf] {
     send "[string trimright $line] "
-    expect -re "\x0d$"
+    expect {
+      -re "\x0d$" {}
+      timeout { send_error "TIMEOUT in paste_from_clipboard_in_vim"; return }
+    }
   }
   send ". "
   expect ". "
