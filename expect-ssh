@@ -333,16 +333,6 @@ proc load_mybashprefs {EXPECT_SSH {nest_level 0}} {
   append mybashprefs "}\n"
   append mybashprefs "export -f copy_to_clipboard\n"
 
-  append mybashprefs {
-    function receive_uploaded_file() {
-      local outfile="$1"
-      local tty=$(tty)
-      while true; do read -d' ' l; [ "$l" = . ] && break; printf "%s\n" $l; printf "\015" >$tty; done \
-      | openssl enc -d -base64 | gzip -d -c > "$outfile"
-    }
-    export -f receive_uploaded_file
-  }
-
   append mybashprefs "function download() { local marker1=$DOWNLOAD_DEFAULT_FILE_MARKER\n"
   append mybashprefs "local marker2=$DOWNLOAD_DATA_MARKER\n"
   append mybashprefs {local file="$1"
