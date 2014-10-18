@@ -182,12 +182,13 @@ proc upload_file {} {
     }
     -re $PROMPT
   }
-  send { tty=$(tty); while true; do read -d' ' l; [ "$l" = . ] && break; printf "%s\n" $l; printf "\015" >$tty; done}
-  send "| openssl enc -d -base64 | gzip -d -c > \"$outfile\"; unset tty\r"
+  send " exec 3> >(/usr/bin/openssl enc -base64 -d | gzip -d -c > \"$outfile\")\r"
+  send { while true; do read -d' ' l; [ "$l" = . ] && break; printf "%s\n" $l >&3; printf "\015"; done; exec 3>&-}
+  send \r
   # split into manageable chunks that will not exceed terminal driver
   # buf size
   set n -1 
-  log_user 1
+  log_user 0
   set upload_file_enc [exec "bash" "-c" "gzip -9 -c \"$upload_file\" | openssl enc -base64"]
   set c_len [string length $upload_file_enc]
   foreach line [regexp -all -inline {(?:.{0,80}){1,1}\n} "$upload_file_enc\n"] {
