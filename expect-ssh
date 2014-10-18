@@ -380,8 +380,8 @@ chmod 600 $VIM_CLIPBOARD || {
 }
 }
   
-  append mybashprefs "export VIMINIT='map <c-v> :echon \"$VIM_PASTE_CLIPBOARD_MARKER\\n.\""
-  append mybashprefs {<cr>|vnoremap <C-c> y:call writefile(split(@","\n","b"),$VIM_CLIPBOARD)<cr>:!copy_to_clipboard $VIM_CLIPBOARD<cr>|colorscheme elflord|syntax enable|set noswapfile number hlsearch incsearch sw=2 ignorecase wrap nocompatible ruler ai showmatch modeline modelines=5 nobackup nowritebackup textwidth=0 expandtab formatoptions=croql wildignore=*.class path=.,,**|autocmd Filetype java setlocal omnifunc=javacomplete#Complete'
+  append mybashprefs "export VIMINIT='map <c-v> :echon \"$VIM_PASTE_CLIPBOARD_MARKER\\n.\"<cr>|"
+  append mybashprefs {vnoremap <C-c> y:call writefile(split(@","\n","b"),$VIM_CLIPBOARD)<cr>:!copy_to_clipboard $VIM_CLIPBOARD<cr>|colorscheme elflord|syntax enable|set noswapfile number hlsearch incsearch sw=2 ignorecase wrap nocompatible ruler ai showmatch modeline modelines=5 nobackup nowritebackup textwidth=0 expandtab formatoptions=croql wildignore=*.class path=.,,**|autocmd Filetype java setlocal omnifunc=javacomplete#Complete'
 export EDITOR=/usr/bin/vim
 export FCEDIT=$EDITOR
 
@@ -516,7 +516,7 @@ function tomcatlog() {
     esac
   done
   if [ "$op" = "edit" ]; then
-    signal_load_mybashprefs "unset DISPLAY && vim -n -i NONE $logfile; exit"
+    signal_load_mybashprefs "unset DISPLAY && vim -n -i NONE -c 'map <c-z> :e<cr>:echon \"$logfile was reloaded from disk\"<cr>' $logfile; exit"
     sudo -H -u $tomcat_user /bin/bash
   elif [ "$op" = "clear" ]; then
     sudo truncate --no-create --size 0 $logfile
