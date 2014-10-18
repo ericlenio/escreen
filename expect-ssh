@@ -731,14 +731,19 @@ export -f ssh
       # Note the leading space so it is not saved in bash history
       send " \[ ! -e $mybashprefs_file ] && { touch $mybashprefs_file; chmod 666 $mybashprefs_file; }\r"
       expect -re $PROMPT
+      log_user 0
       send " exec 3< <(echo '$pass')\r"
-      expect -re $PROMPT
-      send " tty=\$(tty)\r"
+      expect -re {(.*\r)}
+      # Hide password from being displayed
+      regsub {'(.*)'} $expect_out(1,string) '[regsub -all . $pass *]' echoline
+      send_user $echoline\n
+      log_user 1
       expect -re $PROMPT
       # Delimit the input with a space, and after each line is sent send \r so
       # the terminal does not scroll
-      send { while true; do read -d' ' l; [ "$l" = . ] && break; printf "%s\n" $l; printf "\015" >$tty; done}
-      send "| openssl enc -d -base64 | gzip -d -c | openssl enc -a -aes256 -pass fd:3 -out $mybashprefs_file; exec 3<&-; unset tty\r"
+      send " exec 4> >(openssl enc -d -base64 | gzip -d -c | openssl enc -a -aes256 -pass fd:3 -out $mybashprefs_file)\r"
+      send { while true; do read -d' ' l; [ "$l" = . ] && break; printf "%s\n" $l >&4; printf "\015"; done; exec 3<&- 4>&-}
+      send \r
       expect -re \r\n$
       # split into manageable chunks that will not exceed terminal driver
       # buf size
