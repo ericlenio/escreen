@@ -114,28 +114,31 @@ proc copy_to_clipboard {clipboard_data} {
 }
 
 proc get_download_filename {default_file_name} {
-  global PROMPT OS
+  global PROMPT OS spawn_id
   set default_outfile "/tmp/$default_file_name"
-  spawn -noecho /bin/bash
   set outfile ""
-  expect -re $PROMPT
-  if { "$OS" == "Linux" } {
-    send " read -e -i '$default_outfile' -p 'Save downloaded file to: ' ans && echo ans=\$ans\r"
-  } elseif { "$OS" == "Darwin" } {
-    send " read -e -p 'Save downloaded file to: ' ans && echo ans=\$ans\r"
-    expect -ex :
-    send $default_outfile
-  } else {
-    send_error "get_download_filename: need support for OS=$OS"
+  set main_spawn_id $spawn_id
+  set bashscript {function get_download_file() {
+    read -e -p 'Save downloaded file to (leave blank to cancel): ' f
+    if [ -z "$f" ]; then return; fi
+    if [ -e "$f" -a ! -w "$f" ]; then echo "$f is not writable"; return; fi
+    local dir=$(dirname "$f")
+    if [ -z "$dir" ]; then dir=$(pwd); fi
+    if [ ! -e "$f" -a ! -w "$dir" ]; then echo "Directory $dir is not writable"; return; fi
+    echo "File will be downloaded to: $f"
+    }
+    get_download_file
   }
+  spawn -noecho /bin/bash --norc --noprofile -c {eval "$0"} $bashscript
+  expect ": "
+  send $default_outfile
   interact {
-    -o
-    -re "\\nans=(\[^\\r\\n]*).*$PROMPT" {
+    -o -nobuffer -re "File will be downloaded to: (.*)\r" {
       set outfile $interact_out(1,string)
-      close
-      return $outfile
     }
   }
+  set spawn_id $main_spawn_id
+  return $outfile
 }
 
 proc upload_file {} {
@@ -147,7 +150,7 @@ proc upload_file {} {
     # canonicalize f: must do tilde expansion
     f=${f/#~/$HOME}
     if [ ! -e "$f" ]; then
-      echo "No such file \"$f\", stop."
+      echo "Error: no such file, or file is not readable: $f"
       return 1
     fi
     read -p "Confirm: upload \"$f\" (y/n, default y): " yn
@@ -161,7 +164,7 @@ proc upload_file {} {
     get_upload_file
   }
   set main_spawn_id $spawn_id
-  spawn -noecho /bin/bash --norc --noprofile -c "eval \"\$0\"" $bashscript
+  spawn -noecho /bin/bash --norc --noprofile -c {eval "$0"} $bashscript
   set upload_file ""
   interact {
     -o -nobuffer -re "File to be uploaded: (.*)\r\nWill be uploaded to: (.*)\r" {
@@ -207,7 +210,8 @@ proc upload_file {} {
 }
 
 proc download {outfile encoded_data} {
-  catch {
+  set l -1
+  if { [catch {
     set chan [open "|/usr/bin/openssl enc -base64 -d | gzip -d -c > \"$outfile\"" w]
     fconfigure $chan -translation binary -encoding binary
     puts $chan $encoded_data
@@ -215,9 +219,10 @@ proc download {outfile encoded_data} {
     close $chan
     set l [file size $outfile]
     send_user "DONE...downloaded to $outfile, $l bytes"
-    return $l
-  } err
-  send_error "ERROR in proc download: $err"
+    } err] } {
+    send_error "ERROR in proc download: $err"
+  }
+  return $l
 }
 
 proc paste_from_clipboard_in_vim {} {
@@ -321,7 +326,7 @@ proc load_mybashprefs {EXPECT_SSH {nest_level 0}} {
     if [ -z "$file_to_copy" ]; then
       file_to_copy="-"
     elif [ ! -e "$file_to_copy" ]; then
-      echo "Error: no such file: $file_to_copy"
+      echo "Error: no such file, or file is not readable: $file_to_copy"
       file_to_copy=/dev/null
     fi
     for l in $(perl -pe 'BEGIN{$n=0;}END{print "-" if $n==0}$n+=length($_);chomp if eof' -- "$file_to_copy" | gzip -9 -c | openssl enc -base64); do
@@ -337,7 +342,7 @@ proc load_mybashprefs {EXPECT_SSH {nest_level 0}} {
   append mybashprefs "local marker2=$DOWNLOAD_DATA_MARKER\n"
   append mybashprefs {local file="$1"
     if [ ! -e "$file" ]; then
-      echo "Error: no such file: $file"
+      echo "Error: no such file, or file is not readable: $file"
       return
     fi
     local locfile=$(basename "$file")
