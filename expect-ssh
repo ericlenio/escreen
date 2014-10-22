@@ -104,7 +104,12 @@ proc copy_to_clipboard {clipboard_data} {
     set l [exec pbpaste | wc --bytes]
   } elseif { $OS == "Linux" } {
     exec sh -c "printf '%s\n' \"\$0\" | /usr/bin/openssl enc -base64 -d | gzip -d -c | clipit" $clipboard_data
-    set l [exec clipit -c | wc --bytes]
+    set content [exec clipit -c]
+    if { [string length $content] <= 255 } {
+      # put smaller clipboards in the X windows primary selection for convenience
+      exec sh -c "printf '%s\n' \"\$0\" | /usr/bin/openssl enc -base64 -d | gzip -d -c | xsel -i -p" $clipboard_data
+    }
+    set l [string length $content]
   } else {
     send_error "copy_to_clipboard: need handling for $OS"
     return
