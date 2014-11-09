@@ -763,7 +763,11 @@ export -f ssh
       set c_len [string length $mybashprefs_enc]
       foreach line [regexp -all -inline {(?:.{0,80}){1,1}\n} "$mybashprefs_enc\n"] {
         send "[string trimright $line] "
-        expect -re "\x0d$"
+        expect {
+          # first time in this loop it could by \r\n
+          -re "\r\n$" {}
+          -re "\x0d$" {}
+        }
         if { $n > -1 } { send_user \r }
         incr n [string length $line]
         set precision [string length $c_len]
