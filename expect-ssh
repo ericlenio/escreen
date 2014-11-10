@@ -1012,8 +1012,14 @@ interact {
     } elseif { $marker_type == $MARKER(DOWNLOAD_DATA) } {
       download $outfile $encoded_args
     } elseif { $marker_type == $MARKER(LDSUPPORT_PW) } {
-      array set args [exec sh -c "printf '%s\n' \"\$0\" | /usr/bin/openssl enc -base64 -d | gzip -d -c" $encoded_args]
-      process_ldsupport_request $args(ld_url) $args(enc_pass)
+      if { [catch {
+        array set args [exec sh -c "printf '%s\n' \"\$0\" | /usr/bin/openssl enc -base64 -d | gzip -d -c" $encoded_args]
+      } err] } {
+        send_error "ERROR decrypting: $err"
+        send_error "encoded_args=$encoded_args"
+      } else {
+        process_ldsupport_request $args(ld_url) $args(enc_pass)
+      }
     } elseif { $marker_type == $MARKER(VIM_PASTE_CLIPBOARD) } {
       paste_from_clipboard_in_vim
     }
