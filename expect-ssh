@@ -688,12 +688,18 @@ fi
 unset OLD_LD_BIN
 
 function ssh() {
-  signal_load_mybashprefs
-  /usr/bin/ssh "$@"
-  if [ "$EXPECTSSH_IN_SCREEN" = 1 -o -n "$STY" ]; then
-    printf "\033k${HOSTNAME}\033\134"
+  if [ -t 1 ]; then
+    signal_load_mybashprefs
+    /usr/bin/ssh "$@"
+    local rc=$?
+    if [ "$EXPECTSSH_IN_SCREEN" = 1 -o -n "$STY" ]; then
+      printf "\033k${HOSTNAME}\033\134"
+    fi
+    return $rc
+  else
+    # we are in a pipeline
+    /usr/bin/ssh "$@"
   fi
-  return $?
 }
 export -f ssh
 
