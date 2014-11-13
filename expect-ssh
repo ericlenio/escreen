@@ -96,7 +96,7 @@ proc resize_handler {} {
 }
 
 proc copy_to_clipboard {clipboard_data} {
-  global PROMPT OS ANSI_RE_GENERAL
+  global PROMPT OS
   set max_clipboard_data_len 1000000
   log_user 1
   if { $OS == "Darwin" } {
@@ -277,7 +277,7 @@ proc paste_from_clipboard_in_vim {} {
 }
 
 proc load_mybashprefs {EXPECT_SSH {nest_level 0}} {
-  global PROMPT ANSI_RE_TEXT_FORMATTING PS1_MARKER ANSI_RE_GENERAL EXPECTSSH_TMPDIR MYBASHPREFS_PASSWORD
+  global PROMPT ANSI_RE_TEXT_FORMATTING PS1_MARKER EXPECTSSH_TMPDIR MYBASHPREFS_PASSWORD
   global LOAD_MYBASHPREFS_MARKER COPY_TO_CLIPBOARD_MARKER DOWNLOAD_DEFAULT_FILE_MARKER DOWNLOAD_DATA_MARKER
   global LDSUPPORT_PW_MARKER VIM_PASTE_CLIPBOARD_MARKER
   log_user 1
@@ -966,20 +966,6 @@ interact {
   # patterns after the -o apply to the spawned process."
   -o
   -nobuffer -re $PROMPT { main_prompt_checker interact_out }
-  #-re {(?:^|[\r\n](?:$ANSI_RE_GENERAL)*)~copy_to_clipboard_in_vim[^\w].*} {
-    #send ":!copy_to_clipboard \$VIM_CLIPBOARD\r"
-    #expect -re $COPY_TO_CLIPBOARD_BEGIN_RE
-    #set n [copy_to_clipboard]
-    #expect {
-      #-re {Press ENTER or type command to continue.*$} {
-	#send "\r"
-	#expect -re "$ANSI_RE_SHOW_CURSOR$"
-	#send ":echon \"$n characters were copied to clipboard\"\r"
-	#expect -re "$ANSI_RE_SHOW_CURSOR$"
-      #}
-      #-re {has changed since editing started.*\(L\)oad File: $} {}
-    #}
-  #}
   -nobuffer -re \[\n\r]$GENERIC_MARKER {
     set marker_type $interact_out(1,string)
     set encoded_args ""
@@ -995,6 +981,8 @@ interact {
     }
     # convert all \015 back to \n
     regsub -all "\015" $encoded_args "\n" encoded_args
+    # clean out any cursor movement sequences that sometimes get thrown in by screen
+    regsub -all $ANSI_RE_GENERAL $encoded_args "" encoded_args
     if { $marker_type == $MARKER(LOAD_MYBASHPREFS) } {
       #
       # We have a request to load bash prefs into the current shell, but we
