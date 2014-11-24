@@ -98,16 +98,28 @@ proc resize_handler {} {
 proc copy_to_clipboard {clipboard_data} {
   global PROMPT OS
   set max_clipboard_data_len 1000000
+  set content {}
+  set l 0
   log_user 1
   if { $OS == "Darwin" } {
-    exec sh -c "printf '%s\n' \"\$0\" | /usr/bin/openssl enc -base64 -d | gzip -d -c | pbcopy" $clipboard_data
-    set l [exec pbpaste | wc --bytes]
+    if {[catch {
+      exec sh -c "printf '%s\n' \"\$0\" | /usr/bin/openssl enc -base64 -d | gzip -d -c | pbcopy" $clipboard_data
+    }]} {
+      send_error "ERROR: could not copy clipboard data"
+    } else {
+      set l [exec pbpaste | wc --bytes]
+    }
   } elseif { $OS == "Linux" } {
-    exec sh -c "printf '%s\n' \"\$0\" | /usr/bin/openssl enc -base64 -d | gzip -d -c | clipit" $clipboard_data
-    set content [exec clipit -c]
-    if { [string length $content] <= 255 } {
-      # put smaller clipboards in the X windows primary selection for convenience
-      exec sh -c "printf '%s\n' \"\$0\" | /usr/bin/openssl enc -base64 -d | gzip -d -c | xsel -i -p" $clipboard_data
+    if {[catch {
+      exec sh -c "printf '%s\n' \"\$0\" | /usr/bin/openssl enc -base64 -d | gzip -d -c | clipit" $clipboard_data
+    }]} {
+      send_error "ERROR: could not copy clipboard data"
+    } else {
+      set content [exec clipit -c]
+      if { [string length $content] <= 255 } {
+        # put smaller clipboards in the X windows primary selection for convenience
+        exec sh -c "printf '%s\n' \"\$0\" | /usr/bin/openssl enc -base64 -d | gzip -d -c | xsel -i -p" $clipboard_data
+      }
     }
     set l [string length $content]
   } else {
