@@ -37,6 +37,7 @@ array set MARKER {
   DOWNLOAD_DATA 04
   LDSUPPORT_PW 05
   VIM_PASTE_CLIPBOARD 06
+  UPLOAD_FUNCTION 07
 }
 
 proc get_marker {marker_type} {
@@ -50,6 +51,7 @@ set DOWNLOAD_DEFAULT_FILE_MARKER [get_marker DOWNLOAD_DEFAULT_FILE]
 set DOWNLOAD_DATA_MARKER [get_marker DOWNLOAD_DATA]
 set LDSUPPORT_PW_MARKER [get_marker LDSUPPORT_PW]
 set VIM_PASTE_CLIPBOARD_MARKER [get_marker VIM_PASTE_CLIPBOARD]
+set UPLOAD_FUNCTION_MARKER [get_marker UPLOAD_FUNCTION]
 
 set EXPECTSSH_TMPDIR $env(EXPECTSSH_TMPDIR)
 # PS1_MARKER is a non-regexp marker in the normal PS1 prompt that we search for
@@ -72,10 +74,12 @@ append PROMPT ")"
 set OS [exec uname -s]
 set LD_SUPPORT_BASIC_AUTH secret
 
-set rcfile "$env(HOME)/.expect-ssh/config"
+set configdir "$env(HOME)/.expect-ssh"
+set rcfile "$configdir/config"
 if {[file exists $rcfile]} {
   source $rcfile
 }
+set EXPECTSSH_FUNCTIONS_DIR "$configdir/functions.d"
 
 if {[info exists env(EXPECT_SSH)] == 1} {
   set env(EXPECT_SSH) [expr $env(EXPECT_SSH) + 1]
@@ -93,6 +97,45 @@ proc resize_handler {} {
   set rows [stty rows]
   set cols [stty columns]
   stty rows $rows columns $cols < $spawn_out_slave_name
+}
+
+proc compute_md5 {s} {
+  return [string tolower [md5::md5 -hex $s]]
+}
+
+proc slurp_file {f} {
+  set fp [open $f r]
+  set file_data [read $fp]
+  close $fp
+  return $file_data
+}
+
+#
+# Load user functions
+#
+proc get_user_functions {} {
+  global EXPECTSSH_FUNCTIONS_DIR EXPECTSSH_TMPDIR env
+  global UPLOAD_FUNCTION_MARKER
+  array unset FUNCMAP
+  set FUNCMAP(:remote_file_prefix) $EXPECTSSH_TMPDIR/$env(USER).fcn.
+  if { [file isdirectory $EXPECTSSH_FUNCTIONS_DIR]==1 } {
+    foreach funcname [glob -directory $EXPECTSSH_FUNCTIONS_DIR -tails *] {
+      set func_def [slurp_file $EXPECTSSH_FUNCTIONS_DIR/$funcname]
+      set FUNCMAP($funcname) ""
+      set FUNCMAP($funcname,file) $EXPECTSSH_FUNCTIONS_DIR/$funcname
+      set FUNCMAP($funcname,md5) [compute_md5 $func_def]
+      set FUNCMAP($funcname,defn) $func_def
+      set FUNCMAP($funcname,remote_file) $FUNCMAP(:remote_file_prefix)$funcname.$FUNCMAP($funcname,md5)
+      set stub "function $funcname () { printf \"%s\010.\n%s.\" \"$UPLOAD_FUNCTION_MARKER\" $funcname;"
+      append stub "$funcname \"\$@\"; }\n"
+      append stub "export -f $funcname\n"
+      set FUNCMAP($funcname,stub) $stub
+    }
+    # check if FUNCMAP exists on remote end
+    # if it exists, see if it pass md5 check
+    # if it does not exist, or fails md5 check, upload it
+  }
+  return [array get FUNCMAP]
 }
 
 proc copy_to_clipboard {clipboard_data} {
@@ -158,6 +201,9 @@ proc get_download_filename {default_file_name} {
   return $outfile
 }
 
+#
+# Upload a local file to the remote session.
+#
 proc upload_file {} {
   global PROMPT OS spawn_id
   set bashscript {function get_upload_file() {
@@ -303,6 +349,7 @@ proc load_mybashprefs {EXPECT_SSH {nest_level 0}} {
     #}
   #}
   set mybashprefs_file $EXPECTSSH_TMPDIR/.mybashprefs
+  array set FUNCMAP [get_user_functions]
   set mybashprefs "export EXPECTSSH_TMPDIR=$EXPECTSSH_TMPDIR\n"
   append mybashprefs "export HISTCONTROL=ignoreboth:erasedups\n"
   # see if previous command in history was the line to decode bashprefs, and if so delete it from history
@@ -314,403 +361,13 @@ proc load_mybashprefs {EXPECT_SSH {nest_level 0}} {
   # otherwise the line spacing gets all weird when typing out long bash commands
   append mybashprefs [regsub -all {\\033\[[^a-zA-Z]*[a-zA-Z]} $PS1_MARKER [join { {\[} {\0} {\]} } {}]]
   append mybashprefs "'\n"
-  # signal_load_mybashprefs:
-  # Do an expression that is easily evaluated to a TCL array for args;
-  append mybashprefs "function signal_load_mybashprefs() { local marker=$LOAD_MYBASHPREFS_MARKER\n"
-  # EXPECTSSH_IN_SCREEN is a flag to know if current shell is (ultimately)
-  # inside a screen session, and if so when ssh-ing to a new host we can update
-  # the screen window title with the new hostname.
-  append mybashprefs "local in_screen=0\n"
-  append mybashprefs {if [ -n "$STY" -o -n "$EXPECTSSH_IN_SCREEN" ]; then in_screen=1; fi}
-  append mybashprefs "\n"
-  append mybashprefs {local CMD_ARRAY=("$@")}
-  append mybashprefs "\n"
-  append mybashprefs {local args=$(printf "EXPECT_SSH %s EXPECTSSH_IN_SCREEN {%s} CMD_ARRAY {%s}" $EXPECT_SSH "$in_screen" "$(declare -p CMD_ARRAY)" | gzip -9 -c | openssl enc -base64)}
-  append mybashprefs "\n"
-  # pass a \010 (backspace) character to erase last character of the pattern so
-  # that expect-ssh only processes this signal 1 time ... else when inside
-  # screen it would potentially get re-executed from a resumed session.
-  append mybashprefs {printf "%s\010.\n%s.\n" "$marker" "$args"}
-  append mybashprefs "\n}\n"
-  append mybashprefs "export -f signal_load_mybashprefs\n"
+  append mybashprefs "for f in $FUNCMAP(:remote_file_prefix)*; do\n"
+  append mybashprefs "echo f=\$f\n"
+  append mybashprefs "done\n"
 
-  append mybashprefs "function copy_to_clipboard() { local marker=$COPY_TO_CLIPBOARD_MARKER\n"
-  # copy_to_clipboard: use perl to remove the last \n on the last line, and
-  # minimally set a hyphen character in the stream so as to not pass 0 bytes to
-  # clipit (which causes it to block)
-  append mybashprefs {local file_to_copy="$1"
-    printf "%s\010.\n" "$marker"
-    if [ -z "$file_to_copy" ]; then
-      file_to_copy="-"
-    elif [ ! -e "$file_to_copy" ]; then
-      echo "Error: no such file, or file is not readable: $file_to_copy"
-      file_to_copy=/dev/null
-    fi
-    for l in $(perl -pe 'BEGIN{$n=0;}END{print "-" if $n==0}$n+=length($_);chomp if eof' -- "$file_to_copy" | gzip -9 -c | openssl enc -base64); do
-      printf "%s" $l
-      printf "\015"
-    done
-    printf ".\n"
+  foreach funcname [array names FUNCMAP -regexp {^\w+$}] {
+    append mybashprefs $FUNCMAP($funcname,stub)
   }
-  append mybashprefs "}\n"
-  append mybashprefs "export -f copy_to_clipboard\n"
-
-  append mybashprefs "function download() { local marker1=$DOWNLOAD_DEFAULT_FILE_MARKER\n"
-  append mybashprefs "local marker2=$DOWNLOAD_DATA_MARKER\n"
-  append mybashprefs {local file="$1"
-    if [ ! -e "$file" ]; then
-      echo "Error: no such file, or file is not readable: $file"
-      return
-    fi
-    local locfile=$(basename "$file")
-    local args=$(printf "default_file_name {%s}" "$locfile" | gzip -9 -c | openssl enc -base64)
-    printf "%s\010.\n%s.\n" "$marker1" "$args"
-    local ans
-    # Only continue if a valid download filename was picked in get_download_filename
-    read -p "Continue? " ans
-    if [ "$ans" != y ]; then
-      return
-    fi
-    printf "%s\010.\n" "$marker2"
-    for l in $(gzip -9 -c "$file" | openssl enc -base64); do
-      printf "%s" $l
-      printf "\015"
-    done
-    printf ".\n"
-  }
-  append mybashprefs "}\n"
-  append mybashprefs "export -f download\n"
-
-  
-  append mybashprefs {unset PROMPT_COMMAND
-export HISTIGNORE=' *'
-export VIM_CLIPBOARD=$EXPECTSSH_TMPDIR/vim.clipboard.$USER
-touch $VIM_CLIPBOARD
-chmod 600 $VIM_CLIPBOARD || {
-  echo "WARNING: could not chmod on $VIM_CLIPBOARD, halting."
-  return
-}
-}
-  
-  append mybashprefs "export VIMINIT='map <c-v> :echon \"$VIM_PASTE_CLIPBOARD_MARKER\\n.\"<cr>|"
-  append mybashprefs {vnoremap <C-c> y:call writefile(split(@","\n","b"),$VIM_CLIPBOARD)<cr>:!copy_to_clipboard $VIM_CLIPBOARD<cr>|colorscheme elflord|syntax enable|set noswapfile number hlsearch incsearch sw=2 ignorecase wrap nocompatible ruler ai showmatch modeline modelines=5 nobackup nowritebackup textwidth=0 expandtab formatoptions=croql wildignore=*.class path=.,,**|autocmd Filetype java setlocal omnifunc=javacomplete#Complete'
-export EDITOR=/usr/bin/vim
-export FCEDIT=$EDITOR
-
-function openssl_show_cert() {
-  local cert=$1
-  if [ -z "$cert" ]; then
-    # assume stdin
-    cert="-"
-  fi
-  openssl x509 -in $cert -noout -text
-}
-export -f openssl_show_cert
-
-function openssl_s_client_showcerts() {
-  local hostport="$1"
-  local host=${hostport%%:[0-9]*}
-  local port=${hostport##*:}
-  if [ "$host" = "$hostport" -o "$port" = "$hostport" ]; then
-    echo "Usage: ${FUNCNAME[0]} host.example.com:port"
-    return
-  fi
-  echo | openssl s_client -showcerts -connect $host:$port
-}
-export -f openssl_s_client_showcerts
-
-function pathadd() {
-  if [ -d "$1" ] && [[ ":$PATH:" != *":$1:"* ]]; then
-    PATH="${PATH:+"$PATH:"}$1"
-  fi
-}
-
-function l() {
-  local os=$(uname -s)
-  if [ $os = Darwin ]; then
-    ls -laF "$@"
-  else
-    ls -laF --time-style=+'%D %H:%M:%S' "$@"
-  fi
-}
-unalias l 2>/dev/null
-export -f l
-
-function vimf() {
-  local patt="$1"
-  if [ -z "$patt" ]; then
-    patt="*"
-  else
-    patt="*$patt*"
-  fi
-  vim $(find . ! -type d ! -wholename '*/.svn*' ! -iregex '.*\.\(jar\|pdf\|swp\|png\|class\|jpg\|gif\)' -name "$patt")
-}
-export -f vimf
-
-function pg_version() {
-  # Note: just gets the major.minor version number
-  sudo -u postgres psql -tAc "select version()" 2>/dev/null | perl -pe 's{^\w+\s(\d+\.\d+).*}{$1}'
-}
-export -f pg_version
-
-function pg_activity() {
-  local version=$(pg_version)
-  local query="SELECT datname,usename,pid,client_addr,waiting,query_start,query FROM pg_stat_activity order by datname,usename,query_start"
-  perl -e "exit ( $version <= 9.2 ? 0 : 1 )" && \
-    query="SELECT datname,usename,procpid,client_addr,waiting,query_start,current_query FROM pg_stat_activity order by datname,usename,query_start"
-  sudo -u postgres psql -c "$query"
-}
-export -f pg_activity
-
-function pg_cancel_backend() {
-  local procpid="$1"
-  if [ -z "$procpid" ]; then
-    echo "Usage: pg_cancel_backend procpid"
-    return 1
-  fi
-  printf "select pg_cancel_backend($procpid);" | sudo -u postgres psql
-}
-export -f pg_cancel_backend
-
-function pg_terminate_backend() {
-  local procpid="$1"
-  if [ -z "$procpid" ]; then
-    echo "Usage: pg_terminate_backend procpid"
-    return 1
-  fi
-  printf "select pg_terminate_backend($procpid);" | sudo -u postgres psql
-}
-export -f pg_terminate_backend
-
-function get_time_with_millis() {
-  # Mac does not support %N in date command, so use perl
-  local time=$(perl -MTime::HiRes -e "printf(qq(%.3f\n),Time::HiRes::time())")
-  echo -n $time
-}
-export -f get_time_with_millis
-
-function jargrep() {
-  for f in $(find . -name '*.jar'); do
-    local output=$(jar tvf $f | grep "$@")
-    if [ "$output" ]; then
-      echo "$f: $output"
-    fi
-  done
-}
-export -f jargrep
-
-function rgrep() {
-  find . -type f ! -wholename './build/*' ! -wholename '*/.svn*' ! -wholename '*.class' ! -wholename '*.jar' ! -wholename '*.swp' | xargs grep "$@" 2>/dev/null
-}
-export -f rgrep
-
-function tomcatlog() {
-  local OPTS=$(getopt -o 23ecx -- "$@")
-  eval set -- "$OPTS"
-  local flag=$1
-  local logfile=/var/log/tomcat7/catalina.out
-  local tomcat_user=tomcat7
-  local op
-  while true ; do
-    case "$1" in
-      -2) logfile=/var/log/lincdoc/catalina.out
-        tomcat_user=tomcat
-        shift
-        ;;
-      -3) logfile=/var/log/lincdoc/catalina.log
-        tomcat_user=tomcat
-        shift
-        ;;
-      -e) op=edit; shift;;
-      -c) op=clear; shift;;
-      -x) op=exceptions; shift;;
-      --) shift ; break ;;
-    esac
-  done
-  if [ "$op" = "edit" ]; then
-    signal_load_mybashprefs "unset DISPLAY && vim -n -i NONE -c 'map <c-z> :e<cr>:echon \"$logfile was reloaded from disk\"<cr>' $logfile; exit"
-    sudo -H -u $tomcat_user /bin/bash
-  elif [ "$op" = "clear" ]; then
-    sudo truncate --no-create --size 0 $logfile
-    echo "$logfile was truncated."
-  elif [ "$op" = "exceptions" ]; then
-    sudo -u $tomcat_user grep Exception $logfile
-  else
-    sudo -E -H -u $tomcat_user multitail -f -c $logfile
-  fi
-}
-export -f tomcatlog
-
-function screen() {
-  # see if -r or -R was passed, if so just invoke screen with the current arg list "as is"
-  local origArgs=("$@")
-  local OPTS=$(getopt -q -o rR -- "$@")
-  eval set -- "$OPTS"
-  while true; do
-    case "$1" in
-      -r|-R) /usr/bin/screen "${origArgs[@]}"; return ;;
-      --) shift; break ;;
-      *) shift ;;
-    esac
-  done
-
-  local shell=$EXPECTSSH_TMPDIR/.bash.screen.$USER
-  #printf 'exec /bin/bash --norc --noprofile "$@"\n' > $shell
-  # why exec bash via perl here? because bash will munge PS1 otherwise
-  # on Macs
-  printf '#!/usr/bin/perl\n' > $shell
-  printf 'exec qw(/bin/bash --norc --noprofile),@ARGV;\n' >> $shell
-  chmod 700 $shell
-  local SCREENRC=$EXPECTSSH_TMPDIR/.screenrc.$USER
-  # Set up a little macro so that ^a% will dump the current screen to a file,
-  # then edit it in vim.
-  local printscreen_macro=$EXPECTSSH_TMPDIR/.screenrc.$USER.printscreen
-  local hardcopy_file=$EXPECTSSH_TMPDIR/.screenrc.$USER.hardcopy
-  touch $SCREENRC $printscreen_macro $hardcopy_file
-  chmod 600 $SCREENRC $printscreen_macro $hardcopy_file
-  export SCREENRC
-  cat > $SCREENRC << 'EOF'
-startup_message off
-bind " " windowlist -b
-vbell on
-vbell_msg DING
-#shelltitle "$ |bash:"
-bindkey "\032" stuff "\032"
-caption always "%{= kw}%-w%{= BW}%n%t%{-}%+w %-= @%H %m/%d %c"
-shelltitle "$ |:"
-defmonitor on
-#setenv PROMPT_COMMAND 'screen_prompt'
-#shell $shell
-#screen rm $SCREENRC
-EOF
-  cat >> $SCREENRC << EOF
-bind % source $printscreen_macro
-EOF
-  cat > $printscreen_macro << EOF
-hardcopy_append off
-hardcopy $hardcopy_file
-screen vim $hardcopy_file
-EOF
-
-  local esc='^Ee'
-  if [ "$EXPECT_SSH" = 0 ]; then
-    esc='^Aa'
-  fi
-  /usr/bin/screen -e$esc -s $shell "${origArgs[@]}"
-}
-export -f screen
-
-function s() {
-  local user=$1
-  if [ "$user" = "" ]; then
-    user=root
-  fi
-  id -u "$user" >/dev/null 2>&1 || { echo "No such user \"$user\"."; return; }
-  signal_load_mybashprefs
-  sudo -H -u $user -- /bin/bash
-}
-export -f s
-
-function screen_prompt() {
-  # use printf instead of echo: works on macs
-  #printf "\033k${HOSTNAME}\033\134"
-  false
-}
-export -f screen_prompt
-}
-
-  append mybashprefs "function get_ldsupport_pw() { local marker=$LDSUPPORT_PW_MARKER\n"
-  append mybashprefs {local app_context=$1
-  if [ -z "$app_context" ]; then
-    app_context=lincdoc
-  fi
-  if [ -d /etc/lincware/lwsa ]; then
-    # 3.1 or higher
-    local ld_url="http://remoteadmin.lincware.com:$(sudo cat /var/run/lwsa-remoteadmin.http_port)/$app_context/login/_/system"
-    local cmd="$(sudo lwsa --get_psql_connect $app_context --silent) -tAc \"select config from ld_admin.ld_config_map where key = 'ldsupport-crypt-pw'\""
-    if [[ "$cmd" != *psql* ]]; then
-      echo "ERROR: no such app context: $app_context"
-      echo "Re-run get_ldsupport_pw, specifying one of these contexts:"
-      sudo lwsa --list_app_context_ids --silent | perl -pe 's{localhost-8080-(.*)}{$1}'
-      return
-    fi
-    echo $ld_url
-    local enc_pass="$(eval $cmd)"
-    local args="$(printf "ld_url {%s} enc_pass {%s}" "$ld_url" "$enc_pass" | gzip -9 -c | openssl enc -base64)"
-    # send \010. to prevent the pattern from being detected again
-    printf "%s\010.\n" "$marker"
-    for l in "$args"; do
-      printf "%s\015" $l
-    done
-    printf ".\n"
-  else
-    local version=$(show-version)
-    if [[ "$version" = 3* ]]; then
-      local pid=$(pgrep -U remoteadmin ssh)
-      if [ -n "$pid" ]; then
-        ps --no-headers ww $pid | perl -pe 's{.*?\b(\d+):localhost:80\b.*}{http://remoteadmin.lincware.com:$1}'
-      fi
-      generate-build-properties -get lincdoc.user.ldsupport.password
-    else
-      # version 2.x
-      local pid=$(pgrep -U sshtunnel ssh)
-      if [ -n "$pid" ]; then
-        ps --no-headers -ww -o user:12,pid,args $pid | perl -pe 's{.*?\b(\d+):localhost:80\b.*}{http://remoteadmin.lincware.com:$1}'
-      fi
-      echo "lincdoc/$(generate-build-properties -get lincdoc.ldap.password)"
-    fi
-  fi
-}
-  append mybashprefs "}\n"
-  append mybashprefs {export -f get_ldsupport_pw
-
-function ldu() {
-  perl -e'%h=map{/.\s/;99**(ord$&&7)-$`,$_}`sudo du -h`;print@h{sort%h}'
-}
-export -f ldu
-
-function update_gpg_key() {
-  local apt_keyring=/etc/apt/trusted.gpg
-  # the old key expired 04/28/2014
-  local old_key="Lincware Repository"
-  local apt_lincware_key_file=/etc/apt/trusted.gpg.d/apt.lincware.com.gpg
-  # To do: set http_proxy environment var if customer uses a proxy
-  local new_key_url=http://apt.lincware.com/apt.lincware.com.gpg
-  echo "Attempting to fetch $new_key_url now"
-  local new_key_base64="$(curl --silent $new_key_url)"
-  sudo -H bash -s << EOSUDO
-    gpg --no-default-keyring --with-colons --list-keys --keyring $apt_keyring "$old_key" >/dev/null 2>&1 && {
-      # delete old gpg key that expired on 04/28/2014
-      gpg --no-default-keyring --keyring $apt_keyring --yes --batch --delete-key "$old_key"
-    }
-    echo "$new_key_base64" | gpg --no-default-keyring --keyring $apt_lincware_key_file --import
-EOSUDO
-}
-export -f update_gpg_key
-
-OLD_LD_BIN=/opt/lincdoc/trunk/product/bin
-if [ -d $OLD_LD_BIN ]; then
-  pathadd $OLD_LD_BIN
-fi
-unset OLD_LD_BIN
-
-function ssh() {
-  if [ -t 1 ]; then
-    signal_load_mybashprefs
-    /usr/bin/ssh "$@"
-    local rc=$?
-    if [ "$EXPECTSSH_IN_SCREEN" = 1 -o -n "$STY" ]; then
-      printf "\033k${HOSTNAME}\033\134"
-    fi
-    return $rc
-  else
-    # we are in a pipeline
-    /usr/bin/ssh "$@"
-  fi
-}
-export -f ssh
-
-}
 
   # unset $c, set below
   append mybashprefs "unset c\n"
@@ -721,7 +378,7 @@ export -f ssh
   #exp_internal -f /tmp/log 0
 
   #
-  set mybashprefs_hash [string tolower [md5::md5 -hex $mybashprefs]]
+  set mybashprefs_hash [compute_md5 $mybashprefs]
   # Combine my password with md5 hash for the password to encrypt the data,
   # with the md5 in the password we can trigger a re-upload of bash prefs
   # should they change.
@@ -805,6 +462,94 @@ export -f ssh
 }
 ### END of load_mybashprefs
 
+proc bootstrap_shell {EXPECT_SSH {nest_level 0}} {
+  global PROMPT EXPECTSSH_TMPDIR
+  send "TMP=\$(history|tail -1|awk '{print \$1}') && history -d \$TMP && history -d \$((\$TMP-1)) && HISTCONTROL=ignoreboth:erasedups && unset TMP\r"
+  expect -re $PROMPT
+  send " \[ ! -d $EXPECTSSH_TMPDIR ] && { mkdir $EXPECTSSH_TMPDIR; chmod 1777 $EXPECTSSH_TMPDIR; }\r"
+  expect -re $PROMPT
+}
+
+# Check if remote function file (i.e. bash script file) exists, and if not
+# upload it. If it does exist, re-upload it if it fails md5 check.
+proc upload_function { funcname {nest_level 0}} {
+  global PROMPT MYBASHPREFS_PASSWORD EXPECT_SSH
+  array set FUNCMAP [get_user_functions]
+  set remote_file $FUNCMAP($funcname,remote_file)
+  set remote_file_content $FUNCMAP($funcname,defn)
+  set file_content_hash [compute_md5 $remote_file_content]
+  # Combine my password with md5 hash for the password to encrypt the data,
+  # with the md5 in the password we can trigger a re-upload of bash prefs
+  # should they change.
+  set pass "$MYBASHPREFS_PASSWORD-$file_content_hash"
+  send " c=\"\$(openssl enc -a -d -aes256 -in $remote_file)\" && eval \"\${c}\"\r"
+  set password_was_entered 0
+  expect {
+    -re "password:$" {
+      send $pass\r
+      set password_was_entered 1
+      exp_continue
+    }
+    -re "(?:bad decrypt|bad magic number|error reading input file|No such file or directory).*$PROMPT" {
+      if { $nest_level > 0 } {
+        # do not get in recursive loop attempting to upload + write out
+        return "NOT OK"
+      }
+      # compress all file content, base64 encode, pass over the wire,
+      # base64 decode, uncompress, then encrypt + base64 encode and write to
+      # disk
+      #send_user "uploading $remote_file ...\n"
+      # Note the leading space so it is not saved in bash history
+      send " \[ ! -e $remote_file ] && { touch $remote_file; chmod 666 $remote_file; }\r"
+      expect -re $PROMPT
+      log_user 0
+      send " exec 3< <(echo '$pass')\r"
+      expect -re {(.*\r)}
+      # Hide password from being displayed
+      regsub {'(.*)'} $expect_out(1,string) '[regsub -all . $pass *]' echoline
+      send_user $echoline\n
+      log_user 1
+      expect -re $PROMPT
+      # Delimit the input with a space, and after each line is sent send \r so
+      # the terminal does not scroll
+      send " exec 4> >(openssl enc -d -base64 | gzip -d -c | openssl enc -a -aes256 -pass fd:3 -out $remote_file)\r"
+      send { while true; do read -d' ' l; [ "$l" = . ] && break; printf "%s\n" $l >&4; printf "\015"; done; exec 3<&- 4>&-}
+      send \r
+      expect -re \r\n$
+      # split into manageable chunks that will not exceed terminal driver
+      # buf size
+      set n -1 
+      log_user 0
+      set remote_file_content_enc [exec "bash" "-c" "echo -n \"\$0\" | gzip -9 -c | openssl enc -base64" $remote_file_content]
+      set c_len [string length $remote_file_content_enc]
+      foreach line [regexp -all -inline {(?:.{0,80}){1,1}\n} "$remote_file_content_enc\n"] {
+        send "[string trimright $line] "
+        expect {
+          # first time in this loop it could by \r\n
+          -re "\r\n$" {}
+          -re "\x0d$" {}
+        }
+        if { $n > -1 } { send_user \r }
+        incr n [string length $line]
+        set precision [string length $c_len]
+        send_user [format "%*d/%*d uploaded" $precision $n $precision $c_len]
+      }
+      send_user " ... DONE with upload\r\n"
+      send ". "
+      expect ". "
+      log_user 1
+      expect -re $PROMPT
+      return [upload_function $funcname 1]
+    }
+    -re $PROMPT {
+      # sometimes the prompt can be detected BEFORE we have had a chance to get
+      # to openssl's password prompt ...
+      if { $password_was_entered == 0 } { exp_continue }
+    }
+    timeout { send_error "TIMEOUT in proc upload_function"; return "NOT OK" }
+  }
+}
+
 set is_marker_prompt 0
 # See if the custom prompt is in effect
 proc check_prompt_marker {arr} {
@@ -864,7 +609,7 @@ foreach arg $argv {
     puts "  ~k      kill expect: useful if running screen, and you"
     puts "          want to resume screen from another desktop"
     puts "Upon starting, Expect statements can be placed in"
-    puts "~/.expect-ssh/config and they get sourced."
+    puts "$rcfile and they get sourced."
     exit
   }
   if { $arg == "-local_shell_only" || $arg == "-shell" } {
@@ -1023,6 +768,9 @@ interact {
       }
     } elseif { $marker_type == $MARKER(VIM_PASTE_CLIPBOARD) } {
       paste_from_clipboard_in_vim
+    } elseif { $marker_type == $MARKER(UPLOAD_FUNCTION) } {
+      set funcname $encoded_args
+      upload_function $funcname
     }
   }
   #-nobuffer -re {\npsql .*Type "help" for help(.*)[#>] $} {
