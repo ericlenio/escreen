@@ -37,7 +37,7 @@ array set MARKER {
   DOWNLOAD_DATA 04
   LDSUPPORT_PW 05
   VIM_PASTE_CLIPBOARD 06
-  UPLOAD_FUNCTION 07
+  UPLOAD_SCRIPT 07
 }
 
 proc get_marker {marker_type} {
@@ -51,7 +51,7 @@ set DOWNLOAD_DEFAULT_FILE_MARKER [get_marker DOWNLOAD_DEFAULT_FILE]
 set DOWNLOAD_DATA_MARKER [get_marker DOWNLOAD_DATA]
 set LDSUPPORT_PW_MARKER [get_marker LDSUPPORT_PW]
 set VIM_PASTE_CLIPBOARD_MARKER [get_marker VIM_PASTE_CLIPBOARD]
-set UPLOAD_FUNCTION_MARKER [get_marker UPLOAD_FUNCTION]
+set UPLOAD_FUNCTION_MARKER [get_marker UPLOAD_SCRIPT]
 
 set EXPECTSSH_TMPDIR $env(EXPECTSSH_TMPDIR)
 # PS1_MARKER is a non-regexp marker in the normal PS1 prompt that we search for
@@ -127,7 +127,7 @@ proc get_user_functions {} {
       set FUNCMAP($funcname,defn) $func_def
       set FUNCMAP($funcname,remote_file) $FUNCMAP(:remote_file_prefix)$funcname.$FUNCMAP($funcname,md5)
       set stub "function $funcname () { printf \"%s\010.\n%s.\" \"$UPLOAD_FUNCTION_MARKER\" $funcname;"
-      append stub "$funcname \"\$@\"; }\n"
+      append stub "declare -f $funcname; }\n"
       append stub "export -f $funcname\n"
       set FUNCMAP($funcname,stub) $stub
     }
@@ -361,13 +361,10 @@ proc load_mybashprefs {EXPECT_SSH {nest_level 0}} {
   # otherwise the line spacing gets all weird when typing out long bash commands
   append mybashprefs [regsub -all {\\033\[[^a-zA-Z]*[a-zA-Z]} $PS1_MARKER [join { {\[} {\0} {\]} } {}]]
   append mybashprefs "'\n"
-  append mybashprefs "for f in $FUNCMAP(:remote_file_prefix)*; do\n"
-  append mybashprefs "echo f=\$f\n"
-  append mybashprefs "done\n"
+  #append mybashprefs "for f in $FUNCMAP(:remote_file_prefix)*; do\n"
+  #append mybashprefs "echo f=\$f\n"
+  #append mybashprefs "done\n"
 
-  foreach funcname [array names FUNCMAP -regexp {^\w+$}] {
-    append mybashprefs $FUNCMAP($funcname,stub)
-  }
 
   # unset $c, set below
   append mybashprefs "unset c\n"
@@ -458,6 +455,10 @@ proc load_mybashprefs {EXPECT_SSH {nest_level 0}} {
     timeout { send_error "TIMEOUT in proc load_mybashprefs"; return "NOT OK" }
   }
   #exp_internal -f /tmp/log 1
+
+  foreach funcname [array names FUNCMAP -regexp {^\w+$}] {
+    upload_script 
+  }
   return "OK"
 }
 ### END of load_mybashprefs
@@ -472,7 +473,7 @@ proc bootstrap_shell {EXPECT_SSH {nest_level 0}} {
 
 # Check if remote function file (i.e. bash script file) exists, and if not
 # upload it. If it does exist, re-upload it if it fails md5 check.
-proc upload_function { funcname {nest_level 0}} {
+proc upload_script { funcname {nest_level 0}} {
   global PROMPT MYBASHPREFS_PASSWORD EXPECT_SSH
   array set FUNCMAP [get_user_functions]
   set remote_file $FUNCMAP($funcname,remote_file)
@@ -539,14 +540,14 @@ proc upload_function { funcname {nest_level 0}} {
       expect ". "
       log_user 1
       expect -re $PROMPT
-      return [upload_function $funcname 1]
+      return [upload_script $funcname 1]
     }
     -re $PROMPT {
       # sometimes the prompt can be detected BEFORE we have had a chance to get
       # to openssl's password prompt ...
       if { $password_was_entered == 0 } { exp_continue }
     }
-    timeout { send_error "TIMEOUT in proc upload_function"; return "NOT OK" }
+    timeout { send_error "TIMEOUT in proc upload_script"; return "NOT OK" }
   }
 }
 
@@ -768,9 +769,9 @@ interact {
       }
     } elseif { $marker_type == $MARKER(VIM_PASTE_CLIPBOARD) } {
       paste_from_clipboard_in_vim
-    } elseif { $marker_type == $MARKER(UPLOAD_FUNCTION) } {
+    } elseif { $marker_type == $MARKER(UPLOAD_SCRIPT) } {
       set funcname $encoded_args
-      upload_function $funcname
+      upload_script $funcname
     }
   }
   #-nobuffer -re {\npsql .*Type "help" for help(.*)[#>] $} {
