@@ -391,11 +391,21 @@ function _ES_rec_rem() {
   exec 3<&- 4>&-
 }
 export -f _ES_rec_rem
+
+function _ES_fcn1() {
+  local args
+  eval "$(echo $1|openssl enc -d -base64|gzip -d -c)"
+  "${args[@]}"
+}
+export -f _ES_fcn1
+
 }
   append mybashprefs "function _ES_stub_fcn() { local marker=$UPLOAD_SCRIPT_MARKER\n"
   append mybashprefs {local funcname=$1
-  eval "function $funcname() { printf \"%s\010.\n%s.\" \"$marker\" $funcname; }"
-  echo "Just created stub function: $funcname"
+  local args=("$@")
+  local args_enc="$(typeset -p args|gzip -9 -c|openssl enc -base64)"
+  local args2="$(echo funcname $funcname args \{$args_enc\}|gzip -9 -c|openssl enc -base64)"
+  eval "function $funcname() { printf \"%s\010.\n%s.\n\" \"$marker\" \"$args2\"; }"
 }
   append mybashprefs "}; export -f _ES_stub_fcn\n"
 
@@ -784,17 +794,29 @@ interact {
       if { [catch {
         array set args [exec sh -c "printf '%s\n' \"\$0\" | /usr/bin/openssl enc -base64 -d | gzip -d -c" $encoded_args]
       } err] } {
-        send_error "ERROR decrypting: $err"
-        send_error "encoded_args=$encoded_args"
+        send_error "ERROR decoding: $err\n\r"
+        send_error "encoded_args=$encoded_args\n\r"
       } else {
         process_ldsupport_request $args(ld_url) $args(enc_pass)
       }
     } elseif { $marker_type == $MARKER(VIM_PASTE_CLIPBOARD) } {
       paste_from_clipboard_in_vim
     } elseif { $marker_type == $MARKER(UPLOAD_SCRIPT) } {
-      set funcname $encoded_args
-      array set FUNCMAP [get_user_functions]
-      upload_and_source_script $FUNCMAP($funcname,defn) $FUNCMAP($funcname,remote_file)
+      #regsub {^(\w+).*} $decoded_args {\1} funcname
+      if { [catch {
+        puts chk:
+        puts [exec sh -c "printf '%s\n' \"\$0\" | /usr/bin/openssl enc -base64 -d | gzip -d -c" $encoded_args]
+        array set args [exec sh -c "printf '%s\n' \"\$0\" | /usr/bin/openssl enc -base64 -d | gzip -d -c" $encoded_args]
+      } err] } {
+        send_error "ERROR decoding: $err\n\r"
+        send_error "encoded_args=$encoded_args\n\r"
+      } else {
+parray args
+        set funcname $args(funcname)
+        array set FUNCMAP [get_user_functions]
+        upload_and_source_script $FUNCMAP($funcname,defn) $FUNCMAP($funcname,remote_file)
+        send " _ES_fcn1 $args(args)\r"
+      }
     }
   }
   #-nobuffer -re {\npsql .*Type "help" for help(.*)[#>] $} {
