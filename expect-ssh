@@ -51,7 +51,7 @@ set DOWNLOAD_DEFAULT_FILE_MARKER [get_marker DOWNLOAD_DEFAULT_FILE]
 set DOWNLOAD_DATA_MARKER [get_marker DOWNLOAD_DATA]
 set LDSUPPORT_PW_MARKER [get_marker LDSUPPORT_PW]
 set VIM_PASTE_CLIPBOARD_MARKER [get_marker VIM_PASTE_CLIPBOARD]
-set UPLOAD_FUNCTION_MARKER [get_marker UPLOAD_SCRIPT]
+set UPLOAD_SCRIPT_MARKER [get_marker UPLOAD_SCRIPT]
 
 set EXPECTSSH_TMPDIR $env(EXPECTSSH_TMPDIR)
 # PS1_MARKER is a non-regexp marker in the normal PS1 prompt that we search for
@@ -115,8 +115,9 @@ proc slurp_file {f} {
 #
 proc get_user_functions {} {
   global EXPECTSSH_FUNCTIONS_DIR EXPECTSSH_TMPDIR env
-  global UPLOAD_FUNCTION_MARKER
+  #global UPLOAD_SCRIPT_MARKER
   array unset FUNCMAP
+  set FUNCMAP(:remote_file) $EXPECTSSH_TMPDIR/$env(USER).FUNCMAP
   set FUNCMAP(:remote_file_prefix) $EXPECTSSH_TMPDIR/$env(USER).fcn.
   if { [file isdirectory $EXPECTSSH_FUNCTIONS_DIR]==1 } {
     foreach funcname [glob -directory $EXPECTSSH_FUNCTIONS_DIR -tails *] {
@@ -126,10 +127,10 @@ proc get_user_functions {} {
       set FUNCMAP($funcname,md5) [compute_md5 $func_def]
       set FUNCMAP($funcname,defn) $func_def
       set FUNCMAP($funcname,remote_file) $FUNCMAP(:remote_file_prefix)$funcname.$FUNCMAP($funcname,md5)
-      set stub "function $funcname () { printf \"%s\010.\n%s.\" \"$UPLOAD_FUNCTION_MARKER\" $funcname;"
-      append stub "declare -f $funcname; }\n"
-      append stub "export -f $funcname\n"
-      set FUNCMAP($funcname,stub) $stub
+      #set stub "function $funcname () { printf \"%s\010.\n%s.\" \"$UPLOAD_SCRIPT_MARKER\" $funcname;"
+      #append stub "declare -f $funcname; }\n"
+      #append stub "export -f $funcname\n"
+      #set FUNCMAP($funcname,stub) $stub
     }
     # check if FUNCMAP exists on remote end
     # if it exists, see if it pass md5 check
@@ -337,7 +338,7 @@ proc paste_from_clipboard_in_vim {} {
 proc load_mybashprefs {EXPECT_SSH {nest_level 0}} {
   global PROMPT ANSI_RE_TEXT_FORMATTING PS1_MARKER EXPECTSSH_TMPDIR MYBASHPREFS_PASSWORD
   global LOAD_MYBASHPREFS_MARKER COPY_TO_CLIPBOARD_MARKER DOWNLOAD_DEFAULT_FILE_MARKER DOWNLOAD_DATA_MARKER
-  global LDSUPPORT_PW_MARKER VIM_PASTE_CLIPBOARD_MARKER
+  global LDSUPPORT_PW_MARKER VIM_PASTE_CLIPBOARD_MARKER UPLOAD_SCRIPT_MARKER
   log_user 1
   # verify we are in bash
   #send " echo 'test for bash'\r"
@@ -361,10 +362,42 @@ proc load_mybashprefs {EXPECT_SSH {nest_level 0}} {
   # otherwise the line spacing gets all weird when typing out long bash commands
   append mybashprefs [regsub -all {\\033\[[^a-zA-Z]*[a-zA-Z]} $PS1_MARKER [join { {\[} {\0} {\]} } {}]]
   append mybashprefs "'\n"
-  #append mybashprefs "for f in $FUNCMAP(:remote_file_prefix)*; do\n"
-  #append mybashprefs "echo f=\$f\n"
-  #append mybashprefs "done\n"
 
+  append mybashprefs {function _ES_source_script() {
+  local script=$1
+  local c
+  c="$(openssl enc -a -d -aes256 -in $script)" && eval "$c"
+}
+export -f _ES_source_script
+
+function _ES_rec_rem() {
+  local remote_file="$1"
+  local pass="$2"
+  local l
+  if [ ! -e $remote_file ]; then
+    touch $remote_file
+    chmod 666 $remote_file
+  fi
+  exec 3< <(echo "$pass")
+  # Delimit the input with a space, and after each line is sent send \r so the
+  # terminal does not scroll
+  exec 4> >(openssl enc -d -base64 | gzip -d -c | openssl enc -a -aes256 -pass fd:3 -out $remote_file)
+  while true; do
+    read -d' ' l
+    [ "$l" = . ] && break
+    printf "%s\n" $l >&4
+    printf "\015"
+  done
+  exec 3<&- 4>&-
+}
+export -f _ES_rec_rem
+}
+  append mybashprefs "function _ES_stub_fcn() { local marker=$UPLOAD_SCRIPT_MARKER\n"
+  append mybashprefs {local funcname=$1
+  eval "function $funcname() { printf \"%s\010.\n%s.\" \"$marker\" $funcname; }"
+  echo "Just created stub function: $funcname"
+}
+  append mybashprefs "}; export -f _ES_stub_fcn\n"
 
   # unset $c, set below
   append mybashprefs "unset c\n"
@@ -378,8 +411,8 @@ proc load_mybashprefs {EXPECT_SSH {nest_level 0}} {
   set mybashprefs_hash [compute_md5 $mybashprefs]
   # Combine my password with md5 hash for the password to encrypt the data,
   # with the md5 in the password we can trigger a re-upload of bash prefs
-  # should they change.
-  set pass "$MYBASHPREFS_PASSWORD-$mybashprefs_hash"
+  # should they change. Md5 the result for shorter version of password.
+  set pass [compute_md5 $MYBASHPREFS_PASSWORD-$mybashprefs_hash]
   send " c=\"\$(openssl enc -a -d -aes256 -in $mybashprefs_file)\" && eval \"\${c}$EXPECT_SSH\"\r"
   set password_was_entered 0
   expect {
@@ -456,34 +489,28 @@ proc load_mybashprefs {EXPECT_SSH {nest_level 0}} {
   }
   #exp_internal -f /tmp/log 1
 
+  set bootstrap_cust_scripts ""
+  # create md5 for each stub
+  # create function to glob through stub files
   foreach funcname [array names FUNCMAP -regexp {^\w+$}] {
-    upload_script 
+    append bootstrap_cust_scripts "_ES_stub_fcn $funcname\n"
   }
+  upload_and_source_script $bootstrap_cust_scripts $FUNCMAP(:remote_file)
   return "OK"
 }
 ### END of load_mybashprefs
 
-proc bootstrap_shell {EXPECT_SSH {nest_level 0}} {
-  global PROMPT EXPECTSSH_TMPDIR
-  send "TMP=\$(history|tail -1|awk '{print \$1}') && history -d \$TMP && history -d \$((\$TMP-1)) && HISTCONTROL=ignoreboth:erasedups && unset TMP\r"
-  expect -re $PROMPT
-  send " \[ ! -d $EXPECTSSH_TMPDIR ] && { mkdir $EXPECTSSH_TMPDIR; chmod 1777 $EXPECTSSH_TMPDIR; }\r"
-  expect -re $PROMPT
-}
-
 # Check if remote function file (i.e. bash script file) exists, and if not
 # upload it. If it does exist, re-upload it if it fails md5 check.
-proc upload_script { funcname {nest_level 0}} {
+proc upload_and_source_script { script remote_file } {
   global PROMPT MYBASHPREFS_PASSWORD EXPECT_SSH
-  array set FUNCMAP [get_user_functions]
-  set remote_file $FUNCMAP($funcname,remote_file)
-  set remote_file_content $FUNCMAP($funcname,defn)
-  set file_content_hash [compute_md5 $remote_file_content]
+  set script_md5 [compute_md5 $script]
   # Combine my password with md5 hash for the password to encrypt the data,
   # with the md5 in the password we can trigger a re-upload of bash prefs
-  # should they change.
-  set pass "$MYBASHPREFS_PASSWORD-$file_content_hash"
-  send " c=\"\$(openssl enc -a -d -aes256 -in $remote_file)\" && eval \"\${c}\"\r"
+  # should they change. Md5 the result to make a shorter version of the
+  # password.
+  set pass [compute_md5 $MYBASHPREFS_PASSWORD-$script_md5]
+  send " _ES_source_script $remote_file\r"
   set password_was_entered 0
   expect {
     -re "password:$" {
@@ -492,36 +519,23 @@ proc upload_script { funcname {nest_level 0}} {
       exp_continue
     }
     -re "(?:bad decrypt|bad magic number|error reading input file|No such file or directory).*$PROMPT" {
-      if { $nest_level > 0 } {
-        # do not get in recursive loop attempting to upload + write out
-        return "NOT OK"
-      }
       # compress all file content, base64 encode, pass over the wire,
       # base64 decode, uncompress, then encrypt + base64 encode and write to
       # disk
       #send_user "uploading $remote_file ...\n"
       # Note the leading space so it is not saved in bash history
-      send " \[ ! -e $remote_file ] && { touch $remote_file; chmod 666 $remote_file; }\r"
-      expect -re $PROMPT
-      log_user 0
-      send " exec 3< <(echo '$pass')\r"
-      expect -re {(.*\r)}
+      send " _ES_rec_rem \"$remote_file\" \"$pass\"\r" 
       # Hide password from being displayed
-      regsub {'(.*)'} $expect_out(1,string) '[regsub -all . $pass *]' echoline
-      send_user $echoline\n
-      log_user 1
-      expect -re $PROMPT
-      # Delimit the input with a space, and after each line is sent send \r so
-      # the terminal does not scroll
-      send " exec 4> >(openssl enc -d -base64 | gzip -d -c | openssl enc -a -aes256 -pass fd:3 -out $remote_file)\r"
-      send { while true; do read -d' ' l; [ "$l" = . ] && break; printf "%s\n" $l >&4; printf "\015"; done; exec 3<&- 4>&-}
-      send \r
+      #regsub {'(.*)'} $expect_out(1,string) '[regsub -all . $pass *]' echoline
+      #send_user $echoline\n
+      #log_user 1
+      
       expect -re \r\n$
       # split into manageable chunks that will not exceed terminal driver
       # buf size
       set n -1 
       log_user 0
-      set remote_file_content_enc [exec "bash" "-c" "echo -n \"\$0\" | gzip -9 -c | openssl enc -base64" $remote_file_content]
+      set remote_file_content_enc [exec "bash" "-c" "echo -n \"\$0\" | gzip -9 -c | openssl enc -base64" $script]
       set c_len [string length $remote_file_content_enc]
       foreach line [regexp -all -inline {(?:.{0,80}){1,1}\n} "$remote_file_content_enc\n"] {
         send "[string trimright $line] "
@@ -540,15 +554,23 @@ proc upload_script { funcname {nest_level 0}} {
       expect ". "
       log_user 1
       expect -re $PROMPT
-      return [upload_script $funcname 1]
+      return [upload_and_source_script $script $remote_file]
     }
     -re $PROMPT {
       # sometimes the prompt can be detected BEFORE we have had a chance to get
       # to openssl's password prompt ...
       if { $password_was_entered == 0 } { exp_continue }
     }
-    timeout { send_error "TIMEOUT in proc upload_script"; return "NOT OK" }
+    timeout { send_error "TIMEOUT in proc upload_and_source_script"; return "NOT OK" }
   }
+}
+
+proc bootstrap_shell {EXPECT_SSH {nest_level 0}} {
+  global PROMPT EXPECTSSH_TMPDIR
+  send "TMP=\$(history|tail -1|awk '{print \$1}') && history -d \$TMP && history -d \$((\$TMP-1)) && HISTCONTROL=ignoreboth:erasedups && unset TMP\r"
+  expect -re $PROMPT
+  send " \[ ! -d $EXPECTSSH_TMPDIR ] && { mkdir $EXPECTSSH_TMPDIR; chmod 1777 $EXPECTSSH_TMPDIR; }\r"
+  expect -re $PROMPT
 }
 
 set is_marker_prompt 0
@@ -771,7 +793,8 @@ interact {
       paste_from_clipboard_in_vim
     } elseif { $marker_type == $MARKER(UPLOAD_SCRIPT) } {
       set funcname $encoded_args
-      upload_script $funcname
+      array set FUNCMAP [get_user_functions]
+      upload_and_source_script $FUNCMAP($funcname,defn) $FUNCMAP($funcname,remote_file)
     }
   }
   #-nobuffer -re {\npsql .*Type "help" for help(.*)[#>] $} {
