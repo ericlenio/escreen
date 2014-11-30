@@ -392,20 +392,28 @@ function _ES_rec_rem() {
 }
 export -f _ES_rec_rem
 
+#
+# The first time a user custom function runs, it goes through
+# this function.
 function _ES_fcn1() {
+  local funcname=$1
   local args
-  eval "$(echo $1|openssl enc -d -base64|gzip -d -c)"
-  "${args[@]}"
+  eval "$(echo $2|openssl enc -d -base64|gzip -d -c)"
+  $funcname "${args[@]}"
 }
 export -f _ES_fcn1
 
 }
   append mybashprefs "function _ES_stub_fcn() { local marker=$UPLOAD_SCRIPT_MARKER\n"
   append mybashprefs {local funcname=$1
-  local args=("$@")
-  local args_enc="$(typeset -p args|gzip -9 -c|openssl enc -base64)"
-  local args2="$(echo funcname $funcname args \{$args_enc\}|gzip -9 -c|openssl enc -base64)"
-  eval "function $funcname() { printf \"%s\010.\n%s.\n\" \"$marker\" \"$args2\"; }"
+  local f="function $funcname() { local funcname=$funcname; local marker=$marker;"
+  f+='local args=("$@");'
+  f+='local args_enc="$(typeset -p args|gzip -9 -c|openssl enc -base64 -A)";'
+  f+='echo funcname $funcname args \{$args_enc\};'
+  f+='local args2="$(echo funcname $funcname args \{$args_enc\}|gzip -9 -c|openssl enc -base64)";'
+  f+='printf "%s\010.\n%s.\n" "$marker" "$args2";'
+  f+='}'
+  eval $f
 }
   append mybashprefs "}; export -f _ES_stub_fcn\n"
 
@@ -804,8 +812,6 @@ interact {
     } elseif { $marker_type == $MARKER(UPLOAD_SCRIPT) } {
       #regsub {^(\w+).*} $decoded_args {\1} funcname
       if { [catch {
-        puts chk:
-        puts [exec sh -c "printf '%s\n' \"\$0\" | /usr/bin/openssl enc -base64 -d | gzip -d -c" $encoded_args]
         array set args [exec sh -c "printf '%s\n' \"\$0\" | /usr/bin/openssl enc -base64 -d | gzip -d -c" $encoded_args]
       } err] } {
         send_error "ERROR decoding: $err\n\r"
@@ -815,7 +821,7 @@ parray args
         set funcname $args(funcname)
         array set FUNCMAP [get_user_functions]
         upload_and_source_script $FUNCMAP($funcname,defn) $FUNCMAP($funcname,remote_file)
-        send " _ES_fcn1 $args(args)\r"
+        send " _ES_fcn1 $funcname $args(args)\r"
       }
     }
   }
