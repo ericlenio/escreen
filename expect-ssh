@@ -1,22 +1,25 @@
-#!/bin/bash
+#!/usr/bin/expect
 # vim:filetype=expect
 # Drop in replacement script for ssh, with helpful integrations to use bash,
 # sudo, screen, and vim more effectively. Run with -help to see arguments.
-
-if [ ! -t 0 -o -n "$EXPECT_SSH" ]; then
-  exec /usr/bin/ssh "$@"
-fi
-
-export EXPECTSSH_TMPDIR=/tmp/.expect-ssh
-export EXP_FILE=$EXPECTSSH_TMPDIR/ssh.expect.$USER
-
-[ ! -d $EXPECTSSH_TMPDIR ] && { mkdir $EXPECTSSH_TMPDIR; chmod 1777 $EXPECTSSH_TMPDIR; }
-
-cat > $EXP_FILE << 'EXPECT_EOF' && exec /usr/bin/expect -c "set EXEC $(basename $0)" -f $EXP_FILE -- "$@"
+#
 # apt-get install tcllib
 package require md5
 
-file delete $env(EXP_FILE)
+set env(EXPECTSSH_TMPDIR) /tmp/.expect-ssh
+set EXPECTSSH_TMPDIR $env(EXPECTSSH_TMPDIR)
+# if stdin is not a terminal, or $EXPECT_SSH exists, then we just
+# want to do regular ssh.
+set overlay_test [exec bash -c {
+  [ ! -d $EXPECTSSH_TMPDIR ] && { mkdir $EXPECTSSH_TMPDIR; chmod 1777 $EXPECTSSH_TMPDIR; }
+  [ ! -t 0 -o -n "$EXPECT_SSH" ] && echo overlay_flag
+  true
+}]
+
+if {[regexp {overlay_flag} $overlay_test]==1} {
+  # overlay the expect process with ssh, effectively leaving this script
+  eval overlay /usr/bin/ssh $argv
+}
 
 set spawn_out_slave_name 0
 # for prompt, "\u001b[0m" is a possible "end of color" sequence
@@ -53,7 +56,6 @@ set LDSUPPORT_PW_MARKER [get_marker LDSUPPORT_PW]
 set VIM_PASTE_CLIPBOARD_MARKER [get_marker VIM_PASTE_CLIPBOARD]
 set UPLOAD_SCRIPT_MARKER [get_marker UPLOAD_SCRIPT]
 
-set EXPECTSSH_TMPDIR $env(EXPECTSSH_TMPDIR)
 # PS1_MARKER is a non-regexp marker in the normal PS1 prompt that we search for
 # in certain situations to see if we need to load bash prefs. Watch that it
 # works in regular bash, as well as inside a screen session because screen
@@ -111,9 +113,9 @@ proc slurp_file {f} {
 }
 
 #
-# Load user functions
+# User custom functions
 #
-proc get_user_functions {} {
+proc get_scripts {} {
   global EXPECTSSH_FUNCTIONS_DIR EXPECTSSH_TMPDIR env
   #global UPLOAD_SCRIPT_MARKER
   array unset FUNCMAP
@@ -123,21 +125,49 @@ proc get_user_functions {} {
     foreach funcname [glob -directory $EXPECTSSH_FUNCTIONS_DIR -tails *] {
       set func_def [slurp_file $EXPECTSSH_FUNCTIONS_DIR/$funcname]
       set FUNCMAP($funcname) ""
-      set FUNCMAP($funcname,file) $EXPECTSSH_FUNCTIONS_DIR/$funcname
+      #set FUNCMAP($funcname,file) $EXPECTSSH_FUNCTIONS_DIR/$funcname
       set FUNCMAP($funcname,md5) [compute_md5 $func_def]
       set FUNCMAP($funcname,defn) $func_def
       set FUNCMAP($funcname,remote_file) $FUNCMAP(:remote_file_prefix)$funcname.$FUNCMAP($funcname,md5)
-      #set stub "function $funcname () { printf \"%s\010.\n%s.\" \"$UPLOAD_SCRIPT_MARKER\" $funcname;"
-      #append stub "declare -f $funcname; }\n"
-      #append stub "export -f $funcname\n"
-      #set FUNCMAP($funcname,stub) $stub
     }
-    # check if FUNCMAP exists on remote end
-    # if it exists, see if it pass md5 check
-    # if it does not exist, or fails md5 check, upload it
   }
+
+  array set SYSFUNCMAP [get_system_functions]
+  foreach funcname [array names SYSFUNCMAP] {
+    set func_def $SYSFUNCMAP($funcname)
+    set FUNCMAP($funcname) ""
+    set FUNCMAP($funcname,md5) [compute_md5 $func_def]
+    set FUNCMAP($funcname,defn) $func_def
+    set FUNCMAP($funcname,remote_file) $FUNCMAP(:remote_file_prefix)$funcname.$FUNCMAP($funcname,md5)
+  }
+
   return [array get FUNCMAP]
 }
+
+#
+# System level functions
+#
+proc get_system_functions {} {
+  # EXPECTSSH_IN_SCREEN is a flag to know if current shell is (ultimately)
+  # inside a screen session, and if so when ssh-ing to a new host we can update
+  # the screen window title with the new hostname.
+  set s {
+  function signal_load_mybashprefs() {
+    local marker="$(_ES_marker LOAD_MYBASHPREFS)"
+    local in_screen=0
+    if [ -n "$STY" -o -n "$EXPECTSSH_IN_SCREEN" ]; then in_screen=1; fi
+    local CMD_ARRAY=("$@")
+    local args=$(printf "EXPECT_SSH %s EXPECTSSH_IN_SCREEN {%s} CMD_ARRAY {%s}" $EXPECT_SSH "$in_screen" "$(declare -p CMD_ARRAY)" | gzip -9 -c | openssl enc -base64)
+    # pass a \010 (backspace) character to erase last character of the pattern so
+    # that expect-ssh only processes this signal 1 time ... else when inside
+    # screen it would potentially get re-executed from a resumed session.
+    printf "%s\010.\n%s.\n" "$marker" "$args"
+  }
+}
+  set FUNCMAP(signal_load_mybashprefs) $s
+  return [array get FUNCMAP]
+}
+
 
 proc copy_to_clipboard {clipboard_data} {
   global PROMPT OS
@@ -339,6 +369,7 @@ proc load_mybashprefs {EXPECT_SSH {nest_level 0}} {
   global PROMPT ANSI_RE_TEXT_FORMATTING PS1_MARKER EXPECTSSH_TMPDIR MYBASHPREFS_PASSWORD
   global LOAD_MYBASHPREFS_MARKER COPY_TO_CLIPBOARD_MARKER DOWNLOAD_DEFAULT_FILE_MARKER DOWNLOAD_DATA_MARKER
   global LDSUPPORT_PW_MARKER VIM_PASTE_CLIPBOARD_MARKER UPLOAD_SCRIPT_MARKER
+  global MARKER
   log_user 1
   # verify we are in bash
   #send " echo 'test for bash'\r"
@@ -350,8 +381,19 @@ proc load_mybashprefs {EXPECT_SSH {nest_level 0}} {
     #}
   #}
   set mybashprefs_file $EXPECTSSH_TMPDIR/.mybashprefs
-  array set FUNCMAP [get_user_functions]
+  array set FUNCMAP [get_scripts]
   set mybashprefs "export EXPECTSSH_TMPDIR=$EXPECTSSH_TMPDIR\n"
+
+  append mybashprefs "function _ES_marker() {\n"
+  append mybashprefs "local MARKER\n"
+  foreach marker_name [array names MARKER] {
+    set marker [get_marker $marker_name]
+    append mybashprefs "MARKER\[$marker_name]='$marker'\n"
+  }
+  append mybashprefs {echo ${MARKER[$1]}}
+  append mybashprefs "\n}\n"
+  append mybashprefs "export -f _ES_marker\n"
+
   append mybashprefs "export HISTCONTROL=ignoreboth:erasedups\n"
   # see if previous command in history was the line to decode bashprefs, and if so delete it from history
   append mybashprefs {history -p '!!'|grep -q ^' c=' && TMP=$(history|tail -1|awk '{print $1}') && history -d $TMP && unset TMP}
@@ -393,8 +435,10 @@ function _ES_rec_rem() {
 export -f _ES_rec_rem
 
 #
-# The first time a user custom function runs, it goes through
-# this function.
+# The first time a user custom function runs, it goes through this function
+# because just before this is called, the real function was dynamically
+# generated and now we need to run it.
+#
 function _ES_fcn1() {
   local funcname=$1
   local args
@@ -404,16 +448,19 @@ function _ES_fcn1() {
 export -f _ES_fcn1
 
 }
+  #
+  # _ES_stub_fcn generates a stub function for each user's custom function.
+  #
   append mybashprefs "function _ES_stub_fcn() { local marker=$UPLOAD_SCRIPT_MARKER\n"
   append mybashprefs {local funcname=$1
   local f="function $funcname() { local funcname=$funcname; local marker=$marker;"
   f+='local args=("$@");'
   f+='local args_enc="$(typeset -p args|gzip -9 -c|openssl enc -base64 -A)";'
-  f+='echo funcname $funcname args \{$args_enc\};'
-  f+='local args2="$(echo funcname $funcname args \{$args_enc\}|gzip -9 -c|openssl enc -base64)";'
+  f+='local args2="$(echo funcname $funcname args {$args_enc}|gzip -9 -c|openssl enc -base64)";'
   f+='printf "%s\010.\n%s.\n" "$marker" "$args2";'
   f+='}'
   eval $f
+  echo "generated stub function: $funcname"
 }
   append mybashprefs "}; export -f _ES_stub_fcn\n"
 
@@ -507,16 +554,43 @@ export -f _ES_fcn1
   }
   #exp_internal -f /tmp/log 1
 
-  set bootstrap_cust_scripts ""
-  # create md5 for each stub
-  # create function to glob through stub files
-  foreach funcname [array names FUNCMAP -regexp {^\w+$}] {
-    append bootstrap_cust_scripts "_ES_stub_fcn $funcname\n"
+  set func_list ""
+  foreach funcname [lsort [array names FUNCMAP -regexp {^\w+$}]] {
+puts funcname:$funcname
+    lappend func_list [get_dependencies $funcname [array get FUNCMAP]]
+    lappend func_list $funcname
   }
-  upload_and_source_script $bootstrap_cust_scripts $FUNCMAP(:remote_file)
+
+  set bootstrap_funcs ""
+  array set did_it {}
+  foreach funcname $func_list {
+    if {[string length $funcname]==0} { continue }
+    if {[info exists did_it($funcname)]==1} { continue }
+    set did_it($funcname) 1
+    puts ">>_ES_stub_fcn $funcname"
+    #append bootstrap_funcs "_ES_stub_fcn $funcname\n"
+  }
+
+  #upload_and_source_script $bootstrap_funcs $FUNCMAP(:remote_file)
   return "OK"
 }
 ### END of load_mybashprefs
+
+proc get_dependencies {funcname FUNCMAP {depends_list ""}} {
+  array set FUNCMAP2 $FUNCMAP
+  set depends ""
+  regexp -line {^#\s*depends:(.*)$} $FUNCMAP2($funcname,defn) - depends
+  if {[string length $depends]>0} {
+    foreach funcname2 [split $depends {,}] {
+      set temp [get_dependencies $funcname2 [array get FUNCMAP2]]
+      if {[string length $temp]>0} {
+        lappend depends_list $temp
+      }
+      lappend depends_list $funcname2
+    }
+  }
+  return $depends_list
+}
 
 # Check if remote function file (i.e. bash script file) exists, and if not
 # upload it. If it does exist, re-upload it if it fails md5 check.
@@ -817,9 +891,8 @@ interact {
         send_error "ERROR decoding: $err\n\r"
         send_error "encoded_args=$encoded_args\n\r"
       } else {
-parray args
         set funcname $args(funcname)
-        array set FUNCMAP [get_user_functions]
+        array set FUNCMAP [get_scripts]
         upload_and_source_script $FUNCMAP($funcname,defn) $FUNCMAP($funcname,remote_file)
         send " _ES_fcn1 $funcname $args(args)\r"
       }
@@ -833,4 +906,3 @@ parray args
     #}
   #}
 }
-EXPECT_EOF
