@@ -463,13 +463,13 @@ export -f _ES_rec_rem
 # because just before this is called, the real function was dynamically
 # generated and now we need to run it.
 #
-function _ES_fcn1() {
+function _ES_lrf() {
   local funcname=$1
   local args
   eval "$(echo $2|openssl enc -d -base64|gzip -d -c)"
   $funcname "${args[@]}"
 }
-export -f _ES_fcn1
+export -f _ES_lrf
 
 }
   #
@@ -477,15 +477,15 @@ export -f _ES_fcn1
   #
   append mybashprefs "function _ES_stub_fcn() { local marker=$UPLOAD_SCRIPT_MARKER\n"
   append mybashprefs {local funcname=$1
-  local depends_on=$2
+  #local depends_on=$2
   local f="function $funcname() { local funcname=$funcname; local marker=$marker;"
-  if [ -n "$depends_on" ]; then
-    # load dependencies first
-    local dep
-    for dep in $depends_on; do
-      f+="$dep;"
-    done
-  fi
+  #if [ -n "$depends_on" ]; then
+    ## load dependencies first
+    #local dep
+    #for dep in $depends_on; do
+      #f+="$dep;"
+    #done
+  #fi
   f+='local args=("$@");'
   f+='local args_enc="$(typeset -p args|gzip -9 -c|openssl enc -base64 -A)";'
   f+='local args2="$(echo funcname $funcname args {$args_enc}|gzip -9 -c|openssl enc -base64)";'
@@ -589,12 +589,13 @@ export -f _ES_fcn1
   set func_list ""
   set bootstrap_funcs ""
   foreach funcname [lsort [array names FUNCMAP -regexp {^\w+$}]] {
-    set depends_on $FUNCMAP($funcname,depends_on)
-    if {[string length $depends_on]==0} {
-      append bootstrap_funcs "_ES_stub_fcn $funcname\n"
-    } else {
-      append bootstrap_funcs "_ES_stub_fcn $funcname '[join $depends_on { }]'\n"
-    }
+    #set depends_on $FUNCMAP($funcname,depends_on)
+    #if {[string length $depends_on]==0} {
+      #append bootstrap_funcs "_ES_stub_fcn $funcname\n"
+    #} else {
+      #append bootstrap_funcs "_ES_stub_fcn $funcname '[join $depends_on { }]'\n"
+    #}
+    append bootstrap_funcs "_ES_stub_fcn $funcname\n"
   }
 
   upload_and_source_script $bootstrap_funcs $FUNCMAP(:remote_file)
@@ -904,7 +905,7 @@ interact {
         set funcname $args(funcname)
         array set FUNCMAP [get_scripts]
         upload_and_source_script $FUNCMAP($funcname,defn) $FUNCMAP($funcname,remote_file)
-        send " _ES_fcn1 $funcname $args(args)\r"
+        send " _ES_lrf $funcname $args(args)\r"
       }
     }
   }
