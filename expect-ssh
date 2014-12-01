@@ -141,8 +141,32 @@ proc get_scripts {} {
     set FUNCMAP($funcname,remote_file) $FUNCMAP(:remote_file_prefix)$funcname.$FUNCMAP($funcname,md5)
   }
 
+  #
+  # Find dependencies
+  #
+  foreach funcname [lsort [array names FUNCMAP -regexp {^\w+$}]] {
+    set FUNCMAP($funcname,depends_on) [get_dependencies $funcname [array get FUNCMAP]]
+  }
+
   return [array get FUNCMAP]
 }
+
+proc get_dependencies {funcname FUNCMAP {depends_list ""}} {
+  array set FUNCMAP2 $FUNCMAP
+  set depends ""
+  regexp -line {^#\s*depends:(.*)$} $FUNCMAP2($funcname,defn) - depends
+  if {[string length $depends]>0} {
+    foreach funcname2 [split $depends {,}] {
+      set temp [get_dependencies $funcname2 [array get FUNCMAP2]]
+      if {[string length $temp]>0} {
+        lappend depends_list $temp
+      }
+      lappend depends_list $funcname2
+    }
+  }
+  return $depends_list
+}
+
 
 #
 # System level functions
@@ -453,7 +477,15 @@ export -f _ES_fcn1
   #
   append mybashprefs "function _ES_stub_fcn() { local marker=$UPLOAD_SCRIPT_MARKER\n"
   append mybashprefs {local funcname=$1
+  local depends_on=$2
   local f="function $funcname() { local funcname=$funcname; local marker=$marker;"
+  if [ -n "$depends_on" ]; then
+    # load dependencies first
+    local dep
+    for dep in $depends_on; do
+      f+="$dep;"
+    done
+  fi
   f+='local args=("$@");'
   f+='local args_enc="$(typeset -p args|gzip -9 -c|openssl enc -base64 -A)";'
   f+='local args2="$(echo funcname $funcname args {$args_enc}|gzip -9 -c|openssl enc -base64)";'
@@ -555,42 +587,20 @@ export -f _ES_fcn1
   #exp_internal -f /tmp/log 1
 
   set func_list ""
-  foreach funcname [lsort [array names FUNCMAP -regexp {^\w+$}]] {
-puts funcname:$funcname
-    lappend func_list [get_dependencies $funcname [array get FUNCMAP]]
-    lappend func_list $funcname
-  }
-
   set bootstrap_funcs ""
-  array set did_it {}
-  foreach funcname $func_list {
-    if {[string length $funcname]==0} { continue }
-    if {[info exists did_it($funcname)]==1} { continue }
-    set did_it($funcname) 1
-    puts ">>_ES_stub_fcn $funcname"
-    #append bootstrap_funcs "_ES_stub_fcn $funcname\n"
+  foreach funcname [lsort [array names FUNCMAP -regexp {^\w+$}]] {
+    set depends_on $FUNCMAP($funcname,depends_on)
+    if {[string length $depends_on]==0} {
+      append bootstrap_funcs "_ES_stub_fcn $funcname\n"
+    } else {
+      append bootstrap_funcs "_ES_stub_fcn $funcname '[join $depends_on { }]'\n"
+    }
   }
 
-  #upload_and_source_script $bootstrap_funcs $FUNCMAP(:remote_file)
+  upload_and_source_script $bootstrap_funcs $FUNCMAP(:remote_file)
   return "OK"
 }
 ### END of load_mybashprefs
-
-proc get_dependencies {funcname FUNCMAP {depends_list ""}} {
-  array set FUNCMAP2 $FUNCMAP
-  set depends ""
-  regexp -line {^#\s*depends:(.*)$} $FUNCMAP2($funcname,defn) - depends
-  if {[string length $depends]>0} {
-    foreach funcname2 [split $depends {,}] {
-      set temp [get_dependencies $funcname2 [array get FUNCMAP2]]
-      if {[string length $temp]>0} {
-        lappend depends_list $temp
-      }
-      lappend depends_list $funcname2
-    }
-  }
-  return $depends_list
-}
 
 # Check if remote function file (i.e. bash script file) exists, and if not
 # upload it. If it does exist, re-upload it if it fails md5 check.
