@@ -120,7 +120,7 @@ proc get_scripts {} {
   #global UPLOAD_SCRIPT_MARKER
   array unset FUNCMAP
   set FUNCMAP(:remote_file) $EXPECTSSH_TMPDIR/$env(USER).FUNCMAP
-  set FUNCMAP(:remote_file_prefix) $EXPECTSSH_TMPDIR/$env(USER).fcn.
+  set FUNCMAP(:remote_file_prefix) $EXPECTSSH_TMPDIR/$env(USER).f.
   if { [file isdirectory $EXPECTSSH_FUNCTIONS_DIR]==1 } {
     foreach funcname [glob -directory $EXPECTSSH_FUNCTIONS_DIR -tails *] {
       set func_def [slurp_file $EXPECTSSH_FUNCTIONS_DIR/$funcname]
@@ -128,7 +128,8 @@ proc get_scripts {} {
       #set FUNCMAP($funcname,file) $EXPECTSSH_FUNCTIONS_DIR/$funcname
       set FUNCMAP($funcname,md5) [compute_md5 $func_def]
       set FUNCMAP($funcname,defn) $func_def
-      set FUNCMAP($funcname,remote_file) $FUNCMAP(:remote_file_prefix)$funcname.$FUNCMAP($funcname,md5)
+      #set FUNCMAP($funcname,remote_file) $FUNCMAP(:remote_file_prefix)$funcname.$FUNCMAP($funcname,md5)
+      set FUNCMAP($funcname,remote_file) $FUNCMAP(:remote_file_prefix)$funcname
     }
   }
 
@@ -138,7 +139,7 @@ proc get_scripts {} {
     set FUNCMAP($funcname) ""
     set FUNCMAP($funcname,md5) [compute_md5 $func_def]
     set FUNCMAP($funcname,defn) $func_def
-    set FUNCMAP($funcname,remote_file) $FUNCMAP(:remote_file_prefix)$funcname.$FUNCMAP($funcname,md5)
+    set FUNCMAP($funcname,remote_file) $FUNCMAP(:remote_file_prefix)$funcname
   }
 
   #
@@ -463,13 +464,15 @@ export -f _ES_rec_rem
 # because just before this is called, the real function was dynamically
 # generated and now we need to run it.
 #
-function _ES_lrf() {
+function _ES_lf() {
   local funcname=$1
-  local args
-  eval "$(echo $2|openssl enc -d -base64|gzip -d -c)"
-  $funcname "${args[@]}"
+  if [ -n "$2" ]; then
+    local args
+    eval "$(echo $2|openssl enc -d -base64|gzip -d -c)"
+    $funcname "${args[@]}"
+  fi
 }
-export -f _ES_lrf
+export -f _ES_lf
 
 }
   #
@@ -704,7 +707,10 @@ proc main_prompt_checker {arr} {
           send \r
           expect -re $PROMPT
         }
-        if { [info exists load_mybashprefs_args(CMD_ARRAY)] > 0 && $load_mybashprefs_args(CMD_ARRAY) != "declare -a CMD_ARRAY='()'" } {
+        if { [info exists load_mybashprefs_args(CMD_ARRAY)] > 0
+          && $load_mybashprefs_args(CMD_ARRAY) != "declare -a CMD_ARRAY='()'"
+          && [string length $load_mybashprefs_args(CMD_ARRAY)]>0
+          } {
           send " $load_mybashprefs_args(CMD_ARRAY) && eval \"\${CMD_ARRAY\[@]}\"\r"
         }
       }
@@ -904,16 +910,13 @@ interact {
       } else {
         set funcname $args(funcname)
         array set FUNCMAP [get_scripts]
+        foreach dep $FUNCMAP($funcname,depends_on) {
+          send " _ES_lf $dep\r"
+          expect -re $PROMPT
+        }
         upload_and_source_script $FUNCMAP($funcname,defn) $FUNCMAP($funcname,remote_file)
-        send " _ES_lrf $funcname $args(args)\r"
+        send " _ES_lf $funcname $args(args)\r"
       }
     }
   }
-  #-nobuffer -re {\npsql .*Type "help" for help(.*)[#>] $} {
-    #if { [string first "\\set PROMPT1" $interact_out(1,string) ] < 0 } {
-      #send "\\set PROMPT1 '%n@%m:%/> '\r"
-      #expect -re "> $"
-      #send "\\set PROMPT2 '> '\r"
-    #}
-  #}
 }
