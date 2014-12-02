@@ -6,7 +6,7 @@
 # apt-get install tcllib
 package require md5
 
-set env(EXPECTSSH_TMPDIR) /tmp/.expect-ssh
+set env(EXPECTSSH_TMPDIR) /tmp/.expect-ssh-1.1
 set EXPECTSSH_TMPDIR $env(EXPECTSSH_TMPDIR)
 # if stdin is not a terminal, or $EXPECT_SSH exists, then we just
 # want to do regular ssh.
