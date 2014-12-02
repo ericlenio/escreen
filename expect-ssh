@@ -471,6 +471,11 @@ function _ES_lf() {
     eval "$(echo $2|openssl enc -d -base64|gzip -d -c)"
     $funcname "${args[@]}"
   fi
+  echo "$EXPECTSSH_LOADED_FUNCS" | grep -q -w $funcname || {
+    [ -n "$EXPECTSSH_LOADED_FUNCS" ] && EXPECTSSH_LOADED_FUNCS+=" "
+    EXPECTSSH_LOADED_FUNCS+=$funcname
+  }
+  export EXPECTSSH_LOADED_FUNCS
 }
 export -f _ES_lf
 
