@@ -176,7 +176,7 @@ proc get_system_functions {} {
   # EXPECTSSH_IN_SCREEN is a flag to know if current shell is (ultimately)
   # inside a screen session, and if so when ssh-ing to a new host we can update
   # the screen window title with the new hostname.
-  set s {
+  set script {
   function signal_load_mybashprefs() {
     local marker="$(_ES_marker LOAD_MYBASHPREFS)"
     local in_screen=0
@@ -189,7 +189,34 @@ proc get_system_functions {} {
     printf "%s\010.\n%s.\n" "$marker" "$args"
   }
 }
-  set FUNCMAP(signal_load_mybashprefs) $s
+  set FUNCMAP(signal_load_mybashprefs) $script
+
+  set script {
+  #
+  # depends:signal_load_mybashprefs
+  #
+  function s() {
+    local user=$1
+    if [ "$user" = "" ]; then
+      user=root
+    fi
+    id -u "$user" >/dev/null 2>&1 || { echo "No such user \"$user\"."; return; }
+    signal_load_mybashprefs
+    local _ES_funcs=$(declare -F | cut -d' ' -f3|grep ^_ES_|tr '\n' ' ')
+    local exported_funcs="$_ES_funcs $EXPECTSSH_LOADED_FUNCS"
+    sudo -H -u $user -- /bin/bash -c 'true
+  eval "$(openssl enc -d -base64 << EOF
+  '"$(declare -f $exported_funcs|openssl enc -base64)"'
+EOF
+  )"
+  export EXPECTSSH_LOADED_FUNCS='"$EXPECTSSH_LOADED_FUNCS"'
+  export -f '"$exported_funcs"'
+  exec /bin/bash --norc --noprofile
+'
+  }
+}
+  set FUNCMAP(s) $script
+
   return [array get FUNCMAP]
 }
 
@@ -466,16 +493,16 @@ export -f _ES_rec_rem
 #
 function _ES_lf() {
   local funcname=$1
-  if [ -n "$2" ]; then
-    local args
-    eval "$(echo $2|openssl enc -d -base64|gzip -d -c)"
-    $funcname "${args[@]}"
-  fi
   echo "$EXPECTSSH_LOADED_FUNCS" | grep -q -w $funcname || {
     [ -n "$EXPECTSSH_LOADED_FUNCS" ] && EXPECTSSH_LOADED_FUNCS+=" "
     EXPECTSSH_LOADED_FUNCS+=$funcname
   }
   export EXPECTSSH_LOADED_FUNCS
+  if [ -n "$2" ]; then
+    local args
+    eval "$(echo $2|openssl enc -d -base64|gzip -d -c)"
+    $funcname "${args[@]}"
+  fi
 }
 export -f _ES_lf
 
@@ -483,26 +510,32 @@ export -f _ES_lf
   #
   # _ES_stub_fcn generates a stub function for each user's custom function.
   #
-  append mybashprefs "function _ES_stub_fcn() { local marker=$UPLOAD_SCRIPT_MARKER\n"
+  set stub_flag "_ES_stub_flag"
+  append mybashprefs "function _ES_stub_fcn() { local stub_flag=$stub_flag; local marker=$UPLOAD_SCRIPT_MARKER\n"
   append mybashprefs {local funcname=$1
-  #local depends_on=$2
-  local f="function $funcname() { local funcname=$funcname; local marker=$marker;"
-  #if [ -n "$depends_on" ]; then
-    ## load dependencies first
-    #local dep
-    #for dep in $depends_on; do
-      #f+="$dep;"
-    #done
-  #fi
-  f+='local args=("$@");'
-  f+='local args_enc="$(typeset -p args|gzip -9 -c|openssl enc -base64 -A)";'
-  f+='local args2="$(echo funcname $funcname args {$args_enc}|gzip -9 -c|openssl enc -base64)";'
-  f+='printf "%s\010.\n%s.\n" "$marker" "$args2";'
-  f+='}'
-  eval $f
-  echo "generated stub function: $funcname"
+  if [ -z "$(declare -F $funcname)" ]; then
+    local f="function $funcname() { local funcname=$funcname; local marker=$marker;"
+    f+="local stub_flag=$stub_flag;"
+    f+='local args=("$@");'
+    f+='local args_enc="$(typeset -p args|gzip -9 -c|openssl enc -base64 -A)";'
+    f+='local args2="$(echo funcname $funcname args {$args_enc}|gzip -9 -c|openssl enc -base64)";'
+    f+='printf "%s\010.\n%s.\n" "$marker" "$args2";'
+    f+='}'
+    eval $f
+    echo "generated stub function: $funcname"
+  else
+    echo "skip generating stub for $funcname: function already exists"
+  fi
 }
   append mybashprefs "}; export -f _ES_stub_fcn\n"
+  #
+  # _ES_is_stub_fcn: detect if given funcname is a stub function
+  #
+  append mybashprefs "function _ES_is_stub_fcn() { local stub_flag=$stub_flag\n"
+  append mybashprefs {local funcname=$1
+    declare -f $funcname | grep -q $stub_flag && echo 1 || echo 0
+  }
+  append mybashprefs "}; export -f _ES_is_stub_fcn\n"
 
   # unset $c, set below
   append mybashprefs "unset c\n"
