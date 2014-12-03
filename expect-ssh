@@ -459,6 +459,10 @@ proc load_mybashprefs {EXPECT_SSH {nest_level 0}} {
 
   append mybashprefs {function _ES_source_script() {
   local script=$1
+  if [ ! -e "$script" ]; then
+    echo "No such file"
+    return
+  fi
   local c
   c="$(openssl enc -a -d -aes256 -in $script)" && eval "$c"
 }
@@ -662,7 +666,7 @@ proc upload_and_source_script { script remote_file } {
       set password_was_entered 1
       exp_continue
     }
-    -re "(?:bad decrypt|bad magic number|error reading input file|No such file or directory).*$PROMPT" {
+    -re "(?:bad decrypt|bad magic number|error reading input file|No such file).*$PROMPT" {
       # compress all file content, base64 encode, pass over the wire,
       # base64 decode, uncompress, then encrypt + base64 encode and write to
       # disk
