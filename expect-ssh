@@ -217,6 +217,20 @@ EOF
 }
   set FUNCMAP(s) $script
 
+  set script {
+  function l() {
+    local os=$(uname -s)
+    if [ $os = Darwin ]; then
+      ls -laF "$@"
+    else
+      ls -laF --time-style=+'%D %H:%M:%S' "$@"
+    fi
+  }
+  unalias l 2>/dev/null
+  export -f l
+  }
+  set FUNCMAP(l) $script
+
   return [array get FUNCMAP]
 }
 
@@ -468,6 +482,9 @@ proc load_mybashprefs {EXPECT_SSH {nest_level 0}} {
 }
 export -f _ES_source_script
 
+#
+# Receive a file on the remote end
+#
 function _ES_rec_rem() {
   local remote_file="$1"
   local pass="$2"
