@@ -1,0 +1,23 @@
+#
+# vim:filetype=sh
+# depends:signal_load_mybashprefs
+#
+function s() {
+  local user=$1
+  if [ "$user" = "" ]; then
+    user=root
+  fi
+  id -u "$user" >/dev/null 2>&1 || { echo "No such user \"$user\"."; return; }
+  signal_load_mybashprefs
+  local _ES_funcs=$(declare -F | cut -d' ' -f3|grep ^_ES_|tr '\n' ' ')
+  local exported_funcs="$_ES_funcs $EXPECTSSH_LOADED_FUNCS"
+  sudo -H -u $user -- /bin/bash -c 'true
+eval "$(openssl enc -d -base64 << EOF
+'"$(declare -f $exported_funcs|openssl enc -base64)"'
+EOF
+)"
+export EXPECTSSH_LOADED_FUNCS='"$EXPECTSSH_LOADED_FUNCS"'
+export -f '"$exported_funcs"'
+exec /bin/bash --norc --noprofile
+'
+}

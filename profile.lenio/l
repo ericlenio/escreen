@@ -7,5 +7,4 @@ function l() {
     ls -laF --time-style=+'%D %H:%M:%S' "$@"
   fi
 }
-unalias l 2>/dev/null
 export -f l
