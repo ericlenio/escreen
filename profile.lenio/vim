@@ -1,3 +1,4 @@
+# vim:filetype=sh
 export VIM_CLIPBOARD=$EXPECTSSH_TMPDIR/vim.clipboard.$USER
 touch $VIM_CLIPBOARD
 chmod 600 $VIM_CLIPBOARD || {
