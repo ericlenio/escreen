@@ -461,6 +461,7 @@ export -f _ES_lf
     f+='local args=("$@");'
     f+='local args_enc="$(typeset -p args|gzip -9 -c|openssl enc -base64 -A)";'
     f+='local args2="$(echo funcname $funcname args {$args_enc}|gzip -9 -c|openssl enc -base64)";'
+    f+="unset -f $funcname;"
     f+='printf "%s\010.\n%s.\n" "$marker" "$args2";'
     f+='}'
     eval $f
