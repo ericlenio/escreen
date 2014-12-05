@@ -8,6 +8,7 @@ package require md5
 
 set env(EXPECTSSH_TMPDIR) /tmp/.expect-ssh-1.1
 set EXPECTSSH_TMPDIR $env(EXPECTSSH_TMPDIR)
+set EXPECTSSH_PROFILE [file dirname $argv0]/profile.lenio
 # if stdin is not a terminal, or $EXPECT_SSH exists, then we just
 # want to do regular ssh.
 set overlay_test [exec bash -c {
@@ -114,20 +115,22 @@ proc slurp_file {f} {
 # User custom functions
 #
 proc get_scripts {} {
-  global EXPECTSSH_FUNCTIONS_DIR EXPECTSSH_TMPDIR env
+  global EXPECTSSH_FUNCTIONS_DIR EXPECTSSH_TMPDIR EXPECTSSH_PROFILE env
   #global UPLOAD_SCRIPT_MARKER
   array unset FUNCMAP
   set FUNCMAP(:remote_file) $EXPECTSSH_TMPDIR/$env(USER).FUNCMAP
   set FUNCMAP(:remote_file_prefix) $EXPECTSSH_TMPDIR/$env(USER).f.
-  if { [file isdirectory $EXPECTSSH_FUNCTIONS_DIR]==1 } {
-    foreach funcname [glob -directory $EXPECTSSH_FUNCTIONS_DIR -tails *] {
-      set func_def [slurp_file $EXPECTSSH_FUNCTIONS_DIR/$funcname]
-      set FUNCMAP($funcname) ""
-      #set FUNCMAP($funcname,file) $EXPECTSSH_FUNCTIONS_DIR/$funcname
-      set FUNCMAP($funcname,md5) [compute_md5 $func_def]
-      set FUNCMAP($funcname,defn) $func_def
-      #set FUNCMAP($funcname,remote_file) $FUNCMAP(:remote_file_prefix)$funcname.$FUNCMAP($funcname,md5)
-      set FUNCMAP($funcname,remote_file) $FUNCMAP(:remote_file_prefix)$funcname
+  foreach dir [list $EXPECTSSH_FUNCTIONS_DIR $EXPECTSSH_PROFILE] {
+    if { [file isdirectory $dir]==1 } {
+      foreach funcname [glob -directory $dir -tails *] {
+        set func_def [slurp_file $dir/$funcname]
+        set FUNCMAP($funcname) ""
+        #set FUNCMAP($funcname,file) $dir/$funcname
+        set FUNCMAP($funcname,md5) [compute_md5 $func_def]
+        set FUNCMAP($funcname,defn) $func_def
+        #set FUNCMAP($funcname,remote_file) $FUNCMAP(:remote_file_prefix)$funcname.$FUNCMAP($funcname,md5)
+        set FUNCMAP($funcname,remote_file) $FUNCMAP(:remote_file_prefix)$funcname
+      }
     }
   }
 
@@ -188,46 +191,6 @@ proc get_system_functions {} {
   }
 }
   set FUNCMAP(signal_load_mybashprefs) $script
-
-  set script {
-  #
-  # depends:signal_load_mybashprefs
-  #
-  function s() {
-    local user=$1
-    if [ "$user" = "" ]; then
-      user=root
-    fi
-    id -u "$user" >/dev/null 2>&1 || { echo "No such user \"$user\"."; return; }
-    signal_load_mybashprefs
-    local _ES_funcs=$(declare -F | cut -d' ' -f3|grep ^_ES_|tr '\n' ' ')
-    local exported_funcs="$_ES_funcs $EXPECTSSH_LOADED_FUNCS"
-    sudo -H -u $user -- /bin/bash -c 'true
-  eval "$(openssl enc -d -base64 << EOF
-  '"$(declare -f $exported_funcs|openssl enc -base64)"'
-EOF
-  )"
-  export EXPECTSSH_LOADED_FUNCS='"$EXPECTSSH_LOADED_FUNCS"'
-  export -f '"$exported_funcs"'
-  exec /bin/bash --norc --noprofile
-'
-  }
-}
-  set FUNCMAP(s) $script
-
-  set script {
-  function l() {
-    local os=$(uname -s)
-    if [ $os = Darwin ]; then
-      ls -laF "$@"
-    else
-      ls -laF --time-style=+'%D %H:%M:%S' "$@"
-    fi
-  }
-  unalias l 2>/dev/null
-  export -f l
-  }
-  set FUNCMAP(l) $script
 
   return [array get FUNCMAP]
 }
@@ -501,6 +464,7 @@ export -f _ES_lf
     f+='printf "%s\010.\n%s.\n" "$marker" "$args2";'
     f+='}'
     eval $f
+    unalias $funcname 2>/dev/null
     echo "generated stub function: $funcname"
   else
     echo "skip generating stub for $funcname: function already exists"
