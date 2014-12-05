@@ -39,7 +39,6 @@ array set MARKER {
   DOWNLOAD_DEFAULT_FILE 03
   DOWNLOAD_DATA 04
   LDSUPPORT_PW 05
-  VIM_PASTE_CLIPBOARD 06
   UPLOAD_SCRIPT 07
 }
 
@@ -53,7 +52,6 @@ set COPY_TO_CLIPBOARD_MARKER [get_marker COPY_TO_CLIPBOARD]
 set DOWNLOAD_DEFAULT_FILE_MARKER [get_marker DOWNLOAD_DEFAULT_FILE]
 set DOWNLOAD_DATA_MARKER [get_marker DOWNLOAD_DATA]
 set LDSUPPORT_PW_MARKER [get_marker LDSUPPORT_PW]
-set VIM_PASTE_CLIPBOARD_MARKER [get_marker VIM_PASTE_CLIPBOARD]
 set UPLOAD_SCRIPT_MARKER [get_marker UPLOAD_SCRIPT]
 
 # PS1_MARKER is a non-regexp marker in the normal PS1 prompt that we search for
@@ -234,6 +232,12 @@ EOF
   return [array get FUNCMAP]
 }
 
+proc _ES_register_marker { marker handler } {
+
+}
+
+proc _ES_run_marker_handler { marker_idx encoded_args } {
+}
 
 proc copy_to_clipboard {clipboard_data} {
   global PROMPT OS
@@ -385,56 +389,10 @@ proc download {outfile encoded_data} {
   return $l
 }
 
-proc paste_from_clipboard_in_vim {} {
-  global OS PROMPT ANSI_RE_SHOW_CURSOR
-  send ":shell\r"
-  expect -re $PROMPT
-  # encode the clipboard data and send it across the wire, decoding it on the
-  # other end, and store it in the VIM_CLIPBOARD file. Leading space before
-  # commands so as to not save them to history
-  send " exec 3> >(/usr/bin/openssl enc -base64 -d | gzip -d -c > \$VIM_CLIPBOARD)\r"
-  send { while true; do read -d' ' l; [ "$l" = . ] && break; printf "%s\n" $l >&3; printf "\015"; done; exec 3>&-}
-  send \r
-  expect -re \r\n$
-  if { "$OS" == "Linux" } {
-    set buf [exec clipit -c | gzip -9 -c | /usr/bin/openssl enc -base64]
-  } elseif { "$OS" == "Darwin" } {
-    set buf [exec pbpaste | gzip -9 -c | /usr/bin/openssl enc -base64]
-  }
-  foreach line [split $buf] {
-    send "[string trimright $line] "
-    expect {
-      -re "\x0d$" {}
-      timeout { send_error "TIMEOUT in paste_from_clipboard_in_vim"; return }
-    }
-  }
-  send ". "
-  expect ". "
-  expect -re $PROMPT
-  send " exit\r"
-  expect {
-    -re $ANSI_RE_SHOW_CURSOR {
-      # read the file and put it in the unnamed register
-      send {:let @"=join(readfile($VIM_CLIPBOARD,"b"),"\n")}
-      send "\r"
-      expect {
-        -re $ANSI_RE_SHOW_CURSOR {
-          # paste contents of unnamed register
-          send ":if col(\"\$\")-col(\".\")==1 | call feedkeys(\"p\") | else | call feedkeys(\"P\") | endif\r"
-        }
-        -re {has changed since editing started.*\(L\)oad File: $} {}
-        timeout {send_error "TIMEOUT #1 during paste, aborting"; return}
-      }
-    }
-    -re {has changed since editing started.*\(L\)oad File: $} {}
-    timeout {send_error "TIMEOUT #2 during paste, aborting"; return}
-  }
-}
-
 proc load_mybashprefs {EXPECT_SSH {nest_level 0}} {
   global PROMPT ANSI_RE_TEXT_FORMATTING PS1_MARKER EXPECTSSH_TMPDIR MYBASHPREFS_PASSWORD
   global LOAD_MYBASHPREFS_MARKER COPY_TO_CLIPBOARD_MARKER DOWNLOAD_DEFAULT_FILE_MARKER DOWNLOAD_DATA_MARKER
-  global LDSUPPORT_PW_MARKER VIM_PASTE_CLIPBOARD_MARKER UPLOAD_SCRIPT_MARKER
+  global LDSUPPORT_PW_MARKER UPLOAD_SCRIPT_MARKER
   global MARKER
   log_user 1
   # verify we are in bash
@@ -957,8 +915,6 @@ interact {
       } else {
         process_ldsupport_request $args(ld_url) $args(enc_pass)
       }
-    } elseif { $marker_type == $MARKER(VIM_PASTE_CLIPBOARD) } {
-      paste_from_clipboard_in_vim
     } elseif { $marker_type == $MARKER(UPLOAD_SCRIPT) } {
       #regsub {^(\w+).*} $decoded_args {\1} funcname
       if { [catch {
@@ -976,6 +932,8 @@ interact {
         upload_and_source_script $FUNCMAP($funcname,defn) $FUNCMAP($funcname,remote_file)
         send " _ES_lf $funcname $args(args)\r"
       }
+    } else {
+      _ES_run_marker_handler $marker_type $encoded_args
     }
   }
 }
