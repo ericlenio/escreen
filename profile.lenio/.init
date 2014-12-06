@@ -58,3 +58,25 @@ proc ldsupport_pw_handler {encoded_args} {
   }
 }
 _ES_register_marker LDSUPPORT_PW ldsupport_pw_handler
+
+proc process_ldsupport_request {ld_url enc_pass} {
+  global LD_SUPPORT_BASIC_AUTH PROMPT OS
+  set url https://svn.lincware.com/lw/ldsupportpw
+  catch {
+    set ld_support_pw [exec curl -s -H "Authorization: Basic $LD_SUPPORT_BASIC_AUTH" --data "$enc_pass" $url]
+  } ld_support_pw
+  expect -re $PROMPT
+  if { [regexp {^[-\w]+$} $ld_support_pw] } {
+    send " echo password is: $ld_support_pw\r"
+    expect -re $PROMPT
+    if { "$OS" == "Linux" } {
+      exec sh -c "printf '%s' \"\$0\" | clipit 2>&1" $ld_support_pw
+      system xdg-open $ld_url >/dev/null &
+    } elseif { "$OS" == "Darwin" } {
+      exec sh -c "printf '%s' \"\$0\" | pbcopy 2>&1" $ld_support_pw
+      system open $ld_url &
+    }
+  } else {
+    send_error "ERROR: could not read ldsupport password: further info: $ld_support_pw"
+  }
+}

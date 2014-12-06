@@ -7,7 +7,10 @@ function s() {
   if [ "$user" = "" ]; then
     user=root
   fi
-  id -u "$user" >/dev/null 2>&1 || { echo "No such user \"$user\"."; return; }
+  id -u "$user" >/dev/null 2>&1 || {
+    echo "No such user \"$user\"."
+    return
+  }
   signal_load_mybashprefs
   local _ES_funcs=$(declare -F | cut -d' ' -f3|grep ^_ES_|tr '\n' ' ')
   local exported_funcs="$_ES_funcs $EXPECTSSH_LOADED_FUNCS"

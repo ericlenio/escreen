@@ -56,7 +56,6 @@ append PROMPT "|"
 append PROMPT "([regsub -all {([\[])} $PS1_MARKER [join { {\\} {\1} } {}]])(?:$ANSI_RE_GENERAL)*$"
 append PROMPT ")"
 set OS [exec uname -s]
-set LD_SUPPORT_BASIC_AUTH secret
 #set CTRL_Z \032
 set LOGFILE "/tmp/ssh.log"
 match_max 10000
@@ -72,6 +71,9 @@ array set load_mybashprefs_args {}
 ##
 ##
 
+#
+# Optional arg is an index number, if not given then just return the regex of a
+# generic marker.
 proc get_marker {{idx ""}} {
   # Certain bash functions will send patterns (markers) which expect picks up
   # on to do further processing. The patterns are of the form of
@@ -95,15 +97,20 @@ proc _ES_register_marker { marker_key handler } {
 }
 
 proc _ES_run_marker_handler { marker_idx encoded_args } {
-  puts "_ES_run_marker_handler:$marker_idx"
   global MARKER
   foreach key [array names MARKER -regexp {^(\w+)$}] {
-puts $key:$MARKER($key):$MARKER($key,idx)
-    if {$marker_idx eq $MARKER($key,idx)} {
-      eval [list $MARKER($key) $encoded_args]
+    if {$marker_idx == $MARKER($key,idx)} {
+      set handler $MARKER($key,handler)
+      catch {
+        eval [list $handler $encoded_args]
+      } err
+      if {[string length $err]>0} {
+        send_error "ERROR while invoking handler $handler: $err"
+      }
       return
     }
   }
+  send_error "ERROR in _ES_run_marker_handler: no handler found for idx=$marker_idx"
 }
 
 proc resize_handler {} {
@@ -169,7 +176,7 @@ proc get_scripts {} {
 proc get_dependencies {funcname FUNCMAP {depends_list ""}} {
   array set FUNCMAP2 $FUNCMAP
   set depends ""
-  regexp -line {^#\s*depends:(.*)$} $FUNCMAP2($funcname,defn) - depends
+  regexp -line {^\s*#\s*depends:(.*)$} $FUNCMAP2($funcname,defn) - depends
   if {[string length $depends]>0} {
     foreach funcname2 [split $depends {,}] {
       set temp [get_dependencies $funcname2 [array get FUNCMAP2]]
@@ -202,8 +209,29 @@ proc get_system_functions {} {
     # screen it would potentially get re-executed from a resumed session.
     printf "%s\010.\n%s.\n" "$marker" "$args"
   }
+  export -f signal_load_mybashprefs
 }
   set FUNCMAP(signal_load_mybashprefs) $script
+
+  set script {
+  # depends:signal_load_mybashprefs
+  function ssh() {
+    if [ -t 1 ]; then
+      signal_load_mybashprefs
+      /usr/bin/ssh "$@"
+      local rc=$?
+      if [ "$EXPECTSSH_IN_SCREEN" = 1 -o -n "$STY" ]; then
+        printf "\033k${HOSTNAME}\033\134"
+      fi
+      return $rc
+    else
+      # we are in a pipeline
+      /usr/bin/ssh "$@"
+    fi
+  }
+  export -f ssh
+  }
+  set FUNCMAP(ssh) $script
 
   return [array get FUNCMAP]
 }
@@ -371,6 +399,7 @@ proc download_data_handler {outfile encoded_data} {
 }
 
 proc load_mybashprefs_handler {encoded_args} {
+  global load_mybashprefs_args
   #
   # We have a request to load bash prefs into the current shell, but we
   # only do that under certain conditions below. For example, "ssh
@@ -401,6 +430,7 @@ proc load_mybashprefs {EXPECT_SSH {nest_level 0}} {
 
   append mybashprefs "function _ES_marker() {\n"
   append mybashprefs "local MARKER\n"
+  append mybashprefs "declare -A MARKER\n"
   foreach marker_name [array names MARKER -regexp {^(\w+)$}] {
     append mybashprefs "MARKER\[$marker_name]='$MARKER($marker_name)'\n"
   }
@@ -469,7 +499,7 @@ function _ES_lf() {
   export EXPECTSSH_LOADED_FUNCS
   if [ -n "$2" ]; then
     local args
-    eval "$(echo $2|openssl enc -d -base64|gzip -d -c)"
+    eval $(echo "$2"|openssl enc -d -base64|gzip -d -c)
     $funcname "${args[@]}"
   fi
 }
@@ -486,8 +516,8 @@ export -f _ES_lf
     local f="function $funcname() { local funcname=$funcname; local marker=$marker;"
     f+="local stub_flag=$stub_flag;"
     f+='local args=("$@");'
-    f+='local args_enc="$(typeset -p args|gzip -9 -c|openssl enc -base64 -A)";'
-    f+='local args2="$(echo funcname $funcname args {$args_enc}|gzip -9 -c|openssl enc -base64)";'
+    f+='local args_enc=$(declare -p args|gzip -9 -c|openssl enc -base64);'
+    f+='local args2=$(echo "funcname $funcname args {$args_enc}"|gzip -9 -c|openssl enc -base64);'
     f+="unset -f $funcname;"
     f+='printf "%s\010.\n%s.\n" "$marker" "$args2";'
     f+='}'
@@ -616,11 +646,12 @@ export -f _ES_lf
 ### END of load_mybashprefs
 
 proc upload_script_handler {encoded_args} {
+  global PROMPT
   if { [catch {
     array set args [exec sh -c "printf '%s\n' \"\$0\" | /usr/bin/openssl enc -base64 -d | gzip -d -c" $encoded_args]
   } err] } {
     send_error "ERROR decoding: $err\n\r"
-    send_error "encoded_args=$encoded_args\n\r"
+    send_error "encoded_args braced:{$encoded_args}\n\r"
   } else {
     set funcname $args(funcname)
     array set FUNCMAP [get_scripts]
@@ -629,7 +660,7 @@ proc upload_script_handler {encoded_args} {
       expect -re $PROMPT
     }
     upload_and_source_script $FUNCMAP($funcname,defn) $FUNCMAP($funcname,remote_file)
-    send " _ES_lf $funcname $args(args)\r"
+    send " _ES_lf $funcname \"$args(args)\"\r"
   }
 }
 
@@ -789,28 +820,6 @@ proc process_keystroke {c} {
       # set stdin_buf to any non-blank value
       set stdin_buf "-"
     }
-  }
-}
-
-proc process_ldsupport_request {ld_url enc_pass} {
-  global LD_SUPPORT_BASIC_AUTH PROMPT OS
-  set url https://svn.lincware.com/lw/ldsupportpw
-  catch {
-    set ld_support_pw [exec curl -s -H "Authorization: Basic $LD_SUPPORT_BASIC_AUTH" --data "$enc_pass" $url]
-  } ld_support_pw
-  expect -re $PROMPT
-  if { [regexp {^[-\w]+$} $ld_support_pw] } {
-    send " echo password is: $ld_support_pw\r"
-    expect -re $PROMPT
-    if { "$OS" == "Linux" } {
-      exec sh -c "printf '%s' \"\$0\" | clipit 2>&1" $ld_support_pw
-      system xdg-open $ld_url >/dev/null &
-    } elseif { "$OS" == "Darwin" } {
-      exec sh -c "printf '%s' \"\$0\" | pbcopy 2>&1" $ld_support_pw
-      system open $ld_url &
-    }
-  } else {
-    send_error "ERROR: could not read ldsupport password: further info: $ld_support_pw"
   }
 }
 
