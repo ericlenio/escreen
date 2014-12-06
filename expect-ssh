@@ -6,9 +6,16 @@
 # apt-get install tcllib
 package require md5
 
-set env(EXPECTSSH_TMPDIR) /tmp/.expect-ssh-1.1
+set GIT_BRANCH [exec bash -c "cd [file dirname $argv0] && git status --porcelain -b | grep '^##' | perl -pe 's{.*origin/(.*)\$}{\$1}'"]
+if {[string length $GIT_BRANCH]==0} {
+  puts "Unable to parse git branch, stop."
+  exit 1
+}
+set env(EXPECTSSH_TMPDIR) /tmp/.expect-ssh-$GIT_BRANCH
 set EXPECTSSH_TMPDIR $env(EXPECTSSH_TMPDIR)
+# TO DO: make the profile a command line parameter
 set EXPECTSSH_PROFILE [file dirname $argv0]/profile.lenio
+set profile_init $EXPECTSSH_PROFILE/.init
 # if stdin is not a terminal, or $EXPECT_SSH exists, then we just
 # want to do regular ssh.
 set overlay_test [exec bash -c {
@@ -33,27 +40,10 @@ set ANSI_RE_SHOW_CURSOR {\u001b\[\?25h}
 # to do further processing. The patterns are of the form of GENERIC_MARKER.  It
 # is required that after the pattern is sent there will be a \n and then
 # gzipped and base64 encoded data (optional), then a period (not optional).
-set GENERIC_MARKER "~@(\[0-9]\[0-9]):"
-array set MARKER {
-  LOAD_MYBASHPREFS 01
-  COPY_TO_CLIPBOARD 02
-  DOWNLOAD_DEFAULT_FILE 03
-  DOWNLOAD_DATA 04
-  LDSUPPORT_PW 05
-  UPLOAD_SCRIPT 07
-}
-
-proc get_marker {marker_type} {
-  global GENERIC_MARKER MARKER
-  return [regsub $GENERIC_MARKER ~@00: "~@$MARKER($marker_type):"]
-}
-
-set LOAD_MYBASHPREFS_MARKER [get_marker LOAD_MYBASHPREFS]
-set COPY_TO_CLIPBOARD_MARKER [get_marker COPY_TO_CLIPBOARD]
-set DOWNLOAD_DEFAULT_FILE_MARKER [get_marker DOWNLOAD_DEFAULT_FILE]
-set DOWNLOAD_DATA_MARKER [get_marker DOWNLOAD_DATA]
-set LDSUPPORT_PW_MARKER [get_marker LDSUPPORT_PW]
-set UPLOAD_SCRIPT_MARKER [get_marker UPLOAD_SCRIPT]
+set MARKER_IDX_PRECISION 2
+#set GENERIC_MARKER "~@(\[0-9]\[0-9]):"
+set GENERIC_MARKER "~@(\[0-9]{$MARKER_IDX_PRECISION}):"
+array set MARKER {}
 
 # PS1_MARKER is a non-regexp marker in the normal PS1 prompt that we search for
 # in certain situations to see if we need to load bash prefs. Watch that it
@@ -74,23 +64,48 @@ append PROMPT "([regsub -all {([\[])} $PS1_MARKER [join { {\\} {\1} } {}]])(?:$A
 append PROMPT ")"
 set OS [exec uname -s]
 set LD_SUPPORT_BASIC_AUTH secret
-
-set configdir "$env(HOME)/.expect-ssh"
-set rcfile "$configdir/config"
-if {[file exists $rcfile]} {
-  source $rcfile
-}
-set EXPECTSSH_FUNCTIONS_DIR "$configdir/functions.d"
-
-if {[info exists env(EXPECT_SSH)] == 1} {
-  set env(EXPECT_SSH) [expr $env(EXPECT_SSH) + 1]
-} else {
-  set env(EXPECT_SSH) 0
-}
-
-set CTRL_Z \032
+#set CTRL_Z \032
 set LOGFILE "/tmp/ssh.log"
 match_max 10000
+set configdir "$env(HOME)/.expect-ssh"
+set rcfile "$configdir/config"
+set EXPECTSSH_FUNCTIONS_DIR "$configdir/functions.d"
+set is_marker_prompt 0
+array set load_mybashprefs_args {}
+
+##
+##
+## DEFINE ALL PROCS
+##
+##
+
+proc get_marker {idx} {
+  global GENERIC_MARKER MARKER MARKER_IDX_PRECISION
+  set idx2 [format "%0*d" $MARKER_IDX_PRECISION $idx]
+  return [regsub $GENERIC_MARKER ~@00: "~@$idx2:"]
+}
+
+proc _ES_register_marker { marker_key handler } {
+  global MARKER
+  if {[info exists MARKER($marker_key)]} {
+    return $MARKER($marker_key)
+  }
+  set idx [llength [array names MARKER]]
+  set MARKER($marker_key) [get_marker $idx]
+  set MARKER($marker_key,handler) $handler
+  puts "_ES_register_marker: registered new marker $marker_key with handler: $handler idx=$idx"
+  return $MARKER($marker_key)
+}
+
+proc _ES_run_marker_handler { marker_idx encoded_args } {
+  global MARKER
+  foreach key [array names MARKER "^(\w+)$"] {
+    if {$marker_idx eq $MARKER($key)]} {
+      eval [list $MARKER($key) $encoded_args]
+      return
+    }
+  }
+}
 
 proc resize_handler {} {
   global spawn_out_slave_name
@@ -116,7 +131,6 @@ proc slurp_file {f} {
 #
 proc get_scripts {} {
   global EXPECTSSH_FUNCTIONS_DIR EXPECTSSH_TMPDIR EXPECTSSH_PROFILE env
-  #global UPLOAD_SCRIPT_MARKER
   array unset FUNCMAP
   set FUNCMAP(:remote_file) $EXPECTSSH_TMPDIR/$env(USER).FUNCMAP
   set FUNCMAP(:remote_file_prefix) $EXPECTSSH_TMPDIR/$env(USER).f.
@@ -195,14 +209,7 @@ proc get_system_functions {} {
   return [array get FUNCMAP]
 }
 
-proc _ES_register_marker { marker handler } {
-
-}
-
-proc _ES_run_marker_handler { marker_idx encoded_args } {
-}
-
-proc copy_to_clipboard {clipboard_data} {
+proc copy_to_clipboard_handler {clipboard_data} {
   global PROMPT OS
   set max_clipboard_data_len 1000000
   set content {}
@@ -230,11 +237,23 @@ proc copy_to_clipboard {clipboard_data} {
     }
     set l [string length $content]
   } else {
-    send_error "copy_to_clipboard: need handling for $OS"
+    send_error "copy_to_clipboard_handler: need handling for $OS"
     return
   }
   send_user "DONE...$l bytes copied to the clipboard"
   return $l
+}
+
+proc download_default_file_handler {encoded_args} {
+  array set args [exec sh -c "printf '%s\n' \"\$0\" | /usr/bin/openssl enc -base64 -d | gzip -d -c" $encoded_args]
+  set outfile [get_download_filename $args(default_file_name)]
+  if { $outfile == "" } {
+    # discontinue downloading
+    send "NO\r"
+  } else {
+    send "y\r"
+    expect -ex \n
+  }
 }
 
 proc get_download_filename {default_file_name} {
@@ -336,7 +355,7 @@ proc upload_file {} {
   expect -re $PROMPT
 }
 
-proc download {outfile encoded_data} {
+proc download_data_handler {outfile encoded_data} {
   set l -1
   if { [catch {
     set chan [open "|/usr/bin/openssl enc -base64 -d | gzip -d -c > \"$outfile\"" w]
@@ -352,10 +371,20 @@ proc download {outfile encoded_data} {
   return $l
 }
 
+proc load_mybashprefs_handler {encoded_args} {
+  #
+  # We have a request to load bash prefs into the current shell, but we
+  # only do that under certain conditions below. For example, "ssh
+  # localhost uname" should NOT trigger loading bash prefs, but "ssh
+  # localhost" should.
+  #
+  array set load_mybashprefs_args [exec sh -c "printf '%s\n' \"\$0\" | /usr/bin/openssl enc -base64 -d | gzip -d -c" $encoded_args]
+}
+
 proc load_mybashprefs {EXPECT_SSH {nest_level 0}} {
   global PROMPT ANSI_RE_TEXT_FORMATTING PS1_MARKER EXPECTSSH_TMPDIR MYBASHPREFS_PASSWORD
-  global LOAD_MYBASHPREFS_MARKER COPY_TO_CLIPBOARD_MARKER DOWNLOAD_DEFAULT_FILE_MARKER DOWNLOAD_DATA_MARKER
-  global LDSUPPORT_PW_MARKER UPLOAD_SCRIPT_MARKER
+  global COPY_TO_CLIPBOARD_MARKER DOWNLOAD_DEFAULT_FILE_MARKER DOWNLOAD_DATA_MARKER
+  global LDSUPPORT_PW_MARKER
   global MARKER
   log_user 1
   # verify we are in bash
@@ -374,8 +403,7 @@ proc load_mybashprefs {EXPECT_SSH {nest_level 0}} {
   append mybashprefs "function _ES_marker() {\n"
   append mybashprefs "local MARKER\n"
   foreach marker_name [array names MARKER] {
-    set marker [get_marker $marker_name]
-    append mybashprefs "MARKER\[$marker_name]='$marker'\n"
+    append mybashprefs "MARKER\[$marker_name]='$MARKER($marker_name)'\n"
   }
   append mybashprefs {echo ${MARKER[$1]}}
   append mybashprefs "\n}\n"
@@ -453,7 +481,7 @@ export -f _ES_lf
   # _ES_stub_fcn generates a stub function for each user's custom function.
   #
   set stub_flag "_ES_stub_flag"
-  append mybashprefs "function _ES_stub_fcn() { local stub_flag=$stub_flag; local marker=$UPLOAD_SCRIPT_MARKER\n"
+  append mybashprefs "function _ES_stub_fcn() { local stub_flag=$stub_flag; local marker=\$(_ES_marker UPLOAD_SCRIPT)\n"
   append mybashprefs {local funcname=$1
   if [ -z "$(declare -F $funcname)" ]; then
     local f="function $funcname() { local funcname=$funcname; local marker=$marker;"
@@ -588,6 +616,24 @@ export -f _ES_lf
 }
 ### END of load_mybashprefs
 
+proc upload_script_handler {encoded_args} {
+  if { [catch {
+    array set args [exec sh -c "printf '%s\n' \"\$0\" | /usr/bin/openssl enc -base64 -d | gzip -d -c" $encoded_args]
+  } err] } {
+    send_error "ERROR decoding: $err\n\r"
+    send_error "encoded_args=$encoded_args\n\r"
+  } else {
+    set funcname $args(funcname)
+    array set FUNCMAP [get_scripts]
+    foreach dep $FUNCMAP($funcname,depends_on) {
+      send " _ES_lf $dep\r"
+      expect -re $PROMPT
+    }
+    upload_and_source_script $FUNCMAP($funcname,defn) $FUNCMAP($funcname,remote_file)
+    send " _ES_lf $funcname $args(args)\r"
+  }
+}
+
 # Check if remote function file (i.e. bash script file) exists, and if not
 # upload it. If it does exist, re-upload it if it fails md5 check.
 proc upload_and_source_script { script remote_file } {
@@ -661,7 +707,6 @@ proc bootstrap_shell {EXPECT_SSH {nest_level 0}} {
   expect -re $PROMPT
 }
 
-set is_marker_prompt 0
 # See if the custom prompt is in effect
 proc check_prompt_marker {arr} {
   global is_marker_prompt PS1_MARKER
@@ -675,7 +720,6 @@ proc check_prompt_marker {arr} {
   return $is_marker_prompt
 }
 
-array set load_mybashprefs_args {}
 proc main_prompt_checker {arr} {
   global stdin_buf interact_out expect_out load_mybashprefs_args PROMPT
   set stdin_buf ""
@@ -700,47 +744,6 @@ proc main_prompt_checker {arr} {
   }
   array unset load_mybashprefs_args
 }
-
-#if {[catch {fconfigure stdin -mode}]} {
-#  # Running ssh in a pipeline, stdin is not a keyboard
-#  eval [list system] /usr/bin/ssh $argv
-#  exit
-#}
-set local_shell_only 0
-set stdin_buf ""
-set argv2 {}
-foreach arg $argv {
-  if { $arg == "-help" } {
-    puts "This is ssh-expect, an ssh wrapper to make things"
-    puts "easier when ssh-ing to multiple hosts, and sudo-ing"
-    puts "to multiple users. Options:"
-    puts "  -help   this help menu"
-    puts "  -shell  don't ssh but instead run a local bash shell"
-    puts "All other arguments are passed directly to ssh."
-    puts "While inside any session, type these at a prompt:"
-    puts "  ~d      toggle debug mode (writes to $LOGFILE)"
-    puts "  ~i      load bash functions/preferences"
-    puts "  ~k      kill expect: useful if running screen, and you"
-    puts "          want to resume screen from another desktop"
-    puts "Upon starting, Expect statements can be placed in"
-    puts "$rcfile and they get sourced."
-    exit
-  }
-  if { $arg == "-local_shell_only" || $arg == "-shell" } {
-    set local_shell_only 1
-  } elseif { $arg == "-debug" } {
-    # truncate the file first
-    close [open $LOGFILE "w"]
-    exp_internal -f $LOGFILE 0
-    send_user "DEBUG MODE: sending output for this session to $LOGFILE\n"
-  } else {
-    lappend argv2 "$arg"
-  }
-}
-
-trap {
-  resize_handler
-} WINCH
 
 proc process_keystroke {c} {
   # monitor keyboard input for ~i immediately following a bash prompt, and load
@@ -812,6 +815,70 @@ proc process_ldsupport_request {ld_url enc_pass} {
   }
 }
 
+##
+##
+## END OF PROCS
+##
+##
+
+_ES_register_marker LOAD_MYBASHPREFS load_mybashprefs_handler
+_ES_register_marker UPLOAD_SCRIPT upload_script_handler
+_ES_register_marker COPY_TO_CLIPBOARD copy_to_clipboard_handler
+_ES_register_marker DOWNLOAD_DEFAULT_FILE download_default_file_handler
+_ES_register_marker DOWNLOAD_DATA download_data_handler
+
+if {[file exists $rcfile]} {
+  source $rcfile
+}
+
+if {[file exists $profile_init]} {
+  source $profile_init
+}
+
+if {[info exists env(EXPECT_SSH)] == 1} {
+  set env(EXPECT_SSH) [expr $env(EXPECT_SSH) + 1]
+} else {
+  set env(EXPECT_SSH) 0
+}
+#if {[catch {fconfigure stdin -mode}]} {
+#  # Running ssh in a pipeline, stdin is not a keyboard
+#  eval [list system] /usr/bin/ssh $argv
+#  exit
+#}
+set local_shell_only 0
+set stdin_buf ""
+set argv2 {}
+foreach arg $argv {
+  if { $arg == "-help" } {
+    puts "This is ssh-expect, an ssh wrapper to make things"
+    puts "easier when ssh-ing to multiple hosts, and sudo-ing"
+    puts "to multiple users. Options:"
+    puts "  -help   this help menu"
+    puts "  -shell  don't ssh but instead run a local bash shell"
+    puts "All other arguments are passed directly to ssh."
+    puts "While inside any session, type these at a prompt:"
+    puts "  ~d      toggle debug mode (writes to $LOGFILE)"
+    puts "  ~i      load bash functions/preferences"
+    puts "  ~k      kill expect: useful if running screen, and you"
+    puts "          want to resume screen from another desktop"
+    puts "Upon starting, Expect statements can be placed in"
+    puts "$rcfile and they get sourced."
+    exit
+  }
+  if { $arg == "-local_shell_only" || $arg == "-shell" } {
+    set local_shell_only 1
+  } elseif { $arg == "-debug" } {
+    # truncate the file first
+    close [open $LOGFILE "w"]
+    exp_internal -f $LOGFILE 0
+    send_user "DEBUG MODE: sending output for this session to $LOGFILE\n"
+  } else {
+    lappend argv2 "$arg"
+  }
+}
+
+trap { resize_handler } WINCH
+
 if { $local_shell_only == 1 } {
   eval [list spawn -noecho] /bin/bash
 } else {
@@ -833,7 +900,7 @@ interact {
   -o
   -nobuffer -re $PROMPT { main_prompt_checker interact_out }
   -nobuffer -re \[\n\r]$GENERIC_MARKER {
-    set marker_type $interact_out(1,string)
+    set marker_idx $interact_out(1,string)
     set encoded_args ""
     expect \n
     expect {
@@ -849,56 +916,6 @@ interact {
     regsub -all "\015" $encoded_args "\n" encoded_args
     # clean out any cursor movement sequences that sometimes get thrown in by screen
     regsub -all $ANSI_RE_GENERAL $encoded_args "" encoded_args
-    if { $marker_type == $MARKER(LOAD_MYBASHPREFS) } {
-      #
-      # We have a request to load bash prefs into the current shell, but we
-      # only do that under certain conditions below. For example, "ssh
-      # localhost uname" should NOT trigger loading bash prefs, but "ssh
-      # localhost" should.
-      #
-      array set load_mybashprefs_args [exec sh -c "printf '%s\n' \"\$0\" | /usr/bin/openssl enc -base64 -d | gzip -d -c" $encoded_args]
-    } elseif { $marker_type == $MARKER(COPY_TO_CLIPBOARD) } {
-      copy_to_clipboard $encoded_args
-    } elseif { $marker_type == $MARKER(DOWNLOAD_DEFAULT_FILE) } {
-      array set args [exec sh -c "printf '%s\n' \"\$0\" | /usr/bin/openssl enc -base64 -d | gzip -d -c" $encoded_args]
-      set outfile [get_download_filename $args(default_file_name)]
-      if { $outfile == "" } {
-	# discontinue downloading
-	send "NO\r"
-      } else {
-	send "y\r"
-	expect -ex \n
-      }
-    } elseif { $marker_type == $MARKER(DOWNLOAD_DATA) } {
-      download $outfile $encoded_args
-    } elseif { $marker_type == $MARKER(LDSUPPORT_PW) } {
-      if { [catch {
-        array set args [exec sh -c "printf '%s\n' \"\$0\" | /usr/bin/openssl enc -base64 -d | gzip -d -c" $encoded_args]
-      } err] } {
-        send_error "ERROR decoding: $err\n\r"
-        send_error "encoded_args=$encoded_args\n\r"
-      } else {
-        process_ldsupport_request $args(ld_url) $args(enc_pass)
-      }
-    } elseif { $marker_type == $MARKER(UPLOAD_SCRIPT) } {
-      #regsub {^(\w+).*} $decoded_args {\1} funcname
-      if { [catch {
-        array set args [exec sh -c "printf '%s\n' \"\$0\" | /usr/bin/openssl enc -base64 -d | gzip -d -c" $encoded_args]
-      } err] } {
-        send_error "ERROR decoding: $err\n\r"
-        send_error "encoded_args=$encoded_args\n\r"
-      } else {
-        set funcname $args(funcname)
-        array set FUNCMAP [get_scripts]
-        foreach dep $FUNCMAP($funcname,depends_on) {
-          send " _ES_lf $dep\r"
-          expect -re $PROMPT
-        }
-        upload_and_source_script $FUNCMAP($funcname,defn) $FUNCMAP($funcname,remote_file)
-        send " _ES_lf $funcname $args(args)\r"
-      }
-    } else {
-      _ES_run_marker_handler $marker_type $encoded_args
-    }
+    _ES_run_marker_handler $marker_idx $encoded_args
   }
 }

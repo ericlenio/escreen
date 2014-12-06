@@ -1,5 +1,4 @@
 # vim:filetype=expect
-_ES_register_marker VIM_PASTE_CLIPBOARD paste_from_clipboard_in_vim
 
 proc paste_from_clipboard_in_vim {} {
   global OS PROMPT ANSI_RE_SHOW_CURSOR
@@ -46,3 +45,16 @@ proc paste_from_clipboard_in_vim {} {
     timeout {send_error "TIMEOUT #2 during paste, aborting"; return}
   }
 }
+_ES_register_marker VIM_PASTE_CLIPBOARD paste_from_clipboard_in_vim
+
+proc ldsupport_pw_handler {encoded_args} {
+  if { [catch {
+    array set args [exec sh -c "printf '%s\n' \"\$0\" | /usr/bin/openssl enc -base64 -d | gzip -d -c" $encoded_args]
+  } err] } {
+    send_error "ERROR decoding: $err\n\r"
+    send_error "encoded_args=$encoded_args\n\r"
+  } else {
+    process_ldsupport_request $args(ld_url) $args(enc_pass)
+  }
+}
+_ES_register_marker LDSUPPORT_PW ldsupport_pw_handler
