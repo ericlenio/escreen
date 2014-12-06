@@ -36,13 +36,6 @@ set ANSI_RE_CURSOR_POSITIONING {\u001b\\\[\d+;\d+[Hf]}
 set ANSI_RE_GENERAL {\u001b\[[^a-zA-Z]*[a-zA-Z]}
 set ANSI_RE_SHOW_CURSOR {\u001b\[\?25h}
 
-# Certain bash functions will send patterns (markers) which expect picks up on
-# to do further processing. The patterns are of the form of GENERIC_MARKER.  It
-# is required that after the pattern is sent there will be a \n and then
-# gzipped and base64 encoded data (optional), then a period (not optional).
-set MARKER_IDX_PRECISION 2
-#set GENERIC_MARKER "~@(\[0-9]\[0-9]):"
-set GENERIC_MARKER "~@(\[0-9]{$MARKER_IDX_PRECISION}):"
 array set MARKER {}
 
 # PS1_MARKER is a non-regexp marker in the normal PS1 prompt that we search for
@@ -79,28 +72,34 @@ array set load_mybashprefs_args {}
 ##
 ##
 
-proc get_marker {idx} {
-  global GENERIC_MARKER MARKER MARKER_IDX_PRECISION
-  set idx2 [format "%0*d" $MARKER_IDX_PRECISION $idx]
-  return [regsub $GENERIC_MARKER ~@00: "~@$idx2:"]
+proc get_marker {{idx ""}} {
+  # Certain bash functions will send patterns (markers) which expect picks up
+  # on to do further processing. The patterns are of the form of
+  # GENERIC_MARKER.  It is required that after the pattern is sent there will
+  # be a \n and then gzipped and base64 encoded data (optional), then a period
+  # (not optional).
+  set precision 2
+  set GENERIC_MARKER_RE "~@(\[0-9]{$precision}):"
+  if {[string length $idx]==0} { return $GENERIC_MARKER_RE }
+  set marker [join [list ~@ [format "%0*d" $precision $idx] :] {}]
+  return $marker
 }
 
 proc _ES_register_marker { marker_key handler } {
   global MARKER
-  if {[info exists MARKER($marker_key)]} {
-    return $MARKER($marker_key)
-  }
-  set idx [llength [array names MARKER]]
+  set idx [llength [array names MARKER -regexp {^(\w+)$}]]
   set MARKER($marker_key) [get_marker $idx]
+  set MARKER($marker_key,idx) $idx
   set MARKER($marker_key,handler) $handler
   puts "_ES_register_marker: registered new marker $marker_key with handler: $handler idx=$idx"
-  return $MARKER($marker_key)
 }
 
 proc _ES_run_marker_handler { marker_idx encoded_args } {
+  puts "_ES_run_marker_handler:$marker_idx"
   global MARKER
-  foreach key [array names MARKER "^(\w+)$"] {
-    if {$marker_idx eq $MARKER($key)]} {
+  foreach key [array names MARKER -regexp {^(\w+)$}] {
+puts $key:$MARKER($key):$MARKER($key,idx)
+    if {$marker_idx eq $MARKER($key,idx)} {
       eval [list $MARKER($key) $encoded_args]
       return
     }
@@ -402,7 +401,7 @@ proc load_mybashprefs {EXPECT_SSH {nest_level 0}} {
 
   append mybashprefs "function _ES_marker() {\n"
   append mybashprefs "local MARKER\n"
-  foreach marker_name [array names MARKER] {
+  foreach marker_name [array names MARKER -regexp {^(\w+)$}] {
     append mybashprefs "MARKER\[$marker_name]='$MARKER($marker_name)'\n"
   }
   append mybashprefs {echo ${MARKER[$1]}}
@@ -899,7 +898,7 @@ interact {
   # patterns after the -o apply to the spawned process."
   -o
   -nobuffer -re $PROMPT { main_prompt_checker interact_out }
-  -nobuffer -re \[\n\r]$GENERIC_MARKER {
+  -nobuffer -re \[\n\r][get_marker] {
     set marker_idx $interact_out(1,string)
     set encoded_args ""
     expect \n
