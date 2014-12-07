@@ -105,7 +105,7 @@ proc _ES_run_marker_handler { marker_idx encoded_args } {
         eval [list $handler $encoded_args]
       } err
       if {[string length $err]>0} {
-        send_error "ERROR while invoking handler $handler: $err"
+        send_error "ERROR invoking handler $handler: $err"
       }
       return
     }

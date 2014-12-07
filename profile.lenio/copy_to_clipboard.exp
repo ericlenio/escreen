@@ -32,5 +32,4 @@ proc copy_to_clipboard_handler {clipboard_data} {
     return
   }
   send_user "DONE...$l bytes copied to the clipboard"
-  return $l
 }

@@ -11,6 +11,7 @@ function copy_to_clipboard() {
     echo "Error: no such file, or file is not readable: $file_to_copy"
     file_to_copy=/dev/null
   fi
-  _ES_send_marker "$marker" $(perl -pe 'BEGIN{$n=0;}END{print "-" if $n==0}$n+=length($_);chomp if eof' -- "$file_to_copy")
+  local c=$(perl -pe 'BEGIN{$n=0;}END{print q(-) if $n==0}$n+=length($_);chomp if eof' -- "$file_to_copy")
+  _ES_send_marker "$marker" "$c"
 }
 export -f copy_to_clipboard

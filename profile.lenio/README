@@ -1,0 +1,22 @@
+Files in the profile:
+
+* .init: expect commands sourced at initialization time
+* *.exp: more expect commands that get sourced just after .init
+* any filename matching ^\w+ is assumed to be bash commands
+  that usually, but not necessarily, define a bash function of the same name.
+  A stub shell function of the same name is the file is created when the bash
+  shell starts. When the user runs one, that file is uploaded, cached to
+  EXPECTSSH_TMPDIR in an encrypted format, and sourced.  A new shell will
+  always first try to re-use the cached file, if it does not exist or the md5
+  checksum fails it will get re-uploaded to the cache.
+
+Markers/handlers: each marker is a small pattern (like ~@12:) that the main
+expect loop will detect and then trigger the marker's handler.
+
+Handlers can utilize the following global variables:
+* OS
+* PROMPT
+* EXPECTSSH_TMPDIR
+* EXPECTSSH_PROFILE
+* EXPECTSSH_FUNCTIONS_DIR
+* EXPECTSSH_LOADED_FUNCS
