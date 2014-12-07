@@ -1,7 +1,5 @@
 # vim:filetype=sh
 function l() {
-#comment
-#here
   local os=$(uname -s)
   if [ $os = Darwin ]; then
     ls -laF "$@"

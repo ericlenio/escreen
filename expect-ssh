@@ -143,6 +143,7 @@ proc get_scripts {} {
   foreach dir [list $EXPECTSSH_FUNCTIONS_DIR $EXPECTSSH_PROFILE] {
     if { [file isdirectory $dir]==1 } {
       foreach funcname [glob -directory $dir -tails *] {
+        if { $funcname eq "README" } { continue }
         set func_def [slurp_file $dir/$funcname]
         set FUNCMAP($funcname) ""
         #set FUNCMAP($funcname,file) $dir/$funcname
@@ -389,7 +390,7 @@ proc load_mybashprefs {EXPECT_SSH {nest_level 0}} {
   set mybashprefs "export EXPECTSSH_TMPDIR=$EXPECTSSH_TMPDIR\n"
 
   append mybashprefs "function _ES_marker() {\n"
-  append mybashprefs "local M\n"
+  append mybashprefs "local MARKER\n"
   append mybashprefs "declare -A MARKER=("
   foreach marker_name [array names MARKER -regexp {^(\w+)$}] {
     append mybashprefs "\[$marker_name]=$MARKER($marker_name) "
@@ -528,9 +529,6 @@ export -f _ES_send_marker
   append mybashprefs "export EXPECT_SSH="
   set mybashprefs [strip_comments $mybashprefs]
 
-  #exp_internal -f /tmp/log 0
-
-  #
   set mybashprefs_hash [compute_md5 $mybashprefs]
   # Combine my password with md5 hash for the password to encrypt the data,
   # with the md5 in the password we can trigger a re-upload of bash prefs
@@ -891,7 +889,7 @@ interact {
   # patterns after the -o apply to the spawned process."
   -o
   -nobuffer -re $PROMPT { main_prompt_checker interact_out }
-  -nobuffer -re \[\n\r][get_marker] {
+  -nobuffer -re (?:^|\[\n\r])[get_marker] {
     set marker_idx $interact_out(1,string)
     set encoded_args ""
     expect \n

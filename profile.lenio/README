@@ -13,6 +13,12 @@ Files in the profile:
 Markers/handlers: each marker is a small pattern (like ~@12:) that the main
 expect loop will detect and then trigger the marker's handler.
 
+Markers invoke handlers by using the _ES_send_marker bash function like so:
+
+  marker=$(_ES_marker MARKER_HUMAN_FRIENDLY_NAME)
+  _ES_send_marker "$marker" "any paramaters here ..."
+
+
 Handlers can utilize the following global variables:
 * OS
 * PROMPT
@@ -20,3 +26,19 @@ Handlers can utilize the following global variables:
 * EXPECTSSH_PROFILE
 * EXPECTSSH_FUNCTIONS_DIR
 * EXPECTSSH_LOADED_FUNCS
+
+A handler can expect a single arg to be passed to it, which is 
+a gzip'd, base64'd string of parameters. It is up to 
+
+Bash command files can use the following helper functions:
+* _ES_marker
+
+If a bash command file has a dependency on another command file to be loaded
+first, add a comment line like this in the file with the dependency:
+# depends:some_other_bash_command_file
+
+Expect files can use the following helper functions:
+* _ES_register_marker
+
+Handlers should not have a return value, else the procedure that invokes the
+handler will flag it as an error.
