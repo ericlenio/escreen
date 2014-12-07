@@ -203,11 +203,8 @@ proc get_system_functions {} {
     local in_screen=0
     if [ -n "$STY" -o -n "$EXPECTSSH_IN_SCREEN" ]; then in_screen=1; fi
     local CMD_ARRAY=("$@")
-    local args=$(printf "EXPECT_SSH %s EXPECTSSH_IN_SCREEN {%s} CMD_ARRAY {%s}" $EXPECT_SSH "$in_screen" "$(declare -p CMD_ARRAY)" | gzip -9 -c | openssl enc -base64)
-    # pass a \010 (backspace) character to erase last character of the pattern so
-    # that expect-ssh only processes this signal 1 time ... else when inside
-    # screen it would potentially get re-executed from a resumed session.
-    printf "%s\010.\n%s.\n" "$marker" "$args"
+    local args=$(printf "EXPECT_SSH %s EXPECTSSH_IN_SCREEN {%s} CMD_ARRAY {%s}" $EXPECT_SSH "$in_screen" "$(declare -p CMD_ARRAY)")
+    _ES_send_marker "$marker" "$args"
   }
   export -f signal_load_mybashprefs
 }
@@ -411,8 +408,6 @@ proc load_mybashprefs_handler {encoded_args} {
 
 proc load_mybashprefs {EXPECT_SSH {nest_level 0}} {
   global PROMPT ANSI_RE_TEXT_FORMATTING PS1_MARKER EXPECTSSH_TMPDIR MYBASHPREFS_PASSWORD
-  global COPY_TO_CLIPBOARD_MARKER DOWNLOAD_DEFAULT_FILE_MARKER DOWNLOAD_DATA_MARKER
-  global LDSUPPORT_PW_MARKER
   global MARKER
   log_user 1
   # verify we are in bash
@@ -505,6 +500,27 @@ function _ES_lf() {
 }
 export -f _ES_lf
 
+#
+# Send a marker, with arguments.
+#
+function _ES_send_marker() {
+  local marker="$1"
+  local args=$(echo "$2"|gzip -c|openssl enc -base64)
+  local l
+  # pass a \010 (backspace) character to erase last character of the pattern so
+  # that expect-ssh only processes this signal 1 time ... else when inside
+  # screen it would potentially get re-executed from a resumed session.
+  printf "%s\010.\n" "$marker"
+  printf "$args" | {
+    while IFS=$'\n' read -r l || [ -n "$l" ]; do
+      printf "%s\015" $l
+    done
+  }
+  # send terminating period for the pattern to match
+  printf ".\n"
+}
+export -f _ES_send_marker
+
 }
   #
   # _ES_stub_fcn generates a stub function for each user's custom function.
@@ -517,9 +533,9 @@ export -f _ES_lf
     f+="local stub_flag=$stub_flag;"
     f+='local args=("$@");'
     f+='local args_enc=$(declare -p args|gzip -9 -c|openssl enc -base64);'
-    f+='local args2=$(echo "funcname $funcname args {$args_enc}"|gzip -9 -c|openssl enc -base64);'
+    f+='local args2=$(echo "funcname $funcname args {$args_enc}");'
     f+="unset -f $funcname;"
-    f+='printf "%s\010.\n%s.\n" "$marker" "$args2";'
+    f+='_ES_send_marker "$marker" "$args2";'
     f+='}'
     eval $f
     unalias $funcname 2>/dev/null
@@ -543,6 +559,8 @@ export -f _ES_lf
   # set EXPECT_SSH, this must be the last part of mybashprefs, as we paste the
   # value for EXPECT_SSH below in the send statement
   append mybashprefs "export EXPECT_SSH="
+  # strip out comments
+  regsub -all {\n\s*#[^\n]*\n} $mybashprefs \n mybashprefs
 
   #exp_internal -f /tmp/log 0
 
@@ -656,6 +674,7 @@ proc upload_script_handler {encoded_args} {
     set funcname $args(funcname)
     array set FUNCMAP [get_scripts]
     foreach dep $FUNCMAP($funcname,depends_on) {
+      upload_and_source_script $FUNCMAP($dep,defn) $FUNCMAP($dep,remote_file)
       send " _ES_lf $dep\r"
       expect -re $PROMPT
     }
@@ -668,6 +687,8 @@ proc upload_script_handler {encoded_args} {
 # upload it. If it does exist, re-upload it if it fails md5 check.
 proc upload_and_source_script { script remote_file } {
   global PROMPT MYBASHPREFS_PASSWORD EXPECT_SSH
+  # strip out comments from script
+  regsub -all {\n\s*#[^\n]*\n} $script \n script
   set script_md5 [compute_md5 $script]
   # Combine my password with md5 hash for the password to encrypt the data,
   # with the md5 in the password we can trigger a re-upload of bash prefs
@@ -725,7 +746,7 @@ proc upload_and_source_script { script remote_file } {
       # to openssl's password prompt ...
       if { $password_was_entered == 0 } { exp_continue }
     }
-    timeout { send_error "TIMEOUT in proc upload_and_source_script"; return "NOT OK" }
+    timeout { send_error "TIMEOUT in proc upload_and_source_script:<$script>\n\r"; return "NOT OK" }
   }
 }
 
@@ -912,10 +933,10 @@ interact {
     set encoded_args ""
     expect \n
     expect {
-      -re "(\[^\\.]*)\\." {
+      -re {([^\.]*)\.} {
 	append encoded_args $expect_out(1,string)
       }
-      -re "(\[^\\.]{1,255})" {
+      -re {([^\.]{1,255})} {
 	append encoded_args $expect_out(1,string)
 	exp_continue
       }
