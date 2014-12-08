@@ -95,21 +95,48 @@ proc _ES_register_marker { marker_key handler } {
   puts "_ES_register_marker: registered new marker $marker_key with handler: $handler idx=$idx"
 }
 
-proc _ES_run_marker_handler { marker_idx encoded_args } {
-  global MARKER
+proc _ES_run_marker_handler { marker_idx } {
+  global MARKER ANSI_RE_GENERAL
+  set encoded_args ""
+  set decoded_args ""
+  expect \n
+  expect {
+    -re {([^\.]*)\.} {
+      append encoded_args $expect_out(1,string)
+    }
+    -re {([^\.]{1,255})} {
+      append encoded_args $expect_out(1,string)
+      exp_continue
+    }
+  }
+  # convert all \015 back to \n
+  regsub -all "\015" $encoded_args "\n" encoded_args
+  # clean out any cursor movement sequences that sometimes get thrown in by screen
+  regsub -all $ANSI_RE_GENERAL $encoded_args "" encoded_args
+
+  if {[string length [string trim $encoded_args]]>0} {
+    if {[catch {
+      set decoded_args [exec sh -c "printf '%s' \"\$0\" | /usr/bin/openssl enc -base64 -d | gzip -d -c" $encoded_args]
+    } err]} {
+      send_error "ERROR decoding args: $err\r\n"
+      return
+    }
+  }
+
+  # find the handler and run it
   foreach key [array names MARKER -regexp {^(\w+)$}] {
     if {$marker_idx == $MARKER($key,idx)} {
       set handler $MARKER($key,handler)
       catch {
-        eval [list $handler $encoded_args]
+        eval [list $handler $decoded_args]
       } err
       if {[string length $err]>0} {
-        send_error "ERROR invoking handler $handler: $err"
+        send_error "ERROR invoking handler $handler: $err\r\n"
       }
       return
     }
   }
-  send_error "ERROR in _ES_run_marker_handler: no handler found for idx=$marker_idx"
+  send_error "ERROR in _ES_run_marker_handler: no handler found for idx=$marker_idx\r\n"
 }
 
 proc resize_handler {} {
@@ -233,7 +260,8 @@ proc get_system_functions {} {
   return [array get FUNCMAP]
 }
 
-proc download_default_file_handler {encoded_args} {
+# FIXME
+proc download_default_file_handler {decoded_args} {
   array set args [exec sh -c "printf '%s\n' \"\$0\" | /usr/bin/openssl enc -base64 -d | gzip -d -c" $encoded_args]
   set outfile [get_download_filename $args(default_file_name)]
   if { $outfile == "" } {
@@ -360,7 +388,7 @@ proc download_data_handler {outfile encoded_data} {
   return $l
 }
 
-proc load_mybashprefs_handler {encoded_args} {
+proc load_mybashprefs_handler {decoded_args} {
   global load_mybashprefs_args
   #
   # We have a request to load bash prefs into the current shell, but we
@@ -368,7 +396,7 @@ proc load_mybashprefs_handler {encoded_args} {
   # localhost uname" should NOT trigger loading bash prefs, but "ssh
   # localhost" should.
   #
-  array set load_mybashprefs_args [exec sh -c "printf '%s\n' \"\$0\" | /usr/bin/openssl enc -base64 -d | gzip -d -c" $encoded_args]
+  array set load_mybashprefs_args $decoded_args
 }
 
 proc load_mybashprefs {EXPECT_SSH {nest_level 0}} {
@@ -626,24 +654,18 @@ export -f _ES_send_marker
 }
 ### END of load_mybashprefs
 
-proc upload_script_handler {encoded_args} {
+proc upload_script_handler {decoded_args} {
   global PROMPT
-  if { [catch {
-    array set args [exec sh -c "printf '%s\n' \"\$0\" | /usr/bin/openssl enc -base64 -d | gzip -d -c" $encoded_args]
-  } err] } {
-    send_error "ERROR decoding: $err\n\r"
-    send_error "encoded_args braced:{$encoded_args}\n\r"
-  } else {
-    set funcname $args(funcname)
-    array set FUNCMAP [get_scripts]
-    foreach dep $FUNCMAP($funcname,depends_on) {
-      upload_and_source_script $FUNCMAP($dep,defn) $FUNCMAP($dep,remote_file)
-      send " _ES_lf $dep\r"
-      expect -re $PROMPT
-    }
-    upload_and_source_script $FUNCMAP($funcname,defn) $FUNCMAP($funcname,remote_file)
-    send " _ES_lf $funcname \"$args(args)\"\r"
+  array set args $decoded_args
+  set funcname $args(funcname)
+  array set FUNCMAP [get_scripts]
+  foreach dep $FUNCMAP($funcname,depends_on) {
+    upload_and_source_script $FUNCMAP($dep,defn) $FUNCMAP($dep,remote_file)
+    send " _ES_lf $dep\r"
+    expect -re $PROMPT
   }
+  upload_and_source_script $FUNCMAP($funcname,defn) $FUNCMAP($funcname,remote_file)
+  send " _ES_lf $funcname \"$args(args)\"\r"
 }
 
 proc strip_comments {script} {
@@ -891,21 +913,6 @@ interact {
   -nobuffer -re $PROMPT { main_prompt_checker interact_out }
   -nobuffer -re $marker_re {
     set marker_idx $interact_out(1,string)
-    set encoded_args ""
-    expect \n
-    expect {
-      -re {([^\.]*)\.} {
-	append encoded_args $expect_out(1,string)
-      }
-      -re {([^\.]{1,255})} {
-	append encoded_args $expect_out(1,string)
-	exp_continue
-      }
-    }
-    # convert all \015 back to \n
-    regsub -all "\015" $encoded_args "\n" encoded_args
-    # clean out any cursor movement sequences that sometimes get thrown in by screen
-    regsub -all $ANSI_RE_GENERAL $encoded_args "" encoded_args
-    _ES_run_marker_handler $marker_idx $encoded_args
+    _ES_run_marker_handler $marker_idx
   }
 }

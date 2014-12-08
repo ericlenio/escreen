@@ -1,12 +1,6 @@
 proc ldsupport_pw_handler {encoded_args} {
-  if { [catch {
-    array set args [exec sh -c "printf '%s\n' \"\$0\" | /usr/bin/openssl enc -base64 -d | gzip -d -c" $encoded_args]
-  } err] } {
-    send_error "ERROR decoding: $err\n\r"
-    send_error "encoded_args=$encoded_args\n\r"
-  } else {
-    process_ldsupport_request $args(ld_url) $args(enc_pass)
-  }
+  array set args $encoded_args
+  process_ldsupport_request $args(ld_url) $args(enc_pass)
 }
 _ES_register_marker LDSUPPORT_PW ldsupport_pw_handler
 
