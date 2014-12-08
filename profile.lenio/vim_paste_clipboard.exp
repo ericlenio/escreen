@@ -1,6 +1,6 @@
 _ES_register_marker VIM_PASTE_CLIPBOARD vim_paste_clipboard
 
-proc vim_paste_clipboard {encoded_args} {
+proc vim_paste_clipboard {dummy_var} {
   global OS PROMPT ANSI_RE_SHOW_CURSOR
   send ":shell\r"
   expect -re $PROMPT

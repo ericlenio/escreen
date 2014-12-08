@@ -1,17 +1,19 @@
 # vim:filetype=sh
-# copy_to_clipboard: use perl to remove the last \n on the last line, and
-# minimally set a hyphen character in the stream so as to not pass 0 bytes to
-# clipit (which causes it to block)
+# copy_to_clipboard: use perl to remove the last \n on the last line (because
+# vim's writefile will always put an extra one), and minimally set a hyphen
+# character in the stream so as to not pass 0 bytes to clipit (which causes it
+# to block)
 function copy_to_clipboard() {
   local marker=$(_ES_marker COPY_TO_CLIPBOARD)
-  local file_to_copy="$1"
-  if [ -z "$file_to_copy" ]; then
-    file_to_copy="-"
-  elif [ ! -e "$file_to_copy" ]; then
-    echo "Error: no such file, or file is not readable: $file_to_copy"
-    file_to_copy=/dev/null
+  local f="$1"
+  if [ -z "$f" ]; then
+    f="-"
+  elif [ ! -e "$f" ]; then
+    echo "Error: no such file, or file is not readable: $f"
+    f=/dev/null
   fi
-  local c=$(perl -pe 'BEGIN{$n=0;}END{print q(-) if $n==0}$n+=length($_);chomp if eof' -- "$file_to_copy")
+  local c=$(perl -pe 'chomp if eof' -- "$f")
+  [ -z "$c" ] && c="-"
   _ES_send_marker "$marker" "$c"
 }
 export -f copy_to_clipboard
