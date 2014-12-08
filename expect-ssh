@@ -15,7 +15,6 @@ set env(EXPECTSSH_TMPDIR) /tmp/.expect-ssh-$GIT_BRANCH
 set EXPECTSSH_TMPDIR $env(EXPECTSSH_TMPDIR)
 # TO DO: make the profile a command line parameter
 set EXPECTSSH_PROFILE [file dirname $argv0]/profile.lenio
-set profile_init $EXPECTSSH_PROFILE/.init
 # if stdin is not a terminal, or $EXPECT_SSH exists, then we just
 # want to do regular ssh.
 set overlay_test [exec bash -c {
@@ -809,6 +808,9 @@ proc process_keystroke {c} {
 ##
 ##
 
+#
+# Register some core handlers
+#
 _ES_register_marker LOAD_MYBASHPREFS load_mybashprefs_handler
 _ES_register_marker UPLOAD_SCRIPT upload_script_handler
 _ES_register_marker DOWNLOAD_DEFAULT_FILE download_default_file_handler
@@ -818,11 +820,8 @@ if {[file exists $rcfile]} {
   source $rcfile
 }
 
-if {[file exists $profile_init]} {
-  source $profile_init
-  foreach expfile [glob -directory $EXPECTSSH_PROFILE *.exp] {
-    source $expfile
-  }
+foreach expfile [lsort [glob -directory $EXPECTSSH_PROFILE *.exp]] {
+  source $expfile
 }
 
 if {[info exists env(EXPECT_SSH)] == 1} {
@@ -879,6 +878,7 @@ set spawn_out_slave_name $spawn_out(slave,name)
 # force-resize: needed if on Mac in terminal full screen mode
 resize_handler
 load_mybashprefs $env(EXPECT_SSH)
+set marker_re (?:\x07|\n|\r)[get_marker]
 
 interact {
   # "If two or more patterns can match the same output, only one action will
@@ -889,7 +889,7 @@ interact {
   # patterns after the -o apply to the spawned process."
   -o
   -nobuffer -re $PROMPT { main_prompt_checker interact_out }
-  -nobuffer -re (?:^|\[\n\r])[get_marker] {
+  -nobuffer -re $marker_re {
     set marker_idx $interact_out(1,string)
     set encoded_args ""
     expect \n
