@@ -48,16 +48,13 @@ array set MARKER {}
 # marker is still in the PS1 string.
 #set PS1_MARKER {:\033[7m$\033[0m }
 set PS1_MARKER {:\033[7m\$\033[0m }
-#set PROMPT "($ANSI_RE_TEXT_FORMATTING)*(?::(?:$ANSI_RE_TEXT_FORMATTING))*(#|\\\$)($ANSI_RE_TEXT_FORMATTING)* $"
 set PROMPT "(?:"
 append PROMPT "((?!:)(?:#|\\\$)(?:$ANSI_RE_TEXT_FORMATTING)* (?:$ANSI_RE_GENERAL)*$)"
 append PROMPT "|"
-#append PROMPT "([regsub -all {([\$\[])} $PS1_MARKER [join { {\\} {\1} } {}]])(?:$ANSI_RE_GENERAL)*$"
 append PROMPT "([regsub -all {([\[])} $PS1_MARKER [join { {\\} {\1} } {}]])(?:$ANSI_RE_GENERAL)*$"
 append PROMPT ")"
 set OS [exec uname -s]
-#set CTRL_Z \032
-set LOGFILE "/tmp/ssh.log"
+set LOGFILE $EXPECTSSH_TMPDIR/$env(USER).log
 match_max 10000
 set configdir "$env(HOME)/.expect-ssh"
 set rcfile "$configdir/config"

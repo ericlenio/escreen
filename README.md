@@ -8,6 +8,13 @@ settings when navigating to remote servers. Also provides a copy/paste
 interface to make it very easy to copy text from vim running on remote systems,
 or just copying stdout or files on remote systems.
 
+# Requirements
+
+* Support for running on Linux and Mac OS X (though mostly built/tested on just Linux)
+* Assumes you use bash as your main shell
+* Depends on some basic standard Unix programs like gzip, grep, cut
+* Must have openssl installed
+
 # Profiles
 
 A profile is a directory containing a set of bash command files and expect
@@ -27,21 +34,20 @@ Markers invoke handlers by using the `_ES_send_marker` bash function like so:
     _ES_send_marker "$marker" "any paramaters here ..."
 
 Handlers can utilize the following global variables:
-* OS
-* PROMPT
-* EXPECTSSH_TMPDIR
-* EXPECTSSH_PROFILE
+* OS: output from `uname -s`, e.g. `Linux` or `Darwin`
+* PROMPT: holds the regex to detect a bash prompt
+* EXPECTSSH_TMPDIR: temporary storage directory
+* EXPECTSSH_PROFILE: directory of the current profile
 * EXPECTSSH_FUNCTIONS_DIR
-* EXPECTSSH_LOADED_FUNCS
 
-A handler can expect a single arg to be passed to it, which is a gzip'd,
-base64'd string of data. The format of this data is up to you to define:
-it is the 2nd arg shown above with `_ES_send_marker`.
+A handler can expect a single arg to be passed to it.  The format of this data
+is up to you to define: it is the 2nd arg shown above with `_ES_send_marker`.
 
 ## Other notes
 
-Bash command files can use the following helper functions:
+Bash command files can use the following helper functions/environment variables:
 * _ES_marker
+* EXPECTSSH_LOADED_FUNCS: a space separated list of functions that have been loaded into the current shell
 
 If a bash command file has a dependency on another command file to be loaded
 first, add a comment line like this in the file with the dependency:
