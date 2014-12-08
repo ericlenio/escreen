@@ -6,7 +6,8 @@
 # apt-get install tcllib
 package require md5
 
-set GIT_BRANCH [exec bash -c "cd [file dirname $argv0] && git status --porcelain -b | grep '^##' | perl -pe 's{.*origin/(.*)\$}{\$1}'"]
+regsub -- {.*origin/([\d\.]+).*} [exec bash -c "cd [file dirname $argv0] && git status --porcelain -b|grep '^##'"] {\1} GIT_BRANCH
+
 if {[string length $GIT_BRANCH]==0} {
   puts "Unable to parse git branch, stop."
   exit 1
