@@ -1,0 +1,59 @@
+# vim:filetype=sh
+function screen() {
+  # see if -r or -R was passed, if so just invoke screen with the current arg list "as is"
+  local origArgs=("$@")
+  local OPTS=$(getopt -q -o rR -- "$@")
+  eval set -- "$OPTS"
+  while true; do
+    case "$1" in
+      -r|-R) /usr/bin/screen "${origArgs[@]}"; return ;;
+      --) shift; break ;;
+      *) shift ;;
+    esac
+  done
+
+  local shell=$EXPECTSSH_TMPDIR/.bash.screen.$USER
+  #printf 'exec /bin/bash --norc --noprofile "$@"\n' > $shell
+  # why exec bash via perl here? because bash will munge PS1 otherwise
+  # on Macs
+  printf '#!/usr/bin/perl\n' > $shell
+  printf 'exec qw(/bin/bash --norc --noprofile),@ARGV;\n' >> $shell
+  chmod 700 $shell
+  local SCREENRC=$EXPECTSSH_TMPDIR/.screenrc.$USER
+  # Set up a little macro so that ^a% will dump the current screen to a file,
+  # then edit it in vim.
+  local printscreen_macro=$EXPECTSSH_TMPDIR/.screenrc.$USER.printscreen
+  local hardcopy_file=$EXPECTSSH_TMPDIR/.screenrc.$USER.hardcopy
+  touch $SCREENRC $printscreen_macro $hardcopy_file
+  chmod 600 $SCREENRC $printscreen_macro $hardcopy_file
+  export SCREENRC
+  cat > $SCREENRC << 'EOF'
+startup_message off
+bind " " windowlist -b
+vbell on
+vbell_msg DING
+#shelltitle "$ |bash:"
+bindkey "\032" stuff "\032"
+caption always "%{= kw}%-w%{= BW}%n%t%{-}%+w %-= @%H %m/%d %c"
+shelltitle "$ |:"
+defmonitor on
+#setenv PROMPT_COMMAND 'screen_prompt'
+#shell $shell
+#screen rm $SCREENRC
+EOF
+  cat >> $SCREENRC << EOF
+bind % source $printscreen_macro
+EOF
+  cat > $printscreen_macro << EOF
+hardcopy_append off
+hardcopy $hardcopy_file
+screen vim $hardcopy_file
+EOF
+
+  local esc='^Ee'
+  if [ "$EXPECT_SSH" = 0 ]; then
+    esc='^Aa'
+  fi
+  /usr/bin/screen -e$esc -s $shell "${origArgs[@]}"
+}
+export -f screen
