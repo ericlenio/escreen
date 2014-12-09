@@ -25,7 +25,8 @@ function tomcatlog() {
   done
   if [ "$op" = "edit" ]; then
     signal_load_mybashprefs "unset DISPLAY && vim -n -i NONE -c 'map <c-z> :e<cr>:echon \"$logfile was reloaded from disk\"<cr>' $logfile; exit"
-    sudo -H -u $tomcat_user /bin/bash
+    #sudo -H -u $tomcat_user /bin/bash
+    s $tomcat_user
   elif [ "$op" = "clear" ]; then
     sudo truncate --no-create --size 0 $logfile
     echo "$logfile was truncated."

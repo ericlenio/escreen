@@ -1,4 +1,5 @@
 #!/usr/bin/expect
+set timeout 1
 # vim:filetype=expect
 # Drop in replacement script for ssh, with helpful integrations to use bash,
 # sudo, screen, and vim more effectively. Run with -help to see arguments.
@@ -407,8 +408,10 @@ proc load_mybashprefs {EXPECT_SSH {nest_level 0}} {
     #}
   #}
   array set FUNCMAP [get_scripts]
-  #set mybashprefs "export EXPECTSSH_TMPDIR=$EXPECTSSH_TMPDIR\n"
 
+  set mybashprefs "export EXPECTSSH_TMPDIR=$EXPECTSSH_TMPDIR\n"
+  append mybashprefs "export EXPECTSSH_PS1_MARKER='$EXPECTSSH_PS1_MARKER'\n"
+  append mybashprefs "export EXPECTSSH_PROFILE=$EXPECTSSH_PROFILE\n"
 
   append mybashprefs "function _ES_marker() {\n"
   append mybashprefs "local MARKER\n"
@@ -770,7 +773,9 @@ proc main_prompt_checker {arr} {
           && $load_mybashprefs_args(CMD_ARRAY) != "declare -a CMD_ARRAY='()'"
           && [string length $load_mybashprefs_args(CMD_ARRAY)]>0
           } {
-          send " $load_mybashprefs_args(CMD_ARRAY) && eval \"\${CMD_ARRAY\[@]}\"\r"
+          send " $load_mybashprefs_args(CMD_ARRAY) && "
+          send {eval "${CMD_ARRAY[@]}"}
+          send \r
         }
       }
     }
@@ -848,8 +853,6 @@ foreach expfile [lsort [glob -directory $EXPECTSSH_PROFILE *.exp]] {
   source $expfile
 }
 
-set env(EXPECTSSH_PS1_MARKER) $EXPECTSSH_PS1_MARKER
-set env(EXPECTSSH_PROFILE) $EXPECTSSH_PROFILE
 set PROMPT "(?:"
 append PROMPT "((?!:)(?:#|\\\$)(?:$ANSI_RE_TEXT_FORMATTING)* (?:$ANSI_RE_GENERAL)*$)"
 append PROMPT "|"
