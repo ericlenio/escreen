@@ -1,0 +1,38 @@
+# vim:filetype=sh
+# depends:s
+function tomcatlog() {
+  local OPTS=$(getopt -o 23ecx -- "$@")
+  eval set -- "$OPTS"
+  local flag=$1
+  local logfile=/var/log/tomcat7/catalina.out
+  local tomcat_user=tomcat7
+  local op
+  while true ; do
+    case "$1" in
+      -2) logfile=/var/log/lincdoc/catalina.out
+        tomcat_user=tomcat
+        shift
+        ;;
+      -3) logfile=/var/log/lincdoc/catalina.log
+        tomcat_user=tomcat
+        shift
+        ;;
+      -e) op=edit; shift;;
+      -c) op=clear; shift;;
+      -x) op=exceptions; shift;;
+      --) shift ; break ;;
+    esac
+  done
+  if [ "$op" = "edit" ]; then
+    signal_load_mybashprefs "unset DISPLAY && vim -n -i NONE -c 'map <c-z> :e<cr>:echon \"$logfile was reloaded from disk\"<cr>' $logfile; exit"
+    sudo -H -u $tomcat_user /bin/bash
+  elif [ "$op" = "clear" ]; then
+    sudo truncate --no-create --size 0 $logfile
+    echo "$logfile was truncated."
+  elif [ "$op" = "exceptions" ]; then
+    sudo -u $tomcat_user grep Exception $logfile
+  else
+    sudo -E -H -u $tomcat_user multitail -f -c $logfile
+  fi
+}
+export -f tomcatlog

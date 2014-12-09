@@ -21,7 +21,9 @@ A profile is a directory containing a set of bash command files and expect
 files to fine-tune your bash shell. Files in the profile:
 
 * *.exp: expect commands that get sourced when expect-ssh starts up, these are usually for registering new markers and handlers (see below)
+* you should have at least one .exp file that defines your PS1 marker as variable `EXPECTSSH_PS1_MARKER`
 * any filename matching `^\w+` is assumed to be bash commands that usually, but not necessarily, define a bash function of the same name. A stub shell function of the same name is the file is created when the bash shell starts. When the user runs one, that file is uploaded, cached to `EXPECTSSH_TMPDIR` in an encrypted format, and sourced.  A new shell will always first try to re-use the cached file, if it does not exist or the md5 checksum fails it will get re-uploaded to the cache.
+* .bashrc: put your personal settings here
 
 ## Markers and handlers
 
@@ -47,6 +49,7 @@ is up to you to define: it is the 2nd arg shown above with `_ES_send_marker`.
 
 Bash command files can use the following helper functions/environment variables:
 * _ES_marker
+* _ES_esc_ps1
 * EXPECTSSH_LOADED_FUNCS: a space separated list of functions that have been loaded into the current shell
 
 If a bash command file has a dependency on another command file to be loaded

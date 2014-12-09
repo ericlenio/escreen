@@ -1,0 +1,5 @@
+# Define a pattern that we expect at the END of the PS1 prompt.  Here we have a
+# colon, then the ANSI escape sequence to do reverse video, then a dollar sign,
+# then the escape sequence to reset the colors/attributes back to defaults,
+# then a space.
+set EXPECTSSH_PS1_MARKER {:\033[7m\$\033[0m }
