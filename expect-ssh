@@ -1,5 +1,6 @@
 #!/usr/bin/expect
 # vim:filetype=expect
+#
 # Drop in replacement script for ssh, with helpful integrations to use bash,
 # sudo, screen, and vim more effectively. Run with -help to see arguments.
 #
@@ -408,9 +409,7 @@ proc load_mybashprefs {EXPECT_SSH {nest_level 0}} {
   #}
   array set FUNCMAP [get_scripts]
 
-  set mybashprefs "export EXPECTSSH_TMPDIR=$EXPECTSSH_TMPDIR\n"
-  append mybashprefs "export EXPECTSSH_PS1_MARKER='$EXPECTSSH_PS1_MARKER'\n"
-  append mybashprefs "export EXPECTSSH_PROFILE=$EXPECTSSH_PROFILE\n"
+  set mybashprefs ""
 
   append mybashprefs "function _ES_marker() {\n"
   append mybashprefs "local MARKER\n"
@@ -551,14 +550,51 @@ export -f _ES_send_marker
     export -f _ES_eps1m
   }
 
+  append mybashprefs {function _ES_q() {
+  local args=("$@")
+  local argsX=$(declare -p args|openssl enc -base64)
+
+  # if _Q exists, just push onto it
+  declare -p _Q 2>/dev/null 1>&2 && {
+    _Q[${#_Q[@]}]="$argsX"
+    #echo "PUSH $args:$(showQ)"
+    return
+  }
+
+  local _Q=("$argsX")
+  while [ ${#_Q[@]} -gt 0 ]; do
+    #echo DECODE:${_Q[0]}:$(echo "${_Q[0]}"|openssl enc -d -base64)
+    eval $(echo "${_Q[0]}"|openssl enc -d -base64)
+    _Q=("${_Q[@]:1}") #removed the 1st element
+    #echo "after removing Q0:$(showQ)"
+    #echo about to run:${args[@]}
+    ${args[@]}
+    #echo sleep
+    #sleep 2
+  done
+  }
+  export -f _ES_q
+  }
+
+
+  append mybashprefs "function _ES_bashrc() {\n"
+  append mybashprefs "declare -a EXPECTSSH_Q\n"
+  append mybashprefs "export EXPECTSSH_Q\n"
+  append mybashprefs "export EXPECTSSH_TMPDIR=$EXPECTSSH_TMPDIR\n"
+  append mybashprefs "export EXPECTSSH_PS1_MARKER='$EXPECTSSH_PS1_MARKER'\n"
+  append mybashprefs "export EXPECTSSH_PROFILE=$EXPECTSSH_PROFILE\n"
+
   set bashrc $EXPECTSSH_PROFILE/.bashrc
   if {[file exists $bashrc]} {
-    append mybashprefs "function _ES_bashrc() {\n"
+    foreach funcname [lsort [array names FUNCMAP -regexp {^\w+$}]] {
+      append mybashprefs "_ES_stub_fcn $funcname\n"
+    }
     append mybashprefs [slurp_file $bashrc]
-    append mybashprefs "}\n"
-    append mybashprefs "export -f _ES_bashrc\n"
-    append mybashprefs "_ES_bashrc\n"
   }
+  append mybashprefs "}\n"
+  append mybashprefs "export -f _ES_bashrc\n"
+  append mybashprefs "_ES_bashrc\n"
+
   # unset $c, set below
   append mybashprefs "unset c\n"
   # set EXPECT_SSH, this must be the last part of mybashprefs, as we paste the
@@ -647,13 +683,12 @@ export -f _ES_send_marker
   }
   #exp_internal -f /tmp/log 1
 
-  set func_list ""
-  set bootstrap_funcs ""
-  foreach funcname [lsort [array names FUNCMAP -regexp {^\w+$}]] {
-    append bootstrap_funcs "_ES_stub_fcn $funcname\n"
-  }
+  #set bootstrap_funcs ""
+  #foreach funcname [lsort [array names FUNCMAP -regexp {^\w+$}]] {
+    #append bootstrap_funcs "_ES_stub_fcn $funcname\n"
+  #}
 
-  upload_and_source_script $bootstrap_funcs $FUNCMAP(:remote_file)
+  #upload_and_source_script $bootstrap_funcs $FUNCMAP(:remote_file)
   return "OK"
 }
 ### END of load_mybashprefs
@@ -687,7 +722,7 @@ proc upload_and_source_script { script remote_file } {
   # should they change. Md5 the result to make a shorter version of the
   # password.
   set pass [compute_md5 $MYBASHPREFS_PASSWORD-$script_md5]
-  send " _ES_source_script $remote_file\r"
+  send " _ES_q _ES_source_script $remote_file\r"
   set password_was_entered 0
   expect {
     -re "password:$" {

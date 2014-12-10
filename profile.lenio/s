@@ -1,6 +1,12 @@
 # vim:filetype=sh
-# depends:signal_load_mybashprefs
 #
+# Wrapper for sudo. Usage:
+# To become root:
+#   s
+# To become nobody
+#   s nobody
+# To become lincdoc and edit /etc/services:
+#   s lincdoc vim /etc/services
 function s() {
   local user
   if [ $# -eq 0 ]; then
@@ -14,17 +20,11 @@ function s() {
     return
   }
   local cmd=("$@")
-  if [ ${#cmd[@]} -gt 0 ]; then
-    #cmd[${#cmd[@]}]=';exit'
-    #cmd[${#cmd[@]}]='exit'
-    true
+  if [ $# -eq 0 ]; then
+    cmd=( exec /bin/bash --norc --noprofile )
   fi
-  signal_load_mybashprefs "${cmd[@]}"
-  sudo -H -u $user -- /bin/bash
-  return
-
-
-# OLD STUFF
+  #signal_load_mybashprefs "${cmd[@]}"
+  #sudo -H -u $user -- /bin/bash
   local _ES_funcs=$(declare -F|cut -d' ' -f3|grep ^_ES_|tr '\n' ' ')
   local exported_funcs="$_ES_funcs $EXPECTSSH_LOADED_FUNCS"
   sudo -H -E -u $user -- /bin/bash -c 'true
@@ -34,5 +34,6 @@ EOF
 )"
 export EXPECTSSH_LOADED_FUNCS='"$EXPECTSSH_LOADED_FUNCS"'
 export -f '"$exported_funcs"'
-exec /bin/bash --norc --noprofile'
+_ES_bashrc
+"$@"' -- "${cmd[@]}"
 }
