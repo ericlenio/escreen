@@ -87,7 +87,7 @@ proc _ES_register_marker { marker_key handler } {
   set MARKER($marker_key) [get_marker $idx]
   set MARKER($marker_key,idx) $idx
   set MARKER($marker_key,handler) $handler
-  puts "_ES_register_marker: registered new marker $marker_key with handler: $handler idx=$idx"
+  #puts "_ES_register_marker: registered new marker $marker_key with handler: $handler idx=$idx"
 }
 
 proc _ES_run_marker_handler { marker_idx } {
@@ -216,20 +216,24 @@ proc get_dependencies {funcname FUNCMAP {depends_list ""}} {
 # System level functions
 #
 proc get_system_functions {} {
+  global MARKER
   # EXPECTSSH_IN_SCREEN is a flag to know if current shell is (ultimately)
   # inside a screen session, and if so when ssh-ing to a new host we can update
   # the screen window title with the new hostname.
-  set script {
-  function signal_load_mybashprefs() {
-    local marker="$(_ES_marker LOAD_MYBASHPREFS)"
+  set script ""
+  append script "function signal_load_mybashprefs() {"
+  # We do NOT use _ES_marker or _ES_send_marker here because we cannot
+  # assume they exist in the shell
+  append script "local marker=\"$MARKER(LOAD_MYBASHPREFS)\"\n"
+  append script {
     local in_screen=0
     if [ -n "$STY" -o -n "$EXPECTSSH_IN_SCREEN" ]; then in_screen=1; fi
     local CMD_ARRAY=("$@")
     local args=$(printf "EXPECT_SSH %s EXPECTSSH_IN_SCREEN {%s} CMD_ARRAY {%s}" $EXPECT_SSH "$in_screen" "$(declare -p CMD_ARRAY)")
-    _ES_send_marker "$marker" "$args"
   }
-  export -f signal_load_mybashprefs
-}
+  append script {_ES_send_marker "$marker" "$args"}
+  append script "\n"
+  append script "}; export -f signal_load_mybashprefs\n"
   set FUNCMAP(signal_load_mybashprefs) $script
 
   set script {
@@ -527,9 +531,9 @@ export -f _ES_send_marker
     eval $f
     export -f $funcname
     unalias $funcname 2>/dev/null
-    echo "generated stub function: $funcname"
-  else
-    echo "skip generating stub for $funcname: function already exists"
+    #echo "generated stub function: $funcname"
+  #else
+    #echo "skip generating stub for $funcname: function already exists"
   fi
 }
   append mybashprefs "}; export -f _ES_stub_fcn\n"
@@ -557,8 +561,10 @@ export -f _ES_send_marker
 
   set bashrc $EXPECTSSH_PROFILE/.bashrc
   if {[file exists $bashrc]} {
+    set n 1
     foreach funcname [lsort [array names FUNCMAP -regexp {^\w+$}]] {
       append mybashprefs "_ES_stub_fcn $funcname\n"
+      incr n
     }
     append mybashprefs [slurp_file $bashrc]
   }
@@ -566,8 +572,8 @@ export -f _ES_send_marker
   append mybashprefs "export -f _ES_bashrc\n"
   append mybashprefs "_ES_bashrc\n"
 
-  # unset $c, set below
-  append mybashprefs "unset c\n"
+  # unset $c, $d, $f: all set below
+  append mybashprefs "unset c d f\n"
   # set EXPECT_SSH, this must be the last part of mybashprefs, as we paste the
   # value for EXPECT_SSH below in the send statement
   append mybashprefs "export EXPECT_SSH="
@@ -578,7 +584,8 @@ export -f _ES_send_marker
   # with the md5 in the password we can trigger a re-upload of bash prefs
   # should they change. Md5 the result for shorter version of password.
   set pass [compute_md5 $MYBASHPREFS_PASSWORD-$mybashprefs_hash]
-  send " c=\"\$(openssl enc -a -d -aes256 -in $EXPECTSSH_MYBASHPREFS)\" && eval \"\${c}$EXPECT_SSH\"\r"
+  #send " c=\"\$(openssl enc -a -d -aes256 -in $EXPECTSSH_MYBASHPREFS)\" && eval \"\${c}$EXPECT_SSH\"\r"
+  send " f=$EXPECTSSH_MYBASHPREFS; c=\"\$(openssl enc -a -d -aes256 -in \$f)\" && eval \"\${c}$EXPECT_SSH\"\r"
   set password_was_entered 0
   expect {
     -re "password:$" {
@@ -598,13 +605,13 @@ export -f _ES_send_marker
       # (http://expect.sourceforge.net/FAQ.html#q76) "terminal input queue"
       # "typeahead buffer" MAX_INPUT
       # "getconf -a|grep MAX_INPUT" may help determine this value
-      send "TMP=\$(history|tail -1|awk '{print \$1}') && history -d \$TMP && history -d \$((\$TMP-1)) && HISTCONTROL=ignoreboth:erasedups && unset TMP\r"
+      send "c=\$(history|tail -1|awk '{print \$1}') && history -d \$c && history -d \$((\$c-1)) && HISTCONTROL=ignoreboth:erasedups\r"
       expect -re $PROMPT
-      send " \[ ! -d $EXPECTSSH_TMPDIR ] && { mkdir $EXPECTSSH_TMPDIR; chmod 1777 $EXPECTSSH_TMPDIR; }\r"
+      send " d=$EXPECTSSH_TMPDIR; \[ ! -d \$d ] && { mkdir \$d; chmod 1777 \$d; }\r"
       expect -re $PROMPT
       #send_user "uploading $EXPECTSSH_MYBASHPREFS ...\n"
       # Note the leading space so it is not saved in bash history
-      send " \[ ! -e $EXPECTSSH_MYBASHPREFS ] && { touch $EXPECTSSH_MYBASHPREFS; chmod 666 $EXPECTSSH_MYBASHPREFS; }\r"
+      send " touch \$f; chmod 666 \$f\r"
       expect -re $PROMPT
       log_user 0
       send " exec 3< <(echo '$pass')\r"
@@ -616,7 +623,7 @@ export -f _ES_send_marker
       expect -re $PROMPT
       # Delimit the input with a space, and after each line is sent send \r so
       # the terminal does not scroll
-      send " exec 4> >(openssl enc -d -base64 | gzip -d -c | openssl enc -a -aes256 -pass fd:3 -out $EXPECTSSH_MYBASHPREFS)\r"
+      send " exec 4> >(openssl enc -d -base64 | gzip -d -c | openssl enc -a -aes256 -pass fd:3 -out \$f)\r"
       send { while true; do read -d' ' l; [ "$l" = . ] && break; printf "%s\n" $l >&4; printf "\015"; done; exec 3<&- 4>&-}
       send \r
       expect -re \r\n$
