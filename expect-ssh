@@ -415,6 +415,14 @@ proc load_mybashprefs {EXPECT_SSH {nest_level 0}} {
 
   set mybashprefs ""
 
+  # 
+  # Everything is wrapped in function _ES_bashrc
+  #
+  append mybashprefs "function _ES_bashrc() {\n"
+  append mybashprefs "export EXPECTSSH_TMPDIR=$EXPECTSSH_TMPDIR\n"
+  append mybashprefs "export EXPECTSSH_PS1_MARKER='$EXPECTSSH_PS1_MARKER'\n"
+  append mybashprefs "export EXPECTSSH_PROFILE=$EXPECTSSH_PROFILE\n"
+
   append mybashprefs "function _ES_marker() {\n"
   append mybashprefs "local MARKER\n"
   append mybashprefs "declare -A MARKER=("
@@ -554,10 +562,6 @@ export -f _ES_send_marker
     export -f _ES_eps1m
   }
 
-  append mybashprefs "function _ES_bashrc() {\n"
-  append mybashprefs "export EXPECTSSH_TMPDIR=$EXPECTSSH_TMPDIR\n"
-  append mybashprefs "export EXPECTSSH_PS1_MARKER='$EXPECTSSH_PS1_MARKER'\n"
-  append mybashprefs "export EXPECTSSH_PROFILE=$EXPECTSSH_PROFILE\n"
 
   set bashrc $EXPECTSSH_PROFILE/.bashrc
   if {[file exists $bashrc]} {
@@ -568,15 +572,17 @@ export -f _ES_send_marker
     }
     append mybashprefs [slurp_file $bashrc]
   }
-  append mybashprefs "}\n"
-  append mybashprefs "export -f _ES_bashrc\n"
-  append mybashprefs "_ES_bashrc\n"
 
   # unset $c, $d, $f: all set below
   append mybashprefs "unset c d f\n"
-  # set EXPECT_SSH, this must be the last part of mybashprefs, as we paste the
-  # value for EXPECT_SSH below in the send statement
-  append mybashprefs "export EXPECT_SSH="
+  append mybashprefs "export EXPECT_SSH=$EXPECT_SSH\n"
+
+  #
+  # Finally: END of function _ES_bashrc
+  #
+  append mybashprefs "}\n"
+  append mybashprefs "export -f _ES_bashrc\n"
+  append mybashprefs "_ES_bashrc\n"
   set mybashprefs [strip_comments $mybashprefs]
 
   set mybashprefs_hash [compute_md5 $mybashprefs]
@@ -585,7 +591,7 @@ export -f _ES_send_marker
   # should they change. Md5 the result for shorter version of password.
   set pass [compute_md5 $MYBASHPREFS_PASSWORD-$mybashprefs_hash]
   #send " c=\"\$(openssl enc -a -d -aes256 -in $EXPECTSSH_MYBASHPREFS)\" && eval \"\${c}$EXPECT_SSH\"\r"
-  send " f=$EXPECTSSH_MYBASHPREFS; c=\"\$(openssl enc -a -d -aes256 -in \$f)\" && eval \"\${c}$EXPECT_SSH\"\r"
+  send " f=$EXPECTSSH_MYBASHPREFS; c=\"\$(openssl enc -a -d -aes256 -in \$f)\" && eval \"\${c}\"\r"
   set password_was_entered 0
   expect {
     -re "password:$" {
