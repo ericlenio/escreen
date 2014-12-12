@@ -515,16 +515,19 @@ export -f _ES_send_marker
   #
   # _ES_stub_fcn generates a stub function for each user's custom function.
   #
-  set stub_flag "_ES_stub_flag"
-  append mybashprefs "function _ES_stub_fcn() { local stub_flag=$stub_flag; local marker=\$(_ES_marker UPLOAD_SCRIPT)\n"
+  #set stub_flag "_ES_stub_flag"
+  append mybashprefs "function _ES_stub_fcn() {\n"
+  #append mybashprefs "local stub_flag=$stub_flag\n"
+  append mybashprefs "local marker=\$(_ES_marker UPLOAD_SCRIPT)\n"
   append mybashprefs {local funcname=$1
   if [ -z "$(declare -F $funcname)" ]; then
     local f="function $funcname() { local funcname=$funcname; local marker=$marker;"
-    f+="local stub_flag=$stub_flag;"
+    #f+="local stub_flag=$stub_flag;"
     f+='local args=("$@");'
     f+='local args_enc=$(declare -p args|gzip -9 -c|openssl enc -base64);'
     f+='local args2=$(echo "funcname $funcname args {$args_enc}");'
     f+="unset -f $funcname;"
+    #f+='read -p "$(whoami) ans:" ans;echo ans=$ans;'
     f+='_ES_send_marker "$marker" "$args2";'
     f+='}'
     eval $f
@@ -539,11 +542,11 @@ export -f _ES_send_marker
   #
   # _ES_is_stub_fcn: detect if given funcname is a stub function
   #
-  append mybashprefs "function _ES_is_stub_fcn() { local stub_flag=$stub_flag\n"
-  append mybashprefs {local funcname=$1
-    declare -f $funcname | grep -q $stub_flag && echo 1 || echo 0
-  }
-  append mybashprefs "}; export -f _ES_is_stub_fcn\n"
+  #append mybashprefs "function _ES_is_stub_fcn() { local stub_flag=$stub_flag\n"
+  #append mybashprefs {local funcname=$1
+    #declare -f $funcname | grep -q $stub_flag && echo 1 || echo 0
+  #}
+  #append mybashprefs "}; export -f _ES_is_stub_fcn\n"
 
   #
   # escape the regex for the PS1 marker
@@ -566,7 +569,6 @@ export -f _ES_send_marker
 
   # unset $c, set below
   append mybashprefs "unset c\n"
-
   #
   # Finally: END of function _ES_core
   #

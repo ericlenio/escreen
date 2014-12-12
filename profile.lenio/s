@@ -19,9 +19,11 @@ function s() {
     echo "No such user \"$user\"."
     return
   }
-  signal_load_mybashprefs "$@"
+  #signal_load_mybashprefs "$@"
 
   #local _ES_funcs=$(declare -F|cut -d' ' -f3|grep ^_ES_|tr '\n' ' ')
+  local cmd=("$@")
+  [ $# -eq 0 ] && cmd=(exec /bin/bash --norc --noprofile)
   local exported_funcs="_ES_core $EXPECTSSH_LOADED_FUNCS"
   sudo -H -u $user -- /bin/bash -c 'true
 eval "$(openssl enc -d -base64 << EOF
@@ -31,9 +33,5 @@ EOF
 export EXPECTSSH_LOADED_FUNCS='"$EXPECTSSH_LOADED_FUNCS"'
 export -f '"$exported_funcs"'
 _ES_core
-#echo HERE:$(whoami):"$@"
-#echo SUDO_COMMAND=$SUDO_COMMAND
-"$@"
-exec /bin/bash --norc --noprofile
-'
+"$@"' -- "${cmd[@]}"
 }
