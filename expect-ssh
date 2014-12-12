@@ -1,4 +1,5 @@
 #!/usr/bin/expect
+set timeout 2
 # vim:filetype=expect
 #
 # Drop in replacement script for ssh, with helpful integrations to use bash,
@@ -409,6 +410,7 @@ proc load_mybashprefs {EXPECTSSH_SHLVL {nest_level 0}} {
   # Everything is wrapped in function _ES_core
   #
   append mybashprefs "function _ES_core() {\n"
+  append mybashprefs "export _ES_FCN_PREFIX=$FUNCMAP(:remote_file_prefix)\n"
   append mybashprefs "export EXPECTSSH_SHLVL=\$1\n"
   append mybashprefs "export EXPECTSSH_TMPDIR=$EXPECTSSH_TMPDIR\n"
   append mybashprefs "export EXPECTSSH_PS1_MARKER='$EXPECTSSH_PS1_MARKER'\n"
@@ -470,6 +472,24 @@ function _ES_rec_rem() {
 }
 export -f _ES_rec_rem
 
+function _ES_rec_rem2() {
+  local l
+  # Delimit the input with a space, and after each line is sent send \r so the
+  # terminal does not scroll
+  local s
+  while true; do
+    read -d' ' l
+    [ "$l" = . ] && break
+    s+=$(printf "%s" $l)$'\n'
+    printf "\015"
+  done
+  local s=$(echo "$s"|openssl enc -d -base64|gzip -d -c)
+  echo "$s"
+  #eval "$s"
+  #echo a:"$@"
+  #"$@"
+}
+export -f _ES_rec_rem2
 #
 # The first time a user custom function runs, it goes through this function
 # because just before this is called, the real function was dynamically
@@ -493,6 +513,24 @@ export -f _ES_lf
 #
 # Send a marker, with arguments.
 #
+function _ES_send_marker0() {
+  local marker="$1"
+  local args=$(echo -n "$2"|gzip -9 -c|openssl enc -base64)
+  local l
+  # pass a \010 (backspace) character to erase last character of the pattern so
+  # that expect-ssh only processes this signal 1 time ... else when inside
+  # screen it would potentially get re-executed from a resumed session.
+  printf "%s\010.\n" "$marker"
+  printf "$args" | {
+    while IFS=$'\n' read -r l || [ -n "$l" ]; do
+      printf "%s\015" $l
+    done
+  }
+  # send terminating period for the pattern to match
+  printf ".\n"
+}
+export -f _ES_send_marker0
+
 function _ES_send_marker() {
   local marker="$1"
   local args=$(echo -n "$2"|gzip -9 -c|openssl enc -base64)
@@ -513,22 +551,14 @@ export -f _ES_send_marker
 
 }
   #
-  # _ES_stub_fcn generates a stub function for each user's custom function.
+  # _ES_gen_stub generates a stub function for each user's custom function.
   #
-  #set stub_flag "_ES_stub_flag"
-  append mybashprefs "function _ES_stub_fcn() {\n"
-  #append mybashprefs "local stub_flag=$stub_flag\n"
+  append mybashprefs "function _ES_gen_stub() {\n"
   append mybashprefs "local marker=\$(_ES_marker UPLOAD_SCRIPT)\n"
   append mybashprefs {local funcname=$1
   if [ -z "$(declare -F $funcname)" ]; then
-    local f="function $funcname() { local funcname=$funcname; local marker=$marker;"
-    #f+="local stub_flag=$stub_flag;"
-    f+='local args=("$@");'
-    f+='local args_enc=$(declare -p args|gzip -9 -c|openssl enc -base64);'
-    f+='local args2=$(echo "funcname $funcname args {$args_enc}");'
-    f+="unset -f $funcname;"
-    #f+='read -p "$(whoami) ans:" ans;echo ans=$ans;'
-    f+='_ES_send_marker "$marker" "$args2";'
+    local f="function $funcname() { "
+    f+='_ES_bootstrap '$funcname' "$@";'
     f+='}'
     eval $f
     export -f $funcname
@@ -538,16 +568,21 @@ export -f _ES_send_marker
     #echo "skip generating stub for $funcname: function already exists"
   fi
 }
-  append mybashprefs "}; export -f _ES_stub_fcn\n"
+  append mybashprefs "}; export -f _ES_gen_stub\n"
   #
-  # _ES_is_stub_fcn: detect if given funcname is a stub function
+  # _ES_bootstrap bootstraps a function
   #
-  #append mybashprefs "function _ES_is_stub_fcn() { local stub_flag=$stub_flag\n"
-  #append mybashprefs {local funcname=$1
-    #declare -f $funcname | grep -q $stub_flag && echo 1 || echo 0
-  #}
-  #append mybashprefs "}; export -f _ES_is_stub_fcn\n"
-
+  append mybashprefs "function _ES_bootstrap() {\n"
+  append mybashprefs "local marker=\$(_ES_marker UPLOAD_SCRIPT)\n"
+  append mybashprefs {
+    local funcname=$1
+    local f=$_ES_FCN_PREFIX$funcname
+    unset -f $funcname
+    _ES_send_marker "$marker" $funcname
+    #local s="$(_ES_rec_rem2)"
+    _ES_rec_rem2
+  }
+  append mybashprefs "}; export -f _ES_bootstrap\n"
   #
   # escape the regex for the PS1 marker
   append mybashprefs {function _ES_eps1m() {
@@ -561,7 +596,7 @@ export -f _ES_send_marker
   if {[file exists $bashrc]} {
     set n 1
     foreach funcname [lsort [array names FUNCMAP -regexp {^\w+$}]] {
-      append mybashprefs "_ES_stub_fcn $funcname\n"
+      append mybashprefs "_ES_gen_stub $funcname\n"
       incr n
     }
     append mybashprefs [slurp_file $bashrc]
@@ -659,11 +694,6 @@ export -f _ES_send_marker
   }
   #exp_internal -f /tmp/log 1
 
-  #set bootstrap_funcs ""
-  #foreach funcname [lsort [array names FUNCMAP -regexp {^\w+$}]] {
-    #append bootstrap_funcs "_ES_stub_fcn $funcname\n"
-  #}
-
   #upload_and_source_script $bootstrap_funcs $FUNCMAP(:remote_file)
   return "OK"
 }
@@ -671,16 +701,18 @@ export -f _ES_send_marker
 
 proc upload_script_handler {decoded_args} {
   global PROMPT
-  array set args $decoded_args
-  set funcname $args(funcname)
+  #array set args $decoded_args
+  #set funcname $args(funcname)
+  set funcname $decoded_args
   array set FUNCMAP [get_scripts]
   foreach dep $FUNCMAP($funcname,depends_on) {
     upload_and_source_script $FUNCMAP($dep,defn) $FUNCMAP($dep,remote_file)
     send " _ES_lf $dep\r"
     expect -re $PROMPT
   }
-  upload_and_source_script $FUNCMAP($funcname,defn) $FUNCMAP($funcname,remote_file)
-  send " _ES_lf $funcname \"$args(args)\"\r"
+  #upload_and_source_script $FUNCMAP($funcname,defn) $FUNCMAP($funcname,remote_file)
+  #send " _ES_lf $funcname \"$args(args)\"\r"
+  upload_and_source_script2 $FUNCMAP($funcname,defn) $FUNCMAP($funcname,remote_file)
 }
 
 proc strip_comments {script} {
@@ -751,6 +783,31 @@ proc upload_and_source_script { script remote_file } {
     }
     timeout { send_error "TIMEOUT in proc upload_and_source_script:<$script>\n\r"; return "NOT OK" }
   }
+}
+proc upload_and_source_script2 { script remote_file } {
+  set script [strip_comments $script]
+  # split into manageable chunks that will not exceed terminal driver
+  # buf size
+  set n -1 
+  log_user 0
+  set remote_file_content_enc [exec "bash" "-c" "echo -n \"\$0\" | gzip -9 -c | openssl enc -base64" $script]
+  set c_len [string length $remote_file_content_enc]
+  foreach line [regexp -all -inline {(?:.{0,80}){1,1}\n} "$remote_file_content_enc\n"] {
+    send "[string trimright $line] "
+    expect {
+      # first time in this loop it could by \r\n
+      -re "\r\n$" {}
+      -re "\x0d$" {}
+    }
+    if { $n > -1 } { send_user \r }
+    incr n [string length $line]
+    set precision [string length $c_len]
+    send_user [format "%*d/%*d uploaded" $precision $n $precision $c_len]
+  }
+  send_user " ... DONE with upload\r\n"
+  send ". "
+  expect ". "
+  log_user 1
 }
 
 # See if the custom prompt is in effect
