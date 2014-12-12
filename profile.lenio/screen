@@ -51,7 +51,7 @@ screen vim $hardcopy_file
 EOF
 
   local esc='^Ee'
-  if [ "$EXPECT_SSH" = 0 ]; then
+  if [ "$EXPECTSSH_SHLVL" = 0 ]; then
     esc='^Aa'
   fi
   /usr/bin/screen -e$esc -s $shell "${origArgs[@]}"

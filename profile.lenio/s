@@ -21,8 +21,8 @@ function s() {
   }
   signal_load_mybashprefs "$@"
 
-  local _ES_funcs=$(declare -F|cut -d' ' -f3|grep ^_ES_|tr '\n' ' ')
-  local exported_funcs="$_ES_funcs $EXPECTSSH_LOADED_FUNCS"
+  #local _ES_funcs=$(declare -F|cut -d' ' -f3|grep ^_ES_|tr '\n' ' ')
+  local exported_funcs="_ES_core $EXPECTSSH_LOADED_FUNCS"
   sudo -H -u $user -- /bin/bash -c 'true
 eval "$(openssl enc -d -base64 << EOF
 '"$(declare -f $exported_funcs|openssl enc -base64)"'
@@ -30,7 +30,7 @@ EOF
 )"
 export EXPECTSSH_LOADED_FUNCS='"$EXPECTSSH_LOADED_FUNCS"'
 export -f '"$exported_funcs"'
-_ES_bashrc
+_ES_core
 #echo HERE:$(whoami):"$@"
 #echo SUDO_COMMAND=$SUDO_COMMAND
 "$@"

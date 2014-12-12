@@ -18,11 +18,11 @@ set EXPECTSSH_TMPDIR $env(EXPECTSSH_TMPDIR)
 set EXPECTSSH_MYBASHPREFS $EXPECTSSH_TMPDIR/mybashprefs.$env(USER)
 # TO DO: make the profile a command line parameter
 set EXPECTSSH_PROFILE [file dirname $argv0]/profile.lenio
-# if stdin is not a terminal, or $EXPECT_SSH exists, then we just
+# if stdin is not a terminal, or $EXPECTSSH_SHLVL exists, then we just
 # want to do regular ssh.
 set overlay_test [exec bash -c {
   [ ! -d $EXPECTSSH_TMPDIR ] && { mkdir $EXPECTSSH_TMPDIR; chmod 1777 $EXPECTSSH_TMPDIR; }
-  [ ! -t 0 -o -n "$EXPECT_SSH" ] && echo overlay_flag
+  [ ! -t 0 -o -n "$EXPECTSSH_SHLVL" ] && echo overlay_flag
   true
 }]
 
@@ -40,16 +40,6 @@ set ANSI_RE_SHOW_CURSOR {\u001b\[\?25h}
 
 array set MARKER {}
 
-# EXPECTSSH_PS1_MARKER is a non-regexp marker in the normal PS1 prompt that we search for
-# in certain situations to see if we need to load bash prefs. Watch that it
-# works in regular bash, as well as inside a screen session because screen
-# will translate many ANSI escape codes.
-#
-# TO DO: figure out why screen always translates "\033[9Xm" to
-# "\033[3Xm\033[9Xm" for X=0..9. It won't hurt us here because the 
-# marker is still in the PS1 string.
-#set EXPECTSSH_PS1_MARKER {:\033[7m$\033[0m }
-#set EXPECTSSH_PS1_MARKER {:\033[7m\$\033[0m }
 set OS [exec uname -s]
 set LOGFILE $EXPECTSSH_TMPDIR/$env(USER).log
 match_max 10000
@@ -221,7 +211,7 @@ proc get_system_functions {} {
   # inside a screen session, and if so when ssh-ing to a new host we can update
   # the screen window title with the new hostname.
   set script ""
-  append script "function signal_load_mybashprefs() {"
+  append script "function signal_load_mybashprefs() {\n"
   # We do NOT use _ES_marker or _ES_send_marker here because we cannot
   # assume they exist in the shell
   append script "local marker=\"$MARKER(LOAD_MYBASHPREFS)\"\n"
@@ -229,7 +219,7 @@ proc get_system_functions {} {
     local in_screen=0
     if [ -n "$STY" -o -n "$EXPECTSSH_IN_SCREEN" ]; then in_screen=1; fi
     local CMD_ARRAY=("$@")
-    local args=$(printf "EXPECT_SSH %s EXPECTSSH_IN_SCREEN {%s} CMD_ARRAY {%s}" $EXPECT_SSH "$in_screen" "$(declare -p CMD_ARRAY)")
+    local args=$(printf "EXPECTSSH_SHLVL %s EXPECTSSH_IN_SCREEN {%s} CMD_ARRAY {%s}" $EXPECTSSH_SHLVL "$in_screen" "$(declare -p CMD_ARRAY)")
   }
   append script {_ES_send_marker "$marker" "$args"}
   append script "\n"
@@ -398,7 +388,7 @@ proc load_mybashprefs_handler {decoded_args} {
   array set load_mybashprefs_args $decoded_args
 }
 
-proc load_mybashprefs {EXPECT_SSH {nest_level 0}} {
+proc load_mybashprefs {EXPECTSSH_SHLVL {nest_level 0}} {
   global PROMPT ANSI_RE_TEXT_FORMATTING EXPECTSSH_PS1_MARKER EXPECTSSH_TMPDIR MYBASHPREFS_PASSWORD
   global MARKER EXPECTSSH_MYBASHPREFS EXPECTSSH_PROFILE
   log_user 1
@@ -416,9 +406,10 @@ proc load_mybashprefs {EXPECT_SSH {nest_level 0}} {
   set mybashprefs ""
 
   # 
-  # Everything is wrapped in function _ES_bashrc
+  # Everything is wrapped in function _ES_core
   #
-  append mybashprefs "function _ES_bashrc() {\n"
+  append mybashprefs "function _ES_core() {\n"
+  append mybashprefs "export EXPECTSSH_SHLVL=\$1\n"
   append mybashprefs "export EXPECTSSH_TMPDIR=$EXPECTSSH_TMPDIR\n"
   append mybashprefs "export EXPECTSSH_PS1_MARKER='$EXPECTSSH_PS1_MARKER'\n"
   append mybashprefs "export EXPECTSSH_PROFILE=$EXPECTSSH_PROFILE\n"
@@ -573,16 +564,15 @@ export -f _ES_send_marker
     append mybashprefs [slurp_file $bashrc]
   }
 
-  # unset $c, $d, $f: all set below
-  append mybashprefs "unset c d f\n"
-  append mybashprefs "export EXPECT_SSH=$EXPECT_SSH\n"
+  # unset $c, set below
+  append mybashprefs "unset c\n"
 
   #
-  # Finally: END of function _ES_bashrc
+  # Finally: END of function _ES_core
   #
   append mybashprefs "}\n"
-  append mybashprefs "export -f _ES_bashrc\n"
-  append mybashprefs "_ES_bashrc\n"
+  append mybashprefs "export -f _ES_core\n"
+  #append mybashprefs "_ES_core\n"
   set mybashprefs [strip_comments $mybashprefs]
 
   set mybashprefs_hash [compute_md5 $mybashprefs]
@@ -590,8 +580,8 @@ export -f _ES_send_marker
   # with the md5 in the password we can trigger a re-upload of bash prefs
   # should they change. Md5 the result for shorter version of password.
   set pass [compute_md5 $MYBASHPREFS_PASSWORD-$mybashprefs_hash]
-  #send " c=\"\$(openssl enc -a -d -aes256 -in $EXPECTSSH_MYBASHPREFS)\" && eval \"\${c}$EXPECT_SSH\"\r"
-  send " f=$EXPECTSSH_MYBASHPREFS; c=\"\$(openssl enc -a -d -aes256 -in \$f)\" && eval \"\${c}\"\r"
+  #send " c=\"\$(openssl enc -a -d -aes256 -in $EXPECTSSH_MYBASHPREFS)\" && eval \"\${c}$EXPECTSSH_SHLVL\"\r"
+  send " f=$EXPECTSSH_MYBASHPREFS; c=\"\$(openssl enc -a -d -aes256 -in \$f)\" && eval \"\${c}\" && _ES_core $EXPECTSSH_SHLVL\r"
   set password_was_entered 0
   expect {
     -re "password:$" {
@@ -656,7 +646,7 @@ export -f _ES_send_marker
       expect ". "
       log_user 1
       expect -re $PROMPT
-      return [load_mybashprefs $EXPECT_SSH 1]
+      return [load_mybashprefs $EXPECTSSH_SHLVL 1]
     }
     -re $PROMPT {
       # sometimes the prompt can be detected BEFORE we have had a chance to get
@@ -698,7 +688,7 @@ proc strip_comments {script} {
 # Check if remote function file (i.e. bash script file) exists, and if not
 # upload it. If it does exist, re-upload it if it fails md5 check.
 proc upload_and_source_script { script remote_file } {
-  global PROMPT MYBASHPREFS_PASSWORD EXPECT_SSH
+  global PROMPT MYBASHPREFS_PASSWORD EXPECTSSH_SHLVL
   set script [strip_comments $script]
   set script_md5 [compute_md5 $script]
   # Combine my password with md5 hash for the password to encrypt the data,
@@ -779,7 +769,7 @@ proc main_prompt_checker {arr} {
   set stdin_buf ""
   if { [array size load_mybashprefs_args] > 0 } {
     if { [check_prompt_marker $arr] == 0 } {
-      set rc [load_mybashprefs [expr $load_mybashprefs_args(EXPECT_SSH) + 1]]
+      set rc [load_mybashprefs [expr $load_mybashprefs_args(EXPECTSSH_SHLVL) + 1]]
       if { $rc == "OK" } {
         if { [info exists load_mybashprefs_args(EXPECTSSH_IN_SCREEN)] > 0 && $load_mybashprefs_args(EXPECTSSH_IN_SCREEN)==1 } {
           send " export EXPECTSSH_IN_SCREEN=1 && "
@@ -810,7 +800,7 @@ proc process_keystroke {c} {
   append stdin_buf $c
   set buflen [string length $stdin_buf]
   if { $stdin_buf == "~i" } {
-    load_mybashprefs $env(EXPECT_SSH)
+    load_mybashprefs $env(EXPECTSSH_SHLVL)
     set stdin_buf ""
   } elseif { $stdin_buf == "~k" } {
     # useful when screen was launched remotely, and you want to take it
@@ -877,10 +867,10 @@ append PROMPT "|"
 append PROMPT "([regsub -all {([\[])} $EXPECTSSH_PS1_MARKER [join { {\\} {\1} } {}]])(?:$ANSI_RE_GENERAL)*$"
 append PROMPT ")"
 
-if {[info exists env(EXPECT_SSH)] == 1} {
-  set env(EXPECT_SSH) [expr $env(EXPECT_SSH) + 1]
+if {[info exists env(EXPECTSSH_SHLVL)] == 1} {
+  set env(EXPECTSSH_SHLVL) [expr $env(EXPECTSSH_SHLVL) + 1]
 } else {
-  set env(EXPECT_SSH) 0
+  set env(EXPECTSSH_SHLVL) 0
 }
 #if {[catch {fconfigure stdin -mode}]} {
 #  # Running ssh in a pipeline, stdin is not a keyboard
@@ -930,7 +920,7 @@ if { $local_shell_only == 1 } {
 set spawn_out_slave_name $spawn_out(slave,name)
 # force-resize: needed if on Mac in terminal full screen mode
 resize_handler
-load_mybashprefs $env(EXPECT_SSH)
+load_mybashprefs $env(EXPECTSSH_SHLVL)
 set marker_re (?:\x07|\n|\r)[get_marker]
 
 interact {
