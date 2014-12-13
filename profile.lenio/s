@@ -1,6 +1,6 @@
 # vim:filetype=sh
 #
-# Wrapper for sudo. Usage:
+# Wrapper for sudo. Usage examples:
 # To become root:
 #   s
 # To become nobody
@@ -15,16 +15,16 @@ function s() {
     user=$1
     shift
   fi
+
   id -u "$user" >/dev/null 2>&1 || {
     echo "No such user \"$user\"."
     return
   }
-  #signal_load_mybashprefs "$@"
 
-  #local _ES_funcs=$(declare -F|cut -d' ' -f3|grep ^_ES_|tr '\n' ' ')
   local cmd=("$@")
   [ $# -eq 0 ] && cmd=(exec /bin/bash --norc --noprofile)
-  sudo -H -u $user -- /bin/bash -c 'true
+
+  local c='true
 eval "$(openssl enc -d -base64 << EOF
 '"$(declare -f _ES_core|openssl enc -base64)"'
 EOF
@@ -41,5 +41,7 @@ EOF
 
 export EXPECTSSH_LOADED_FUNCS='"$EXPECTSSH_LOADED_FUNCS"'
 export -f '"$EXPECTSSH_LOADED_FUNCS"'
-"$@"' -- "${cmd[@]}"
+"$@" </dev/tty'
+
+  echo "$c"|sudo -H -u $user -- /bin/bash -s "${cmd[@]}"
 }
