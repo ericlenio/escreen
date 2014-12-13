@@ -473,21 +473,20 @@ function _ES_rec_rem() {
 export -f _ES_rec_rem
 
 function _ES_rec_rem2() {
+  # v is the name of variable we are going to set so caller can
+  # get the function
+  local v=$1
   local l
   # Delimit the input with a space, and after each line is sent send \r so the
   # terminal does not scroll
   local s
   while true; do
-    read -d' ' l
+    read -d ' ' l
     [ "$l" = . ] && break
-    s+=$(printf "%s" $l)$'\n'
-    printf "\015" >&2
+    s+=$l$'\n'
+    printf "\015"
   done
-  local s=$(echo "$s"|openssl enc -d -base64|gzip -d -c)
-  echo "$s"
-  #eval "$s"
-  #echo a:"$@"
-  #"$@"
+  eval "$v=$(echo "$s"|openssl enc -d -base64|gzip -d -c)"
 }
 export -f _ES_rec_rem2
 #
@@ -579,9 +578,9 @@ export -f _ES_send_marker
     local f=$_ES_FCN_PREFIX$funcname
     unset -f $funcname
     _ES_send_marker "$marker" $funcname
-    local s="$(_ES_rec_rem2)"
-    #_ES_rec_rem2
-    echo got s="$s"
+    _ES_rec_rem2 f
+    eval "$f"
+    "$@"
   }
   append mybashprefs "}; export -f _ES_bootstrap\n"
   #
@@ -714,6 +713,7 @@ proc upload_script_handler {decoded_args} {
   #upload_and_source_script $FUNCMAP($funcname,defn) $FUNCMAP($funcname,remote_file)
   #send " _ES_lf $funcname \"$args(args)\"\r"
   upload_and_source_script2 $FUNCMAP($funcname,defn) $FUNCMAP($funcname,remote_file)
+  return ""
 }
 
 proc strip_comments {script} {
@@ -790,25 +790,24 @@ proc upload_and_source_script2 { script remote_file } {
   # split into manageable chunks that will not exceed terminal driver
   # buf size
   set n -1 
-  log_user 0
   set remote_file_content_enc [exec "bash" "-c" "echo -n \"\$0\" | gzip -9 -c | openssl enc -base64" $script]
   set c_len [string length $remote_file_content_enc]
+  set delim " "
   foreach line [regexp -all -inline {(?:.{0,80}){1,1}\n} "$remote_file_content_enc\n"] {
-    send "[string trimright $line] "
+    send "[string trimright $line]$delim"
     expect {
       # first time in this loop it could by \r\n
       -re "\r\n$" {}
       -re "\x0d$" {}
     }
-    if { $n > -1 } { send_user \r }
+    #if { $n > -1 } { send_user \r }
     incr n [string length $line]
     set precision [string length $c_len]
-    send_user [format "%*d/%*d uploaded" $precision $n $precision $c_len]
+    #send_user [format "%*d/%*d uploaded" $precision $n $precision $c_len]
   }
-  send_user " ... DONE with upload\r\n"
-  send ". "
-  expect ". "
-  log_user 1
+  #send_user " ... DONE with upload\r\n"
+  send ".$delim"
+  expect ".$delim"
 }
 
 # See if the custom prompt is in effect
