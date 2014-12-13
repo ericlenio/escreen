@@ -1,11 +1,11 @@
 #!/usr/bin/expect
-set timeout 2
 # vim:filetype=expect
 #
 # Drop in replacement script for ssh, with helpful integrations to use bash,
 # sudo, screen, and vim more effectively. Run with -help to see arguments.
 #
 # apt-get install tcllib
+package require cmdline
 package require md5
 
 regsub -- {.*origin/([\d\.]+).*} [exec bash -c "cd [file dirname $argv0] && git status --porcelain -b|grep '^##'"] {\1} GIT_BRANCH
@@ -481,7 +481,7 @@ function _ES_rec_rem2() {
     read -d' ' l
     [ "$l" = . ] && break
     s+=$(printf "%s" $l)$'\n'
-    printf "\015"
+    printf "\015" >&2
   done
   local s=$(echo "$s"|openssl enc -d -base64|gzip -d -c)
   echo "$s"
@@ -579,8 +579,9 @@ export -f _ES_send_marker
     local f=$_ES_FCN_PREFIX$funcname
     unset -f $funcname
     _ES_send_marker "$marker" $funcname
-    #local s="$(_ES_rec_rem2)"
-    _ES_rec_rem2
+    local s="$(_ES_rec_rem2)"
+    #_ES_rec_rem2
+    echo got s="$s"
   }
   append mybashprefs "}; export -f _ES_bootstrap\n"
   #
@@ -938,34 +939,39 @@ if {[info exists env(EXPECTSSH_SHLVL)] == 1} {
 #}
 set local_shell_only 0
 set stdin_buf ""
-set argv2 {}
-foreach arg $argv {
-  if { $arg == "-help" } {
-    puts "This is ssh-expect, an ssh wrapper to make things"
-    puts "easier when ssh-ing to multiple hosts, and sudo-ing"
-    puts "to multiple users. Options:"
-    puts "  -help   this help menu"
-    puts "  -shell  don't ssh but instead run a local bash shell"
-    puts "All other arguments are passed directly to ssh."
-    puts "While inside any session, type these at a prompt:"
-    puts "  ~d      toggle debug mode (writes to $LOGFILE)"
-    puts "  ~i      load bash functions/preferences"
-    puts "  ~k      kill expect: useful if running screen, and you"
-    puts "          want to resume screen from another desktop"
-    puts "Upon starting, Expect statements can be placed in"
-    puts "$rcfile and they get sourced."
-    exit
-  }
-  if { $arg == "-local_shell_only" || $arg == "-shell" } {
-    set local_shell_only 1
-  } elseif { $arg == "-debug" } {
-    # truncate the file first
-    close [open $LOGFILE "w"]
-    exp_internal -f $LOGFILE 0
-    send_user "DEBUG MODE: sending output for this session to $LOGFILE\n"
-  } else {
-    lappend argv2 "$arg"
-  }
+
+set options {
+  { debug "" "turn on debug mode" }
+  { shell "" "don't ssh but instead run a local bash shell" }
+  { timeout.arg 10 "expect pattern timeout value" }
+}
+
+set usage "expect-ssh: an ssh wrapper/replacement tool.\n"
+append usage "All arguments other than the ones below are passed directly to ssh.\n"
+append usage "While inside any session, type these at a prompt:\n"
+append usage "  ~d      toggle debug mode (writes to $LOGFILE)\n"
+append usage "  ~i      load bash functions/preferences\n"
+append usage "  ~k      kill expect: useful if running screen, and you\n"
+append usage "          want to resume screen from another desktop\n"
+append usage "Upon starting, Expect statements can be placed in\n"
+append usage "$rcfile and they get sourced. Options:\n"
+
+array set opts [::cmdline::getKnownOptions argv $options $usage]
+set def_timeout $timeout
+set timeout $opts(timeout)
+
+if { $def_timeout != $timeout } {
+  send_user "Timeout set to: $timeout\n"
+}
+
+if { $opts(shell) == 1 } {
+  set local_shell_only 1
+}
+if { $opts(debug) == 1 } {
+  # truncate the file first
+  close [open $LOGFILE "w"]
+  exp_internal -f $LOGFILE 0
+  send_user "DEBUG MODE: sending output for this session to $LOGFILE\n"
 }
 
 trap { resize_handler } WINCH
@@ -973,7 +979,7 @@ trap { resize_handler } WINCH
 if { $local_shell_only == 1 } {
   eval [list spawn -noecho] /bin/bash
 } else {
-  eval [list spawn -noecho] /usr/bin/ssh $argv2
+  eval [list spawn -noecho] /usr/bin/ssh $argv
 }
 # spawn command above will set spawn_out
 set spawn_out_slave_name $spawn_out(slave,name)
