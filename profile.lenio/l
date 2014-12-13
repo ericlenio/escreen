@@ -1,5 +1,4 @@
 # vim:filetype=sh
-# depends:dummy
 function l() {
   local os=$(uname -s)
   if [ $os = Darwin ]; then

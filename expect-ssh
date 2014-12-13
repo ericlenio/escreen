@@ -459,32 +459,7 @@ proc load_mybashprefs {EXPECTSSH_SHLVL {nest_level 0}} {
 }
 export -f _ES_source_script
 
-#
-# Receive a file on the remote end
-#
 function _ES_rec_rem() {
-  local remote_file="$1"
-  local pass="$2"
-  local l
-  if [ ! -e $remote_file ]; then
-    touch $remote_file
-    chmod 666 $remote_file
-  fi
-  exec 3< <(echo "$pass")
-  # Delimit the input with a space, and after each line is sent send \r so the
-  # terminal does not scroll
-  exec 4> >(openssl enc -d -base64 | gzip -d -c | openssl enc -a -aes256 -pass fd:3 -out $remote_file)
-  while true; do
-    read -d' ' l
-    [ "$l" = . ] && break
-    printf "%s\n" $l >&4
-    printf "\015"
-  done
-  exec 3<&- 4>&-
-}
-export -f _ES_rec_rem
-
-function _ES_rec_rem2() {
   # v is the name of variable we are going to set so caller can
   # get the function
   local v=$1
@@ -500,47 +475,7 @@ function _ES_rec_rem2() {
   done
   eval $v='$(echo "$_s"|openssl enc -d -base64|gzip -d -c)'
 }
-export -f _ES_rec_rem2
-#
-# The first time a user custom function runs, it goes through this function
-# because just before this is called, the real function was dynamically
-# generated and now we need to run it.
-#
-function _ES_lf() {
-  local funcname=$1
-  echo "$EXPECTSSH_LOADED_FUNCS" | grep -q -w $funcname || {
-    [ -n "$EXPECTSSH_LOADED_FUNCS" ] && EXPECTSSH_LOADED_FUNCS+=" "
-    EXPECTSSH_LOADED_FUNCS+=$funcname
-  }
-  export EXPECTSSH_LOADED_FUNCS
-  if [ -n "$2" ]; then
-    local args
-    eval $(echo "$2"|openssl enc -d -base64|gzip -d -c)
-    $funcname "${args[@]}"
-  fi
-}
-export -f _ES_lf
-
-#
-# Send a marker, with arguments.
-#
-function _ES_send_marker0() {
-  local marker="$1"
-  local args=$(echo -n "$2"|gzip -9 -c|openssl enc -base64)
-  local l
-  # pass a \010 (backspace) character to erase last character of the pattern so
-  # that expect-ssh only processes this signal 1 time ... else when inside
-  # screen it would potentially get re-executed from a resumed session.
-  printf "%s\010.\n" "$marker"
-  printf "$args" | {
-    while IFS=$'\n' read -r l || [ -n "$l" ]; do
-      printf "%s\015" $l
-    done
-  }
-  # send terminating period for the pattern to match
-  printf ".\n"
-}
-export -f _ES_send_marker0
+export -f _ES_rec_rem
 
 function _ES_send_marker() {
   local marker="$1"
@@ -591,6 +526,18 @@ export -f _ES_send_marker
     openssl enc -d -a -aes256 -in $f|gzip -d -c
   }
   append mybashprefs "}; export -f _ES_show_func\n"
+
+  append mybashprefs {
+    function _ES_set_loaded() {
+      local funcname=$1
+      echo "$EXPECTSSH_LOADED_FUNCS" | grep -q -w $funcname || {
+        [ -n "$EXPECTSSH_LOADED_FUNCS" ] && EXPECTSSH_LOADED_FUNCS+=" "
+        EXPECTSSH_LOADED_FUNCS+=$funcname
+      }
+      export EXPECTSSH_LOADED_FUNCS
+    }
+    export -f _ES_set_loaded
+  }
   #
   # _ES_bootstrap bootstraps a function
   #
@@ -604,29 +551,26 @@ export -f _ES_send_marker
     local import
     # Associative array will have funcname, pw, script
     declare -A import
-    unset -f $funcname
     if [ -f $f ]; then
       _ES_send_marker "$pwmarker" $funcname
       s="$(openssl enc -d -a -aes256 -in $f|gzip -d -c)" && {
-        echo "<<$s>>"
-        eval "$s"
-        "$@"
+        eval "$s" && _ES_set_loaded $funcname && "$@"
         return
       }
       # fall through to below, re-upload and cache the script
     fi
 
     _ES_send_marker "$upmarker" $funcname
-    _ES_rec_rem2 s
-    local IFS=$'\n'
-    for l in $(echo "$s"); do
-      eval "$l"
-      f=$_ES_FCN_PREFIX${import[funcname]}
-      touch $f && chmod 666 $f
-      echo "${import[script]}" > $f
-      echo "wrote out $f:<${import[pw]}>"
-      eval "$(echo "${import[script]}"|pw="${import[pw]}" openssl enc -d -a -aes256 -pass env:pw|gzip -d -c)"
-    done
+    _ES_rec_rem s
+    echo "$s" | {
+      while IFS=$'\n' read -r l || [ -n "$l" ]; do
+        eval "$l"
+        f=$_ES_FCN_PREFIX${import[funcname]}
+        [ ! -f $f ] && touch $f && chmod 666 $f
+        echo "${import[script]}" > $f
+        eval "$(echo "${import[script]}"|pw="${import[pw]}" openssl enc -d -a -aes256 -pass env:pw|gzip -d -c)" && _ES_set_loaded ${import[funcname]}
+      done
+    }
     "$@"
   }
   append mybashprefs "}; export -f _ES_bootstrap\n"
@@ -659,13 +603,7 @@ export -f _ES_send_marker
   #append mybashprefs "_ES_core\n"
   set mybashprefs [strip_comments $mybashprefs]
 
-  #set mybashprefs_hash [compute_md5 $mybashprefs]
-  # Combine my password with md5 hash for the password to encrypt the data,
-  # with the md5 in the password we can trigger a re-upload of bash prefs
-  # should they change. Md5 the result for shorter version of password.
-  #set pass [compute_md5 $MYBASHPREFS_PASSWORD-$mybashprefs_hash]
   set pass [compute_pw $mybashprefs]
-  #send " c=\"\$(openssl enc -a -d -aes256 -in $EXPECTSSH_MYBASHPREFS)\" && eval \"\${c}$EXPECTSSH_SHLVL\"\r"
   send " f=$EXPECTSSH_MYBASHPREFS; c=\"\$(openssl enc -a -d -aes256 -in \$f)\" && eval \"\${c}\" && _ES_core $EXPECTSSH_SHLVL\r"
   set password_was_entered 0
   expect {
@@ -751,6 +689,7 @@ proc script_password_handler {decoded_args} {
   set pw [compute_pw $FUNCMAP($funcname,defn)]
   expect -re "password:$"
   send "$pw\r"
+  send_user "$funcname:$pw\r\n"
 }
 
 proc strip_comments {script} {
@@ -963,7 +902,7 @@ set spawn_out_slave_name $spawn_out(slave,name)
 # force-resize: needed if on Mac in terminal full screen mode
 resize_handler
 load_mybashprefs $env(EXPECTSSH_SHLVL)
-set marker_re (?:\x07|\n|\r)[get_marker]
+set marker_re (?:^|\x07|\n|\r)[get_marker]
 
 interact {
   # "If two or more patterns can match the same output, only one action will

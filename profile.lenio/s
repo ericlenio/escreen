@@ -24,14 +24,22 @@ function s() {
   #local _ES_funcs=$(declare -F|cut -d' ' -f3|grep ^_ES_|tr '\n' ' ')
   local cmd=("$@")
   [ $# -eq 0 ] && cmd=(exec /bin/bash --norc --noprofile)
-  local exported_funcs="_ES_core $EXPECTSSH_LOADED_FUNCS"
   sudo -H -u $user -- /bin/bash -c 'true
 eval "$(openssl enc -d -base64 << EOF
-'"$(declare -f $exported_funcs|openssl enc -base64)"'
+'"$(declare -f _ES_core|openssl enc -base64)"'
 EOF
 )"
-export EXPECTSSH_LOADED_FUNCS='"$EXPECTSSH_LOADED_FUNCS"'
-export -f '"$exported_funcs"'
+export -f _ES_core
+# _ES_core will generate stub functions, so important to run this first and the
+# override those stubs with already loaded functions below.
 _ES_core
+
+eval "$(openssl enc -d -base64 << EOF
+'"$(declare -f $EXPECTSSH_LOADED_FUNCS|openssl enc -base64)"'
+EOF
+)"
+
+export EXPECTSSH_LOADED_FUNCS='"$EXPECTSSH_LOADED_FUNCS"'
+export -f '"$EXPECTSSH_LOADED_FUNCS"'
 "$@"' -- "${cmd[@]}"
 }
