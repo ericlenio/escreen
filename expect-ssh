@@ -188,13 +188,17 @@ proc get_scripts {} {
   }
 
   #
-  # Find dependencies, then strip all comments
+  # Find dependencies
   #
   foreach funcname [lsort [array names FUNCMAP -regexp {^\w+$}]] {
     set FUNCMAP($funcname,depends_on) [get_dependencies $funcname [array get FUNCMAP]]
+  }
+  #
+  # Strip all comments
+  #
+  foreach funcname [lsort [array names FUNCMAP -regexp {^\w+$}]] {
     set FUNCMAP($funcname,defn) [strip_comments $FUNCMAP($funcname,defn)]
   }
-
   return [array get FUNCMAP]
 }
 
