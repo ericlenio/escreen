@@ -660,28 +660,7 @@ export -f _ES_send_marker
       send { while true; do read -d' ' l; [ "$l" = . ] && break; printf "%s\n" $l >&4; printf "\015"; done; exec 3<&- 4>&-}
       send \r
       expect -re \r\n$
-      # split into manageable chunks that will not exceed terminal driver
-      # buf size
-      set n -1 
-      log_user 0
-      set mybashprefs_enc [exec "bash" "-c" "echo -n \"\$0\" | gzip -9 -c | openssl enc -base64" $mybashprefs]
-      set c_len [string length $mybashprefs_enc]
-      foreach line [regexp -all -inline {(?:.{0,80}){1,1}\n} "$mybashprefs_enc\n"] {
-        send "[string trimright $line] "
-        expect {
-          # first time in this loop it could by \r\n
-          -re "\r\n$" {}
-          -re "\x0d$" {}
-        }
-        if { $n > -1 } { send_user \r }
-        incr n [string length $line]
-        set precision [string length $c_len]
-        send_user [format "%*d/%*d uploaded" $precision $n $precision $c_len]
-      }
-      send_user " ... DONE with upload\r\n"
-      send ". "
-      expect ". "
-      log_user 1
+      send_script $mybashprefs 
       expect -re $PROMPT
       return [load_mybashprefs $EXPECTSSH_SHLVL 1]
     }
@@ -712,7 +691,7 @@ proc upload_script_handler {decoded_args} {
   }
   #upload_and_source_script $FUNCMAP($funcname,defn) $FUNCMAP($funcname,remote_file)
   #send " _ES_lf $funcname \"$args(args)\"\r"
-  upload_and_source_script2 $FUNCMAP($funcname,defn) $FUNCMAP($funcname,remote_file)
+  send_script $FUNCMAP($funcname,defn)
   return ""
 }
 
@@ -785,13 +764,15 @@ proc upload_and_source_script { script remote_file } {
     timeout { send_error "TIMEOUT in proc upload_and_source_script:<$script>\n\r"; return "NOT OK" }
   }
 }
-proc upload_and_source_script2 { script remote_file } {
+proc send_script { script } {
   set script [strip_comments $script]
   # split into manageable chunks that will not exceed terminal driver
   # buf size
   set n -1 
+  log_user 0
   set remote_file_content_enc [exec "bash" "-c" "echo -n \"\$0\" | gzip -9 -c | openssl enc -base64" $script]
   set c_len [string length $remote_file_content_enc]
+  set precision [string length $c_len]
   set delim " "
   foreach line [regexp -all -inline {(?:.{0,80}){1,1}\n} "$remote_file_content_enc\n"] {
     send "[string trimright $line]$delim"
@@ -800,14 +781,14 @@ proc upload_and_source_script2 { script remote_file } {
       -re "\r\n$" {}
       -re "\x0d$" {}
     }
-    #if { $n > -1 } { send_user \r }
+    if { $n > -1 } { send_user \r }
     incr n [string length $line]
-    set precision [string length $c_len]
-    #send_user [format "%*d/%*d uploaded" $precision $n $precision $c_len]
+    send_user [format "%*d/%*d uploaded" $precision $n $precision $c_len]
   }
-  #send_user " ... DONE with upload\r\n"
+  send_user " ... DONE with upload\r\n"
   send ".$delim"
   expect ".$delim"
+  log_user 1
 }
 
 # See if the custom prompt is in effect
@@ -958,6 +939,8 @@ append usage "$rcfile and they get sourced. Options:\n"
 array set opts [::cmdline::getKnownOptions argv $options $usage]
 set def_timeout $timeout
 set timeout $opts(timeout)
+#set send_slow {1 .1}
+#set send_human {.1 .3 1 .05 2}
 
 if { $def_timeout != $timeout } {
   send_user "Timeout set to: $timeout\n"
