@@ -17,8 +17,6 @@ if {[string length $GIT_BRANCH]==0} {
 set env(EXPECTSSH_TMPDIR) /tmp/.expect-ssh-$GIT_BRANCH
 set EXPECTSSH_TMPDIR $env(EXPECTSSH_TMPDIR)
 set EXPECTSSH_MYBASHPREFS $EXPECTSSH_TMPDIR/mybashprefs.$env(USER)
-# TO DO: make the profile a command line parameter
-set EXPECTSSH_PROFILE [file dirname $argv0]/profile.lenio
 # if stdin is not a terminal, or $EXPECTSSH_SHLVL exists, then we just
 # want to do regular ssh.
 set overlay_test [exec bash -c {
@@ -851,6 +849,35 @@ proc process_keystroke {c} {
 ##
 ##
 
+set options {
+  { debug "" "turn on debug mode" }
+  { shell "" "don't ssh but instead run a local bash shell" }
+  { profile.arg profile.lenio "choose which profile to use for custom functions/markers/handlers" }
+  { timeout.arg 10 "expect pattern timeout value" }
+}
+
+set usage "expect-ssh: an ssh wrapper/replacement tool.\n"
+append usage "All arguments other than the ones below are passed directly to ssh.\n"
+append usage "While inside any session, type these at a prompt:\n"
+append usage "  ~d      toggle debug mode (writes to $LOGFILE)\n"
+append usage "  ~i      load bash functions/preferences\n"
+append usage "  ~u      upload file (to ssh session)\n"
+append usage "  ~k      kill expect: useful if running screen, and you\n"
+append usage "          want to resume screen from another desktop\n"
+append usage "Upon starting, Expect statements can be placed in\n"
+append usage "$rcfile and they get sourced. Options:\n"
+
+array set opts [::cmdline::getKnownOptions argv $options $usage]
+set def_timeout $timeout
+set timeout $opts(timeout)
+#set send_slow {1 .1}
+#set send_human {.1 .3 1 .05 2}
+
+if { $def_timeout != $timeout } {
+  send_user "Timeout set to: $timeout\n"
+}
+set EXPECTSSH_PROFILE [file dirname $argv0]/$opts(profile)
+
 #
 # Register some core handlers
 #
@@ -886,32 +913,6 @@ if {[info exists env(EXPECTSSH_SHLVL)] == 1} {
 #}
 set local_shell_only 0
 set stdin_buf ""
-
-set options {
-  { debug "" "turn on debug mode" }
-  { shell "" "don't ssh but instead run a local bash shell" }
-  { timeout.arg 10 "expect pattern timeout value" }
-}
-
-set usage "expect-ssh: an ssh wrapper/replacement tool.\n"
-append usage "All arguments other than the ones below are passed directly to ssh.\n"
-append usage "While inside any session, type these at a prompt:\n"
-append usage "  ~d      toggle debug mode (writes to $LOGFILE)\n"
-append usage "  ~i      load bash functions/preferences\n"
-append usage "  ~k      kill expect: useful if running screen, and you\n"
-append usage "          want to resume screen from another desktop\n"
-append usage "Upon starting, Expect statements can be placed in\n"
-append usage "$rcfile and they get sourced. Options:\n"
-
-array set opts [::cmdline::getKnownOptions argv $options $usage]
-set def_timeout $timeout
-set timeout $opts(timeout)
-#set send_slow {1 .1}
-#set send_human {.1 .3 1 .05 2}
-
-if { $def_timeout != $timeout } {
-  send_user "Timeout set to: $timeout\n"
-}
 
 if { $opts(shell) == 1 } {
   set local_shell_only 1
