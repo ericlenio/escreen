@@ -1,7 +1,0 @@
-# vim:filetype=sh
-#
-# escape the regex for the PS1 marker
-function _ES_eps1m() {
-  echo "$EXPECTSSH_PS1_MARKER"|perl -pe 's{(\\033\[[^a-zA-Z]*[a-zA-Z])}{\\[$1\\]}g'
-}
-export -f _ES_eps1m

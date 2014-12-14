@@ -349,6 +349,15 @@ proc load_mybashprefs_handler {decoded_args} {
   array set load_mybashprefs_args $decoded_args
 }
 
+#
+# Escape the non-printing elements of PS1 marker, as per bash man page: see
+# where it discusses "begin a sequence of non-printing characters, which could
+# be used to embed a terminal control sequence into the prompt"
+#
+proc escape_ps1_marker {ps1_marker} {
+  return [regsub -all {(\\033\[[^a-zA-Z]*[a-zA-Z])} $ps1_marker {\\[\1\\]}]
+}
+
 proc load_mybashprefs {EXPECTSSH_SHLVL {nest_level 0}} {
   global PROMPT ANSI_RE_TEXT_FORMATTING EXPECTSSH_PS1_MARKER EXPECTSSH_TMPDIR MYBASHPREFS_PASSWORD
   global MARKER EXPECTSSH_MYBASHPREFS EXPECTSSH_PROFILE
@@ -375,7 +384,7 @@ proc load_mybashprefs {EXPECTSSH_SHLVL {nest_level 0}} {
   append mybashprefs "export _ES_FCN_PREFIX=$FUNCMAP(:remote_file_prefix)\n"
   append mybashprefs "export EXPECTSSH_SHLVL=\$1\n"
   append mybashprefs "export EXPECTSSH_TMPDIR=$EXPECTSSH_TMPDIR\n"
-  append mybashprefs "export EXPECTSSH_PS1_MARKER='$EXPECTSSH_PS1_MARKER'\n"
+  append mybashprefs "export EXPECTSSH_PS1_MARKER='[escape_ps1_marker $EXPECTSSH_PS1_MARKER]'\n"
   append mybashprefs "export EXPECTSSH_PROFILE=$EXPECTSSH_PROFILE\n"
 
   append mybashprefs "function _ES_marker() {\n"
