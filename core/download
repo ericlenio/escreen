@@ -1,0 +1,25 @@
+# vim:filetype=sh
+function download() {
+  local marker1="$(_ES_marker DOWNLOAD_DEFAULT_FILE)"
+  local marker2="$(_ES_marker DOWNLOAD_DATA)"
+  local file="$1"
+  if [ ! -e "$file" ]; then
+    echo "Error: no such file, or file is not readable: $file"
+    return
+  fi
+  local locfile=$(basename "$file")
+  local args=$(printf "default_file_name {%s}" "$locfile")
+  _ES_send_marker "$marker1" "$args"
+  local outfile
+  # Only continue if a valid download filename was picked in get_download_filename
+  read outfile
+  if [ -z "$outfile" ]; then
+    return
+  fi
+  local c
+  for l in $(gzip -9 -c "$file" | openssl enc -base64); do
+    c+=$l$'\n'
+  done
+  _ES_send_marker "$marker2" "outfile {$outfile} content {$c}"
+}
+export -f download

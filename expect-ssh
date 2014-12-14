@@ -157,11 +157,11 @@ proc slurp_file {f} {
 # User custom functions
 #
 proc get_scripts {} {
-  global EXPECTSSH_FUNCTIONS_DIR EXPECTSSH_TMPDIR EXPECTSSH_PROFILE env
+  global EXPECTSSH_FUNCTIONS_DIR EXPECTSSH_TMPDIR EXPECTSSH_PROFILE EXPECTSSH_CORE env
   array unset FUNCMAP
   set FUNCMAP(:remote_file) $EXPECTSSH_TMPDIR/$env(USER).FUNCMAP
   set FUNCMAP(:remote_file_prefix) $EXPECTSSH_TMPDIR/$env(USER).f.
-  foreach dir [list $EXPECTSSH_FUNCTIONS_DIR $EXPECTSSH_PROFILE] {
+  foreach dir [list $EXPECTSSH_CORE $EXPECTSSH_FUNCTIONS_DIR $EXPECTSSH_PROFILE] {
     if { [file isdirectory $dir]==1 } {
       foreach funcname [glob -directory $dir -tails *] {
         if { $funcname eq "README" } { continue }
@@ -175,26 +175,17 @@ proc get_scripts {} {
       }
     }
   }
-
-  array set SYSFUNCMAP [get_system_functions]
-  foreach funcname [array names SYSFUNCMAP] {
-    set func_def $SYSFUNCMAP($funcname)
-    set FUNCMAP($funcname) ""
-    #set FUNCMAP($funcname,md5) [compute_md5 $func_def]
-    set FUNCMAP($funcname,defn) $func_def
-    set FUNCMAP($funcname,remote_file) $FUNCMAP(:remote_file_prefix)$funcname
-  }
-
+  set flist [lsort [array names FUNCMAP -regexp {^\w+$}]]
   #
   # Find dependencies
   #
-  foreach funcname [lsort [array names FUNCMAP -regexp {^\w+$}]] {
+  foreach funcname $flist {
     set FUNCMAP($funcname,depends_on) [get_dependencies $funcname [array get FUNCMAP]]
   }
   #
   # Strip all comments
   #
-  foreach funcname [lsort [array names FUNCMAP -regexp {^\w+$}]] {
+  foreach funcname $flist {
     set FUNCMAP($funcname,defn) [strip_comments $FUNCMAP($funcname,defn)]
   }
   return [array get FUNCMAP]
@@ -214,82 +205,6 @@ proc get_dependencies {funcname FUNCMAP {depends_list ""}} {
     }
   }
   return $depends_list
-}
-
-
-#
-# System level functions
-#
-proc get_system_functions {} {
-  global MARKER
-  # EXPECTSSH_IN_SCREEN is a flag to know if current shell is (ultimately)
-  # inside a screen session, and if so when ssh-ing to a new host we can update
-  # the screen window title with the new hostname.
-  set script ""
-  append script "function signal_load_mybashprefs() {\n"
-  # We do NOT use _ES_marker or _ES_send_marker here because we cannot
-  # assume they exist in the shell
-  append script "local marker=\"$MARKER(LOAD_MYBASHPREFS)\"\n"
-  append script {
-    local in_screen=0
-    if [ -n "$STY" -o -n "$EXPECTSSH_IN_SCREEN" ]; then in_screen=1; fi
-    local CMD_ARRAY=("$@")
-    local args=$(printf "EXPECTSSH_SHLVL %s EXPECTSSH_IN_SCREEN {%s} CMD_ARRAY {%s}" $EXPECTSSH_SHLVL "$in_screen" "$(declare -p CMD_ARRAY)")
-  }
-  append script {_ES_send_marker "$marker" "$args"}
-  append script "\n"
-  append script "}; export -f signal_load_mybashprefs\n"
-  set FUNCMAP(signal_load_mybashprefs) $script
-
-  set script {
-  # depends:signal_load_mybashprefs
-  function ssh() {
-    if [ -t 1 ]; then
-      signal_load_mybashprefs
-      /usr/bin/ssh "$@"
-      local rc=$?
-      if [ "$EXPECTSSH_IN_SCREEN" = 1 -o -n "$STY" ]; then
-        printf "\033k${HOSTNAME}\033\134"
-      fi
-      return $rc
-    else
-      # we are in a pipeline
-      /usr/bin/ssh "$@"
-    fi
-  }
-  export -f ssh
-  }
-  set FUNCMAP(ssh) $script
-
-  set script {
-    function download() {
-      local marker1="$(_ES_marker DOWNLOAD_DEFAULT_FILE)"
-      local marker2="$(_ES_marker DOWNLOAD_DATA)"
-      local file="$1"
-      if [ ! -e "$file" ]; then
-        echo "Error: no such file, or file is not readable: $file"
-        return
-      fi
-      local locfile=$(basename "$file")
-      local args=$(printf "default_file_name {%s}" "$locfile")
-      _ES_send_marker "$marker1" "$args"
-      local outfile
-      # Only continue if a valid download filename was picked in get_download_filename
-      read outfile
-      if [ -z "$outfile" ]; then
-        return
-      fi
-      local c
-      for l in $(gzip -9 -c "$file" | openssl enc -base64); do
-        c+=$l$'\n'
-      done
-      _ES_send_marker "$marker2" "outfile {$outfile} content {$c}"
-    }
-    export -f download
-  }
-  set FUNCMAP(download) $script
-
-  return [array get FUNCMAP]
 }
 
 proc download_default_file_handler {decoded_args} {
@@ -526,6 +441,17 @@ function _ES_send_marker() {
 }
 export -f _ES_send_marker
 
+function _ES_set_loaded() {
+  local funcname=$1
+  [ -z "$funcname" ] && return
+  echo "$EXPECTSSH_LOADED_FUNCS" | grep -q -w $funcname || {
+    [ -n "$EXPECTSSH_LOADED_FUNCS" ] && EXPECTSSH_LOADED_FUNCS+=" "
+    EXPECTSSH_LOADED_FUNCS+=$funcname
+  }
+  export EXPECTSSH_LOADED_FUNCS
+}
+export -f _ES_set_loaded
+
 }
   #
   # _ES_gen_stub generates a stub function for each user's custom function.
@@ -546,29 +472,6 @@ export -f _ES_send_marker
   fi
 }
   append mybashprefs "}; export -f _ES_gen_stub\n"
-  #
-  # _ES_show_func: decrypt and show cached script file
-  #
-  append mybashprefs "function _ES_show_func() {\n"
-  append mybashprefs "local marker=\$(_ES_marker GET_SCRIPT_PW)\n"
-  append mybashprefs {local funcname=$1
-    local f=$_ES_FCN_PREFIX$funcname
-    _ES_send_marker "$marker" $funcname
-    openssl enc -d -a -aes256 -in $f|gzip -d -c
-  }
-  append mybashprefs "}; export -f _ES_show_func\n"
-
-  append mybashprefs {
-    function _ES_set_loaded() {
-      local funcname=$1
-      echo "$EXPECTSSH_LOADED_FUNCS" | grep -q -w $funcname || {
-        [ -n "$EXPECTSSH_LOADED_FUNCS" ] && EXPECTSSH_LOADED_FUNCS+=" "
-        EXPECTSSH_LOADED_FUNCS+=$funcname
-      }
-      export EXPECTSSH_LOADED_FUNCS
-    }
-    export -f _ES_set_loaded
-  }
   #
   # _ES_bootstrap bootstraps a function
   #
@@ -613,14 +516,14 @@ export -f _ES_send_marker
     export -f _ES_eps1m
   }
 
+  set n 1
+  foreach funcname [lsort [array names FUNCMAP -regexp {^\w+$}]] {
+    append mybashprefs "_ES_gen_stub $funcname\n"
+    incr n
+  }
 
   set bashrc $EXPECTSSH_PROFILE/.bashrc
   if {[file exists $bashrc]} {
-    set n 1
-    foreach funcname [lsort [array names FUNCMAP -regexp {^\w+$}]] {
-      append mybashprefs "_ES_gen_stub $funcname\n"
-      incr n
-    }
     append mybashprefs [slurp_file $bashrc]
   }
 
@@ -720,7 +623,7 @@ proc script_password_handler {decoded_args} {
   set pw [compute_pw $FUNCMAP($funcname,defn)]
   expect -re "password:$"
   send "$pw\r"
-  send_user "$funcname:$pw\r\n"
+  send_user "($funcname)\r\n"
 }
 
 proc strip_comments {script} {
@@ -877,6 +780,7 @@ if { $def_timeout != $timeout } {
   send_user "Timeout set to: $timeout\n"
 }
 set EXPECTSSH_PROFILE [file dirname $argv0]/$opts(profile)
+set EXPECTSSH_CORE [file dirname $argv0]/core
 
 #
 # Register some core handlers

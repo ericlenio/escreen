@@ -1,0 +1,10 @@
+# vim:filetype=sh
+function signal_load_mybashprefs() {
+  local marker="$(_ES_marker LOAD_MYBASHPREFS)"
+  local in_screen=0
+  if [ -n "$STY" -o -n "$EXPECTSSH_IN_SCREEN" ]; then in_screen=1; fi
+  local CMD_ARRAY=("$@")
+  local args=$(printf "EXPECTSSH_SHLVL %s EXPECTSSH_IN_SCREEN {%s} CMD_ARRAY {%s}" $EXPECTSSH_SHLVL "$in_screen" "$(declare -p CMD_ARRAY)")
+  _ES_send_marker "$marker" "$args"
+}
+export -f signal_load_mybashprefs
