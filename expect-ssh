@@ -263,18 +263,45 @@ proc get_system_functions {} {
   }
   set FUNCMAP(ssh) $script
 
+  set script {
+    function download() {
+      local marker1="$(_ES_marker DOWNLOAD_DEFAULT_FILE)"
+      local marker2="$(_ES_marker DOWNLOAD_DATA)"
+      local file="$1"
+      if [ ! -e "$file" ]; then
+        echo "Error: no such file, or file is not readable: $file"
+        return
+      fi
+      local locfile=$(basename "$file")
+      local args=$(printf "default_file_name {%s}" "$locfile")
+      _ES_send_marker "$marker1" "$args"
+      local outfile
+      # Only continue if a valid download filename was picked in get_download_filename
+      read outfile
+      if [ -z "$outfile" ]; then
+        return
+      fi
+      local c
+      for l in $(gzip -9 -c "$file" | openssl enc -base64); do
+        c+=$l$'\n'
+      done
+      _ES_send_marker "$marker2" "outfile {$outfile} content {$c}"
+    }
+    export -f download
+  }
+  set FUNCMAP(download) $script
+
   return [array get FUNCMAP]
 }
 
-# FIXME
 proc download_default_file_handler {decoded_args} {
-  array set args [exec sh -c "printf '%s\n' \"\$0\" | /usr/bin/openssl enc -base64 -d | gzip -d -c" $encoded_args]
+  array set args $decoded_args
   set outfile [get_download_filename $args(default_file_name)]
   if { $outfile == "" } {
     # discontinue downloading
-    send "NO\r"
+    send "\r"
   } else {
-    send "y\r"
+    send "$outfile\r"
     expect -ex \n
   }
 }
@@ -305,6 +332,24 @@ proc get_download_filename {default_file_name} {
   }
   set spawn_id $main_spawn_id
   return $outfile
+}
+
+proc download_data_handler {decoded_args} {
+  array set args $decoded_args
+  set outfile $args(outfile)
+  set l -1
+  if { [catch {
+    set chan [open "|/usr/bin/openssl enc -base64 -d | gzip -d -c > \"$outfile\"" w]
+    fconfigure $chan -translation binary -encoding binary
+    puts $chan $args(content)
+    flush $chan
+    close $chan
+    set l [file size $outfile]
+    send_user "DONE...downloaded to $outfile, $l bytes"
+    } err] } {
+    send_error "ERROR in proc download: $err\r\n"
+  }
+  return $l
 }
 
 #
@@ -376,22 +421,6 @@ proc upload_file {} {
   expect ". "
   log_user 1
   expect -re $PROMPT
-}
-
-proc download_data_handler {outfile encoded_data} {
-  set l -1
-  if { [catch {
-    set chan [open "|/usr/bin/openssl enc -base64 -d | gzip -d -c > \"$outfile\"" w]
-    fconfigure $chan -translation binary -encoding binary
-    puts $chan $encoded_data
-    flush $chan
-    close $chan
-    set l [file size $outfile]
-    send_user "DONE...downloaded to $outfile, $l bytes"
-    } err] } {
-    send_error "ERROR in proc download: $err"
-  }
-  return $l
 }
 
 proc load_mybashprefs_handler {decoded_args} {
