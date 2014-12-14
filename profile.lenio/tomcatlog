@@ -1,5 +1,4 @@
 # vim:filetype=sh
-# depends:s,vim
 function tomcatlog() {
   local OPTS=$(getopt -o 23ecx -- "$@")
   eval set -- "$OPTS"

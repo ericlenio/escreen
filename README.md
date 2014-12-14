@@ -111,11 +111,6 @@ Bash command files can use the following helper functions/environment variables:
 * `EXPECTSSH_LOADED_FUNCS`: a space separated list of functions that have been loaded into the current shell
 * `EXPECTSSH_SHLVL`: similar to bash's SHLVL
 
-If a bash command file has a dependency on another command file to be loaded
-first, add a comment line like this in the file with the dependency:
-
-    # depends:some_other_bash_command_file
-
 Expect files can use the following helper functions:
 
 * `_ES_register_marker`

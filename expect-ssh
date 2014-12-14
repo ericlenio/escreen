@@ -175,34 +175,12 @@ proc get_scripts {} {
   }
   set flist [lsort [array names FUNCMAP -regexp {^\w+$}]]
   #
-  # Find dependencies
-  #
-  foreach funcname $flist {
-    set FUNCMAP($funcname,depends_on) [get_dependencies $funcname [array get FUNCMAP]]
-  }
-  #
   # Strip all comments
   #
   foreach funcname $flist {
     set FUNCMAP($funcname,defn) [strip_comments $FUNCMAP($funcname,defn)]
   }
   return [array get FUNCMAP]
-}
-
-proc get_dependencies {funcname FUNCMAP {depends_list ""}} {
-  array set FUNCMAP2 $FUNCMAP
-  set depends ""
-  regexp -line {^\s*#\s*depends:(.*)$} $FUNCMAP2($funcname,defn) - depends
-  if {[string length $depends]>0} {
-    foreach funcname2 [split $depends {,}] {
-      set temp [get_dependencies $funcname2 [array get FUNCMAP2]]
-      if {[string length $temp]>0} {
-        lappend depends_list $temp
-      }
-      lappend depends_list $funcname2
-    }
-  }
-  return $depends_list
 }
 
 proc download_default_file_handler {decoded_args} {
@@ -498,9 +476,6 @@ proc upload_script_handler {decoded_args} {
   set funcname $decoded_args
   array set FUNCMAP [get_scripts]
   set script ""
-  foreach dep $FUNCMAP($funcname,depends_on) {
-    append script "[get_encrypted_func $dep $FUNCMAP($dep,defn)]\n"
-  }
   append script "[get_encrypted_func $funcname $FUNCMAP($funcname,defn)]\n"
   send_script $script
   return ""

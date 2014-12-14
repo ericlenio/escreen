@@ -1,5 +1,4 @@
 # vim:filetype=sh
-# depends:signal_load_mybashprefs
 function ssh() {
   if [ -t 1 ]; then
     signal_load_mybashprefs

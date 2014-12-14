@@ -21,6 +21,10 @@ function _ES_bootstrap() {
   fi
   _ES_send_marker "$upmarker" $funcname
   _ES_rec_rem s
+  # Originally there was a dependency system where expect-ssh detected bash
+  # functions that depended on other functions being loaded first, and that is
+  # why a while loop is done here; under the revised logic of expect-ssh, a
+  # loop here is not necessary but if needed later, it is here.
   echo "$s" | {
     while IFS=$'\n' read -r l || [ -n "$l" ]; do
       eval "$l"
