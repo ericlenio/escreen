@@ -1,24 +1,40 @@
 expect-ssh
 ==========
 
-Format of this file is described [here](https://help.github.com/articles/github-flavored-markdown/).
-
-expect-ssh is a script that wraps ssh to accomplish consistent bash shell
-settings when navigating to remote servers. Also provides a copy/paste
-interface to make it very easy to copy text from vim running on remote systems,
-or just copying stdout or files on remote systems.
+expect-ssh is an [expect](http://expect.sourceforge.net/) script that wraps ssh to accomplish consistent bash shell
+settings when ssh-ing to remote servers. If you have ever spent lots of time setting up your shell
+with the perfect settings for .bashrc, .bash_profile, .vimrc, etc., and then
+found yourself mass-copying these files to other machines you ssh to, then having to
+deal with changing any of your preferences and now having to manually propagate
+those changes out to those ssh sites, then this script presents a solution to
+avoid those types of headaches.
 
 # Requirements
 
 * Support for running on Linux and Mac OS X (though mostly built/tested on just Linux)
 * Assumes you use bash as your main shell
 * Depends on some basic standard Unix programs like gzip, grep, cut
-* Must have openssl installed
+* Also must have openssl installed
+
+# How it works
+
+**Step 1: identify your profile.** Start by creating a **profile** (see below), or using an existing profile. My personal profile is the only one so far, called `profile.lenio`.
+
+**Step 2: set up your rcfile.** The rcfile is `$HOME/.expect-ssh/config`. This is sourced by expect-ssh at init time. It may contain any valid expect commands, but in particular you should make a unique password for yourself like so:
+
+    set MYBASHPREFS_PASSWORD 2sCuk5iVuRXrGmmUjLfwFj8fZSsoldML
+
+**Step 3: ssh to a remote system.** Run the following to start a new ssh session:
+
+    expect-ssh myserver.example.com
+    
+Once ssh drops you into the shell, expect-ssh will detect that and will then proceed to upload only the essential elements of your profile. Why not upload the entire profile? To save time from having to wait, expect-ssh will only upload the minimally necessary files it needs at the time.The profile will load up with its settings and cache them into one or more files under `/tmp/.expect-ssh-x.x`. Each cached file is AES256 encrypted so that no one can read your code. Why cache? This becomes really useful when you start ssh-ing to other systems. More on that below.
+
+Initially, all of your custom bash functions are created as stubs: calling one of them will cause expect-ssh to run commands in your shell to generate the real bash function
 
 # Profiles
 
-A profile is a directory containing a set of bash command files and expect
-files to fine-tune your bash shell. Files in the profile:
+A profile is simply a subdirectory off of the git checkout containing a set of bash command files and expect files to fine-tune your bash shell. The subdirectory naming convention is `profile.ID`, where `ID` is some identifier to indicate who the profile was created for, or what it tries to achieve. Files in the profile:
 
 * *.exp: expect commands that get sourced when expect-ssh starts up, these are usually for registering new markers and handlers (see below)
 * you should have at least one .exp file that defines your PS1 marker as variable `EXPECTSSH_PS1_MARKER`

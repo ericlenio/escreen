@@ -162,7 +162,7 @@ proc get_scripts {} {
   array unset FUNCMAP
   set FUNCMAP(:remote_file) $EXPECTSSH_TMPDIR/$env(USER).FUNCMAP
   set FUNCMAP(:remote_file_prefix) $EXPECTSSH_TMPDIR/$env(USER).f.
-  foreach dir [list $EXPECTSSH_CORE $EXPECTSSH_FUNCTIONS_DIR $EXPECTSSH_PROFILE] {
+  foreach dir [list $EXPECTSSH_CORE $EXPECTSSH_PROFILE $EXPECTSSH_FUNCTIONS_DIR] {
     if { [file isdirectory $dir]==1 } {
       foreach funcname [glob -directory $dir -tails *] {
         if { $funcname eq "README" } { continue }
