@@ -1,6 +1,6 @@
 # vim:filetype=sh
 function get_ldsupport_pw() {
-  local marker=$LDSUPPORT_PW_MARKER
+  local marker="$(_ES_marker LDSUPPORT_PW)"
   local app_context=$1
   if [ -z "$app_context" ]; then
     app_context=lincdoc
@@ -8,16 +8,14 @@ function get_ldsupport_pw() {
   if [ -d /etc/lincware/lwsa ]; then
     # 3.1 or higher
     local ld_url="http://remoteadmin.lincware.com:$(sudo cat /var/run/lwsa-remoteadmin.http_port)/$app_context/login/_/system"
-    #local url=https://svn.lincware.com/lw/ldsupportpw
     local cmd="$(sudo lwsa --get_psql_connect $app_context --silent) -tAc \"select config from ld_admin.ld_config_map where key = 'ldsupport-crypt-pw'\""
-    #if [ "$db" ]; then
-      #cmd="sudo -u postgres psql $db -tAc \"select config from ld_admin.ld_config_map where key = 'ldsupport-crypt-pw'\""
-    #fi
     if [[ "$cmd" != *psql* ]]; then
       if [ -n "$app_context" ]; then
         echo "ERROR: no such app context: $app_context"
-        echo "Available contexts:"
-        sudo lwsa --list_app_context_ids
+        echo "Re-run get_ldsupport_pw, specifying one of these contexts:"
+        for ac in $(sudo lwsa --list_app_context_ids --silent); do
+          echo ${ac#localhost-8080-}
+        done
       else
         echo "ERROR: could not read lwsa configuration to get psql connect string."
       fi
@@ -25,10 +23,8 @@ function get_ldsupport_pw() {
     fi
     echo $ld_url
     local enc_pass="$(eval $cmd)"
-    local args="$(printf "ld_url {%s} enc_pass {%s}" "$ld_url" "$enc_pass" | gzip -9 -c | openssl enc -base64)"
-    # send \010. to prevent the pattern from being detected again
-    printf "%s\010.\n%s.\n" "$marker" "$args"
-    echo
+    local args=$(printf "ld_url {%s} enc_pass {%s}" "$ld_url" "$enc_pass")
+    _ES_send_marker "$marker" "$args"
   else
     local version=$(show-version)
     if [[ "$version" = 3* ]]; then
