@@ -355,7 +355,7 @@ proc escape_ps1_marker {ps1_marker} {
 }
 
 proc load_mybashprefs {EXPECTSSH_SHLVL {nest_level 0}} {
-  global PROMPT ANSI_RE_TEXT_FORMATTING EXPECTSSH_PS1_MARKER EXPECTSSH_TMPDIR MYBASHPREFS_PASSWORD
+  global PROMPT ANSI_RE_TEXT_FORMATTING EXPECTSSH_PS1_TAIL EXPECTSSH_TMPDIR MYBASHPREFS_PASSWORD
   global MARKER EXPECTSSH_MYBASHPREFS EXPECTSSH_PROFILE
   global EXPECTSSH_CORE EXPECTSSH_CORE_FCN_PREFIX
   log_user 1
@@ -380,7 +380,7 @@ proc load_mybashprefs {EXPECTSSH_SHLVL {nest_level 0}} {
   append mybashprefs "export _ES_FCN_PREFIX=$FUNCMAP(:remote_file_prefix)\n"
   append mybashprefs "export EXPECTSSH_SHLVL=\$1\n"
   append mybashprefs "export EXPECTSSH_TMPDIR=$EXPECTSSH_TMPDIR\n"
-  append mybashprefs "export EXPECTSSH_PS1_MARKER='[escape_ps1_marker $EXPECTSSH_PS1_MARKER]'\n"
+  append mybashprefs "export EXPECTSSH_PS1_TAIL='[escape_ps1_marker $EXPECTSSH_PS1_TAIL]'\n"
   append mybashprefs "export EXPECTSSH_PROFILE=$EXPECTSSH_PROFILE\n"
 
   append mybashprefs "function _ES_marker() {\n"
@@ -400,10 +400,10 @@ proc load_mybashprefs {EXPECTSSH_SHLVL {nest_level 0}} {
   #append mybashprefs {export PS1='${debian_chroot:+($debian_chroot)}\u@\H:\[\033[1;32m\]\w}
   ## NOTE: all non-printing characters in the prompt must be surrounded with \[ \]
   ## otherwise the line spacing gets all weird when typing out long bash commands
-  #append mybashprefs [regsub -all {\\033\[[^a-zA-Z]*[a-zA-Z]} $EXPECTSSH_PS1_MARKER [join { {\[} {\0} {\]} } {}]]
+  #append mybashprefs [regsub -all {\\033\[[^a-zA-Z]*[a-zA-Z]} $EXPECTSSH_PS1_TAIL [join { {\[} {\0} {\]} } {}]]
   #append mybashprefs "'\n"
 
-  foreach funcname [glob -directory $EXPECTSSH_CORE -tails *] {
+  foreach funcname [glob -nocomplain -directory $EXPECTSSH_CORE -tails *] {
     if {[regexp "^$EXPECTSSH_CORE_FCN_PREFIX" $funcname]==0} { continue }
     append mybashprefs [slurp_file $EXPECTSSH_CORE/$funcname]
   }
@@ -549,9 +549,9 @@ proc send_script {script} {
 
 # See if the custom prompt is in effect
 proc check_prompt_marker {arr} {
-  global is_marker_prompt EXPECTSSH_PS1_MARKER
+  global is_marker_prompt EXPECTSSH_PS1_TAIL
   upvar $arr arr_ref
-  set marker {*}$EXPECTSSH_PS1_MARKER
+  set marker {*}$EXPECTSSH_PS1_TAIL
   if { [info exists arr_ref(2,string)]==1 && [string trim $arr_ref(2,string)]==$marker } {
     set is_marker_prompt 1
   } else {
@@ -686,10 +686,21 @@ if {[file exists $rcfile]} {
   source $rcfile
 }
 
-foreach expfile [lsort [glob -directory $EXPECTSSH_PROFILE *.exp]] {
+# 
+# Source core .exp files
+#
+foreach expfile [lsort [glob -nocomplain -directory $EXPECTSSH_CORE *.exp]] {
   source $expfile
 }
-
+#
+# Source profile .exp files
+#
+foreach expfile [lsort [glob -nocomplain -directory $EXPECTSSH_PROFILE *.exp]] {
+  source $expfile
+}
+#
+# Source user's personal .exp files
+#
 if {[file isdirectory $EXPECTSSH_PROFILE_OVERRIDES]==1} {
   foreach expfile [lsort [glob -nocomplain -directory $EXPECTSSH_PROFILE_OVERRIDES *.exp]] {
     source $expfile
@@ -699,7 +710,7 @@ if {[file isdirectory $EXPECTSSH_PROFILE_OVERRIDES]==1} {
 set PROMPT "(?:"
 append PROMPT "((?!:)(?:#|\\\$)(?:$ANSI_RE_TEXT_FORMATTING)* (?:$ANSI_RE_GENERAL)*$)"
 append PROMPT "|"
-append PROMPT "([regsub -all {([\[])} $EXPECTSSH_PS1_MARKER [join { {\\} {\1} } {}]])(?:$ANSI_RE_GENERAL)*$"
+append PROMPT "([regsub -all {([\[])} $EXPECTSSH_PS1_TAIL [join { {\\} {\1} } {}]])(?:$ANSI_RE_GENERAL)*$"
 append PROMPT ")"
 
 if {[info exists env(EXPECTSSH_SHLVL)] == 1} {
