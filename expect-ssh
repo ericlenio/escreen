@@ -42,9 +42,8 @@ array set MARKER {}
 set OS [exec uname -s]
 set LOGFILE $EXPECTSSH_TMPDIR/$env(USER).log
 match_max 10000
-set configdir "$env(HOME)/.expect-ssh"
-set rcfile "$configdir/config"
-set EXPECTSSH_FUNCTIONS_DIR "$configdir/functions.d"
+set EXPECTSSH_CONFIGDIR "$env(HOME)/.expect-ssh"
+set rcfile "$EXPECTSSH_CONFIGDIR/config"
 set is_marker_prompt 0
 array set load_mybashprefs_args {}
 
@@ -157,22 +156,19 @@ proc slurp_file {f} {
 # User custom functions
 #
 proc get_scripts {} {
-  global EXPECTSSH_FUNCTIONS_DIR EXPECTSSH_TMPDIR EXPECTSSH_PROFILE EXPECTSSH_CORE env
+  global EXPECTSSH_PROFILE_OVERRIDES EXPECTSSH_TMPDIR EXPECTSSH_PROFILE EXPECTSSH_CORE env
   global EXPECTSSH_CORE_FCN_PREFIX
   array unset FUNCMAP
   set FUNCMAP(:remote_file) $EXPECTSSH_TMPDIR/$env(USER).FUNCMAP
   set FUNCMAP(:remote_file_prefix) $EXPECTSSH_TMPDIR/$env(USER).f.
-  foreach dir [list $EXPECTSSH_CORE $EXPECTSSH_PROFILE $EXPECTSSH_FUNCTIONS_DIR] {
+  foreach dir [list $EXPECTSSH_CORE $EXPECTSSH_PROFILE $EXPECTSSH_PROFILE_OVERRIDES] {
     if { [file isdirectory $dir]==1 } {
-      foreach funcname [glob -directory $dir -tails *] {
+      foreach funcname [glob -nocomplain -directory $dir -tails *] {
         if { $funcname eq "README" } { continue }
         if {[regexp "^$EXPECTSSH_CORE_FCN_PREFIX" $funcname]==1} { continue }
         set func_def [slurp_file $dir/$funcname]
         set FUNCMAP($funcname) ""
-        #set FUNCMAP($funcname,file) $dir/$funcname
-        #set FUNCMAP($funcname,md5) [compute_md5 $func_def]
         set FUNCMAP($funcname,defn) $func_def
-        #set FUNCMAP($funcname,remote_file) $FUNCMAP(:remote_file_prefix)$funcname.$FUNCMAP($funcname,md5)
         set FUNCMAP($funcname,remote_file) $FUNCMAP(:remote_file_prefix)$funcname
       }
     }
@@ -525,7 +521,7 @@ proc strip_comments {script} {
   return [regsub -all {(^|\n)\s*#(?!#)[^\n]*\n} $script {\1}]
 }
 
-proc send_script { script } {
+proc send_script {script} {
   # split into manageable chunks that will not exceed terminal driver
   # buf size
   set n -1 
@@ -647,7 +643,7 @@ proc process_keystroke {c} {
 
 set options {
   { debug "" "turn on debug mode" }
-  { shell "" "don't ssh but instead run a local bash shell" }
+  { shell "" "don't ssh but instead just run a bash shell" }
   { profile.arg profile.lenio "choose which profile to use for custom functions/markers/handlers" }
   { timeout.arg 10 "expect pattern timeout value" }
 }
@@ -656,7 +652,7 @@ set usage "expect-ssh: an ssh wrapper/replacement tool.\n"
 append usage "All arguments other than the ones below are passed directly to ssh.\n"
 append usage "While inside any session, type these at a prompt:\n"
 append usage "  ~d      toggle debug mode (writes to $LOGFILE)\n"
-append usage "  ~i      load bash functions/preferences\n"
+append usage "  ~i      force reload bash functions/preferences\n"
 append usage "  ~u      upload file (to ssh session)\n"
 append usage "  ~k      kill expect: useful if running screen, and you\n"
 append usage "          want to resume screen from another desktop\n"
@@ -673,6 +669,7 @@ if { $def_timeout != $timeout } {
   send_user "Timeout set to: $timeout\n"
 }
 set EXPECTSSH_PROFILE [file dirname $argv0]/$opts(profile)
+set EXPECTSSH_PROFILE_OVERRIDES $EXPECTSSH_CONFIGDIR/$opts(profile)
 set EXPECTSSH_CORE_FCN_PREFIX _ES_
 set EXPECTSSH_CORE [file dirname $argv0]/core
 
@@ -691,6 +688,12 @@ if {[file exists $rcfile]} {
 
 foreach expfile [lsort [glob -directory $EXPECTSSH_PROFILE *.exp]] {
   source $expfile
+}
+
+if {[file isdirectory $EXPECTSSH_PROFILE_OVERRIDES]==1} {
+  foreach expfile [lsort [glob -nocomplain -directory $EXPECTSSH_PROFILE_OVERRIDES *.exp]] {
+    source $expfile
+  }
 }
 
 set PROMPT "(?:"
