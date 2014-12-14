@@ -158,6 +158,7 @@ proc slurp_file {f} {
 #
 proc get_scripts {} {
   global EXPECTSSH_FUNCTIONS_DIR EXPECTSSH_TMPDIR EXPECTSSH_PROFILE EXPECTSSH_CORE env
+  global EXPECTSSH_CORE_FCN_PREFIX
   array unset FUNCMAP
   set FUNCMAP(:remote_file) $EXPECTSSH_TMPDIR/$env(USER).FUNCMAP
   set FUNCMAP(:remote_file_prefix) $EXPECTSSH_TMPDIR/$env(USER).f.
@@ -165,6 +166,7 @@ proc get_scripts {} {
     if { [file isdirectory $dir]==1 } {
       foreach funcname [glob -directory $dir -tails *] {
         if { $funcname eq "README" } { continue }
+        if {[regexp "^$EXPECTSSH_CORE_FCN_PREFIX" $funcname]==1} { continue }
         set func_def [slurp_file $dir/$funcname]
         set FUNCMAP($funcname) ""
         #set FUNCMAP($funcname,file) $dir/$funcname
@@ -350,16 +352,18 @@ proc load_mybashprefs_handler {decoded_args} {
 proc load_mybashprefs {EXPECTSSH_SHLVL {nest_level 0}} {
   global PROMPT ANSI_RE_TEXT_FORMATTING EXPECTSSH_PS1_MARKER EXPECTSSH_TMPDIR MYBASHPREFS_PASSWORD
   global MARKER EXPECTSSH_MYBASHPREFS EXPECTSSH_PROFILE
+  global EXPECTSSH_CORE EXPECTSSH_CORE_FCN_PREFIX
   log_user 1
   # TO DO: verify we are in bash
-  #send " echo 'test for bash'\r"
-  #expect {
-    #-re "\ntest for bash\r.*$PROMPT" {}
-    #timeout {
-      #send_error "timeout in load_mybashprefs while testing for bash\n"
-      #return
-    #}
-  #}
+  send " echo \$BASH-\r"
+  expect {
+    -ex "\n-" { send_user "not a bash shell"; return }
+    -ex "\n/" {}
+    timeout {
+      send_error "timeout in load_mybashprefs while testing for bash\n"
+      return
+    }
+  }
   array set FUNCMAP [get_scripts]
 
   set mybashprefs ""
@@ -394,132 +398,13 @@ proc load_mybashprefs {EXPECTSSH_SHLVL {nest_level 0}} {
   #append mybashprefs [regsub -all {\\033\[[^a-zA-Z]*[a-zA-Z]} $EXPECTSSH_PS1_MARKER [join { {\[} {\0} {\]} } {}]]
   #append mybashprefs "'\n"
 
-  append mybashprefs {function _ES_source_script() {
-  local script=$1
-  if [ ! -e "$script" ]; then
-    echo "No such file"
-    return
-  fi
-  local c
-  c="$(openssl enc -a -d -aes256 -in $script)" && eval "$c"
-}
-export -f _ES_source_script
-
-function _ES_rec_rem() {
-  # v is the name of variable we are going to set so caller can
-  # get the function
-  local v=$1
-  local l
-  # Delimit the input with a space, and after each line is sent send \r so the
-  # terminal does not scroll
-  local _s
-  while true; do
-    read -d ' ' l
-    [ "$l" = . ] && break
-    _s+=$l$'\n'
-    printf "\015"
-  done
-  eval $v='$(echo "$_s"|openssl enc -d -base64|gzip -d -c)'
-}
-export -f _ES_rec_rem
-
-function _ES_send_marker() {
-  local marker="$1"
-  local args=$(echo -n "$2"|gzip -9 -c|openssl enc -base64)
-  local l
-  # pass a \010 (backspace) character to erase last character of the pattern so
-  # that expect-ssh only processes this signal 1 time ... else when inside
-  # screen it would potentially get re-executed from a resumed session.
-  printf "%s\010.\n" "$marker"
-  printf "$args" | {
-    while IFS=$'\n' read -r l || [ -n "$l" ]; do
-      printf "%s\015" $l
-    done
-  }
-  # send terminating period for the pattern to match
-  printf ".\n"
-}
-export -f _ES_send_marker
-
-function _ES_set_loaded() {
-  local funcname=$1
-  [ -z "$funcname" ] && return
-  echo "$EXPECTSSH_LOADED_FUNCS" | grep -q -w $funcname || {
-    [ -n "$EXPECTSSH_LOADED_FUNCS" ] && EXPECTSSH_LOADED_FUNCS+=" "
-    EXPECTSSH_LOADED_FUNCS+=$funcname
-  }
-  export EXPECTSSH_LOADED_FUNCS
-}
-export -f _ES_set_loaded
-
-}
-  #
-  # _ES_gen_stub generates a stub function for each user's custom function.
-  #
-  append mybashprefs "function _ES_gen_stub() {\n"
-  append mybashprefs "local marker=\$(_ES_marker UPLOAD_SCRIPT)\n"
-  append mybashprefs {local funcname=$1
-  if [ -z "$(declare -F $funcname)" ]; then
-    local f="function $funcname() { "
-    f+='_ES_bootstrap '$funcname' "$@";'
-    f+='}'
-    eval $f
-    export -f $funcname
-    unalias $funcname 2>/dev/null
-    #echo "generated stub function: $funcname"
-  #else
-    #echo "skip generating stub for $funcname: function already exists"
-  fi
-}
-  append mybashprefs "}; export -f _ES_gen_stub\n"
-  #
-  # _ES_bootstrap bootstraps a function
-  #
-  append mybashprefs "function _ES_bootstrap() {\n"
-  append mybashprefs "local pwmarker=\$(_ES_marker GET_SCRIPT_PW)\n"
-  append mybashprefs "local upmarker=\$(_ES_marker UPLOAD_SCRIPT)\n"
-  append mybashprefs {
-    local funcname=$1
-    local f=$_ES_FCN_PREFIX$funcname
-    local h s l pw
-    local import
-    # Associative array will have funcname, pw, script
-    declare -A import
-    if [ -f $f ]; then
-      _ES_send_marker "$pwmarker" $funcname
-      s="$(openssl enc -d -a -aes256 -in $f|gzip -d -c)" && {
-        eval "$s" && _ES_set_loaded $funcname && "$@"
-        return
-      }
-      # fall through to below, re-upload and cache the script
-    fi
-
-    _ES_send_marker "$upmarker" $funcname
-    _ES_rec_rem s
-    echo "$s" | {
-      while IFS=$'\n' read -r l || [ -n "$l" ]; do
-        eval "$l"
-        f=$_ES_FCN_PREFIX${import[funcname]}
-        [ ! -f $f ] && touch $f && chmod 666 $f
-        echo "${import[script]}" > $f
-        eval "$(echo "${import[script]}"|pw="${import[pw]}" openssl enc -d -a -aes256 -pass env:pw|gzip -d -c)" && _ES_set_loaded ${import[funcname]}
-      done
-    }
-    "$@"
-  }
-  append mybashprefs "}; export -f _ES_bootstrap\n"
-  #
-  # escape the regex for the PS1 marker
-  append mybashprefs {function _ES_eps1m() {
-    echo "$EXPECTSSH_PS1_MARKER"|perl -pe 's{(\\033\[[^a-zA-Z]*[a-zA-Z])}{\\[$1\\]}g'
-    }
-    export -f _ES_eps1m
+  foreach funcname [glob -directory $EXPECTSSH_CORE -tails *] {
+    if {[regexp "^$EXPECTSSH_CORE_FCN_PREFIX" $funcname]==0} { continue }
+    append mybashprefs [slurp_file $EXPECTSSH_CORE/$funcname]
   }
 
-  set n 1
   foreach funcname [lsort [array names FUNCMAP -regexp {^\w+$}]] {
     append mybashprefs "_ES_gen_stub $funcname\n"
-    incr n
   }
 
   set bashrc $EXPECTSSH_PROFILE/.bashrc
@@ -530,11 +415,10 @@ export -f _ES_set_loaded
   # unset $c, set below
   append mybashprefs "unset c\n"
   #
-  # Finally: END of function _ES_core
+  # END of function _ES_core
   #
   append mybashprefs "}\n"
   append mybashprefs "export -f _ES_core\n"
-  #append mybashprefs "_ES_core\n"
   set mybashprefs [strip_comments $mybashprefs]
 
   set pass [compute_pw $mybashprefs]
@@ -780,6 +664,7 @@ if { $def_timeout != $timeout } {
   send_user "Timeout set to: $timeout\n"
 }
 set EXPECTSSH_PROFILE [file dirname $argv0]/$opts(profile)
+set EXPECTSSH_CORE_FCN_PREFIX _ES_
 set EXPECTSSH_CORE [file dirname $argv0]/core
 
 #

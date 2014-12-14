@@ -1,0 +1,35 @@
+# vim:filetype=sh
+#
+# _ES_bootstrap bootstraps a function
+#
+function _ES_bootstrap() {
+  local pwmarker="$(_ES_marker GET_SCRIPT_PW)"
+  local upmarker="$(_ES_marker UPLOAD_SCRIPT)"
+  local funcname=$1
+  local f=$_ES_FCN_PREFIX$funcname
+  local h s l pw
+  local import
+  # Associative array will have funcname, pw, script
+  declare -A import
+  if [ -f $f ]; then
+    _ES_send_marker "$pwmarker" $funcname
+    s="$(openssl enc -d -a -aes256 -in $f|gzip -d -c)" && {
+      eval "$s" && _ES_set_loaded $funcname && "$@"
+      return
+    }
+    # fall through to below, re-upload and cache the script
+  fi
+  _ES_send_marker "$upmarker" $funcname
+  _ES_rec_rem s
+  echo "$s" | {
+    while IFS=$'\n' read -r l || [ -n "$l" ]; do
+      eval "$l"
+      f=$_ES_FCN_PREFIX${import[funcname]}
+      [ ! -f $f ] && touch $f && chmod 666 $f
+      echo "${import[script]}" > $f
+      eval "$(echo "${import[script]}"|pw="${import[pw]}" openssl enc -d -a -aes256 -pass env:pw|gzip -d -c)" && _ES_set_loaded ${import[funcname]}
+    done
+  }
+  "$@"
+}
+export -f _ES_bootstrap

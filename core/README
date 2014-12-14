@@ -1,0 +1,4 @@
+Core functions are here. Anything here that begins with
+$EXPECTSSH_CORE_FCN_PREFIX is considered an essential core function, and is
+always loaded at init time. Otherwise they are non-essential functions (but
+still considered generic enough to be part of the core of the system).

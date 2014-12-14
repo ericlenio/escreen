@@ -1,0 +1,18 @@
+# vim:filetype=sh
+function _ES_send_marker() {
+  local marker="$1"
+  local args=$(echo -n "$2"|gzip -9 -c|openssl enc -base64)
+  local l
+  # pass a \010 (backspace) character to erase last character of the pattern so
+  # that expect-ssh only processes this signal 1 time ... else when inside
+  # screen it would potentially get re-executed from a resumed session.
+  printf "%s\010.\n" "$marker"
+  printf "$args" | {
+    while IFS=$'\n' read -r l || [ -n "$l" ]; do
+      printf "%s\015" $l
+    done
+  }
+  # send terminating period for the pattern to match
+  printf ".\n"
+}
+export -f _ES_send_marker

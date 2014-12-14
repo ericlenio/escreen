@@ -1,0 +1,18 @@
+# vim:filetype=sh
+function _ES_rec_rem() {
+  # v is the name of variable we are going to set so caller can
+  # get the function
+  local v=$1
+  local l
+  # Delimit the input with a space, and after each line is sent send \r so the
+  # terminal does not scroll
+  local _s
+  while true; do
+    read -d ' ' l
+    [ "$l" = . ] && break
+    _s+=$l$'\n'
+    printf "\015"
+  done
+  eval $v='$(echo "$_s"|openssl enc -d -base64|gzip -d -c)'
+}
+export -f _ES_rec_rem
