@@ -11,8 +11,12 @@ function _ES_rec_rem() {
     read -d ' ' l
     [ "$l" = . ] && break
     _s+=$l$'\n'
-    printf "\015"
+    # print to stderr in case stdout has been redirected, e.g. user invoked
+    # function like so: myfunc | less
+    printf "\015" >&2
   done
+  # special case if stdout is piped to something that buffers, like less
+  [ ! -t 1 ] && printf ". " >&2
   eval $v='$(echo "$_s"|openssl enc -d -base64|gzip -d -c)'
 }
 export -f _ES_rec_rem

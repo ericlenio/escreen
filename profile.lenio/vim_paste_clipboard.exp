@@ -1,9 +1,9 @@
 _ES_register_marker VIM_PASTE_CLIPBOARD vim_paste_clipboard
 
 proc vim_paste_clipboard {-} {
-  global OS PROMPT ANSI_RE_SHOW_CURSOR
+  global OS EXPECTSSH_PROMPT ANSI_RE_SHOW_CURSOR
   send ":shell\r"
-  expect -re $PROMPT
+  expect -re $EXPECTSSH_PROMPT
   # encode the clipboard data and send it across the wire, decoding it on the
   # other end, and store it in the VIM_CLIPBOARD file. Leading space before
   # commands so as to not save them to history
@@ -25,7 +25,7 @@ proc vim_paste_clipboard {-} {
   }
   send ". "
   expect ". "
-  expect -re $PROMPT
+  expect -re $EXPECTSSH_PROMPT
   send " exit\r"
   expect {
     -re $ANSI_RE_SHOW_CURSOR {

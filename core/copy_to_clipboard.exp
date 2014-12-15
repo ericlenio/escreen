@@ -1,7 +1,7 @@
 _ES_register_marker COPY_TO_CLIPBOARD copy_to_clipboard_handler
 
 proc copy_to_clipboard_handler {clipboard_data} {
-  global PROMPT OS
+  global OS
   set max_clipboard_data_len 1000000
   set content {}
   set l 0

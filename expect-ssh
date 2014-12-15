@@ -196,7 +196,7 @@ proc download_default_file_handler {decoded_args} {
 }
 
 proc get_download_filename {default_file_name} {
-  global PROMPT OS spawn_id
+  global EXPECTSSH_PROMPT OS spawn_id
   set default_outfile "/tmp/$default_file_name"
   set outfile ""
   set main_spawn_id $spawn_id
@@ -245,7 +245,7 @@ proc download_data_handler {decoded_args} {
 # Upload a local file to the remote session.
 #
 proc upload_file {} {
-  global PROMPT OS spawn_id
+  global EXPECTSSH_PROMPT OS spawn_id
   set bashscript {function get_upload_file() {
     local f
     local yn
@@ -286,7 +286,7 @@ proc upload_file {} {
     -re "\n.*aborting" {
       return
     }
-    -re $PROMPT
+    -re $EXPECTSSH_PROMPT
   }
   send " exec 3> >(/usr/bin/openssl enc -base64 -d | gzip -d -c > \"$outfile\")\r"
   send { while true; do read -d' ' l; [ "$l" = . ] && break; printf "%s\n" $l >&3; printf "\015"; done; exec 3>&-}
@@ -309,7 +309,7 @@ proc upload_file {} {
   send ". "
   expect ". "
   log_user 1
-  expect -re $PROMPT
+  expect -re $EXPECTSSH_PROMPT
 }
 
 proc load_mybashprefs_handler {decoded_args} {
@@ -333,7 +333,7 @@ proc escape_ps1_marker {ps1_marker} {
 }
 
 proc load_mybashprefs {EXPECTSSH_SHLVL {nest_level 0}} {
-  global PROMPT ANSI_RE_TEXT_FORMATTING EXPECTSSH_PS1_TAIL EXPECTSSH_TMPDIR MYBASHPREFS_PASSWORD
+  global EXPECTSSH_PROMPT ANSI_RE_TEXT_FORMATTING EXPECTSSH_PS1_TAIL EXPECTSSH_TMPDIR MYBASHPREFS_PASSWORD
   global MARKER EXPECTSSH_MYBASHPREFS EXPECTSSH_PROFILE
   global EXPECTSSH_CORE EXPECTSSH_CORE_FCN_PREFIX
   log_user 1
@@ -413,7 +413,7 @@ proc load_mybashprefs {EXPECTSSH_SHLVL {nest_level 0}} {
       set password_was_entered 1
       exp_continue
     }
-    -re "(?:bad decrypt|bad magic number|error reading input file|No such file or directory).*$PROMPT" {
+    -re "(?:bad decrypt|bad magic number|error reading input file|No such file or directory).*$EXPECTSSH_PROMPT" {
       if { $nest_level > 0 } {
         # do not get in recursive loop attempting to upload + write out bash prefs
         return "NOT OK"
@@ -426,13 +426,13 @@ proc load_mybashprefs {EXPECTSSH_SHLVL {nest_level 0}} {
       # "typeahead buffer" MAX_INPUT
       # "getconf -a|grep MAX_INPUT" may help determine this value
       send "c=\$(history|tail -1|awk '{print \$1}') && history -d \$c && history -d \$((\$c-1)) && HISTCONTROL=ignoreboth:erasedups\r"
-      expect -re $PROMPT
+      expect -re $EXPECTSSH_PROMPT
       send " d=$EXPECTSSH_TMPDIR; \[ ! -d \$d ] && { mkdir \$d; chmod 1777 \$d; }\r"
-      expect -re $PROMPT
+      expect -re $EXPECTSSH_PROMPT
       #send_user "uploading $EXPECTSSH_MYBASHPREFS ...\n"
       # Note the leading space so it is not saved in bash history
       send " touch \$f; chmod 666 \$f\r"
-      expect -re $PROMPT
+      expect -re $EXPECTSSH_PROMPT
       log_user 0
       send " exec 3< <(echo '$pass')\r"
       expect -re {(.*\r)}
@@ -440,7 +440,7 @@ proc load_mybashprefs {EXPECTSSH_SHLVL {nest_level 0}} {
       regsub {'(.*)'} $expect_out(1,string) '[regsub -all . $pass *]' echoline
       send_user $echoline\n
       log_user 1
-      expect -re $PROMPT
+      expect -re $EXPECTSSH_PROMPT
       # Delimit the input with a space, and after each line is sent send \r so
       # the terminal does not scroll
       send " exec 4> >(openssl enc -d -base64 | gzip -d -c | openssl enc -a -aes256 -pass fd:3 -out \$f)\r"
@@ -448,10 +448,10 @@ proc load_mybashprefs {EXPECTSSH_SHLVL {nest_level 0}} {
       send \r
       expect -re \r\n$
       send_script $mybashprefs 
-      expect -re $PROMPT
+      expect -re $EXPECTSSH_PROMPT
       return [load_mybashprefs $EXPECTSSH_SHLVL 1]
     }
-    -re $PROMPT {
+    -re $EXPECTSSH_PROMPT {
       # sometimes the prompt can be detected BEFORE we have had a chance to get
       # to openssl's password prompt ...
       if { $password_was_entered == 0 } { exp_continue }
@@ -536,7 +536,7 @@ proc check_prompt_marker {arr} {
 }
 
 proc main_prompt_checker {arr} {
-  global stdin_buf interact_out expect_out load_mybashprefs_args PROMPT
+  global stdin_buf interact_out expect_out load_mybashprefs_args EXPECTSSH_PROMPT
   set stdin_buf ""
   if { [array size load_mybashprefs_args] > 0 } {
     if { [check_prompt_marker $arr] == 0 } {
@@ -546,7 +546,7 @@ proc main_prompt_checker {arr} {
           send " export EXPECTSSH_IN_SCREEN=1 && "
           send {printf "\033k${HOSTNAME}\033\134"}
           send \r
-          expect -re $PROMPT
+          expect -re $EXPECTSSH_PROMPT
         }
         if { [info exists load_mybashprefs_args(CMD_ARRAY)] > 0
           && $load_mybashprefs_args(CMD_ARRAY) != "declare -a CMD_ARRAY='()'"
@@ -567,7 +567,7 @@ proc process_keystroke {c} {
   # bash prefs if user types in that sequence ... cuts down on false positives
   # if say we are inside vim and use that sequence. Must do it by monitoring 1
   # keystroke at a time, putting keystrokes into buffer variable stdin_buf.
-  global stdin_buf env LOGFILE PROMPT
+  global stdin_buf env LOGFILE EXPECTSSH_PROMPT
   append stdin_buf $c
   set buflen [string length $stdin_buf]
   if { $stdin_buf == "~i" } {
@@ -682,11 +682,11 @@ if {[file isdirectory $EXPECTSSH_PROFILE_OVERRIDES]==1} {
   }
 }
 
-set PROMPT "(?:"
-append PROMPT "((?!:)(?:#|\\\$)(?:$ANSI_RE_TEXT_FORMATTING)* (?:$ANSI_RE_GENERAL)*$)"
-append PROMPT "|"
-append PROMPT "([regsub -all {([\[])} $EXPECTSSH_PS1_TAIL [join { {\\} {\1} } {}]])(?:$ANSI_RE_GENERAL)*$"
-append PROMPT ")"
+set EXPECTSSH_PROMPT "(?:"
+append EXPECTSSH_PROMPT "((?!:)(?:#|\\\$)(?:$ANSI_RE_TEXT_FORMATTING)* (?:$ANSI_RE_GENERAL)*$)"
+append EXPECTSSH_PROMPT "|"
+append EXPECTSSH_PROMPT "([regsub -all {([\[])} $EXPECTSSH_PS1_TAIL [join { {\\} {\1} } {}]])(?:$ANSI_RE_GENERAL)*$"
+append EXPECTSSH_PROMPT ")"
 
 if {[info exists env(EXPECTSSH_SHLVL)] == 1} {
   set env(EXPECTSSH_SHLVL) [expr $env(EXPECTSSH_SHLVL) + 1]
@@ -733,7 +733,7 @@ interact {
   # "All the patterns before the -o apply to the user keystrokes. All the
   # patterns after the -o apply to the spawned process."
   -o
-  -nobuffer -re $PROMPT { main_prompt_checker interact_out }
+  -nobuffer -re $EXPECTSSH_PROMPT { main_prompt_checker interact_out }
   -nobuffer -re $marker_re {
     set marker_idx $interact_out(1,string)
     _ES_run_marker_handler $marker_idx
