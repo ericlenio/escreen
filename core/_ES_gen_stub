@@ -3,7 +3,6 @@
 # _ES_gen_stub generates a stub function for each user's custom function.
 #
 function _ES_gen_stub() {
-  local marker="$(_ES_marker UPLOAD_SCRIPT)"
   local funcname=$1
   if [ -z "$(declare -F $funcname)" ]; then
     local f="function $funcname() { "
