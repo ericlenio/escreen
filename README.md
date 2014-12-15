@@ -14,7 +14,7 @@ There is also a handy copy/paste interface for vim (copies to your system
 clipboard), a bash function to copy files or stdin to your system clipboard,
 the ability to easily upload files to a remote ssh session (yes sftp can be
 used, but with expect-ssh you can do it right in the middle of your ssh
-session), and similarly download files from that ssh session.
+session), and similarly download files from a ssh session.
 
 # Requirements
 
