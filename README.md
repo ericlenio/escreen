@@ -10,6 +10,12 @@ changing any of your preferences and now having to manually propagate those
 changes out to those ssh sites, then this script presents a solution to avoid
 those types of headaches.
 
+There is also a handy copy/paste interface for vim (copies to your system
+clipboard), a bash function to copy files or stdin to your system clipboard,
+the ability to easily upload files to a remote ssh session (yes sftp can be
+used, but with expect-ssh you can do it right in the middle of your ssh
+session), and similarly download files from that ssh session.
+
 # Requirements
 
 * Support for running on Linux and Mac OS X (though mostly built/tested on just Linux)
@@ -30,8 +36,10 @@ so:
 
     set MYBASHPREFS_PASSWORD 2sCuk5iVuRXrGmmUjLfwFj8fZSsoldML
 
-You need not memorize this password, nor is it particularly a problem if you lose it.
-Still, keep the file secured: `chmod 600 $HOME/.expect-ssh/config`.
+You need be too concerned about this password, nor is it particularly a problem
+if you lose it.  Worst case is you make a new password and all cached files
+will have to be re-cached (which will happen automatically).  Still, keep the
+file secured: `chmod 600 $HOME/.expect-ssh/config`.
 
 **Step 3: ssh to a remote system.** Run the following to start a new ssh session:
 
@@ -131,14 +139,15 @@ quickly copy/paste between 2 screen windows. To use:
 
 * go into vim's [visual mode](http://vimdoc.sourceforge.net/htmldoc/visual.html) by pressing `v`
 * do vim cursor motion sequences to select the desired text
-* press ctrl-C to copy
+* press ctrl-C to copy (it copies to your system clipboard)
 * switch to the other window (which is presumably also running vim)
 * put the cursor at the position you want to paste to
+* do NOT put vim into insert mode
 * press ctrl-V
 
-Copying text actually copies to the X windows primary selection (system
-clipboard if on Mac), so you can also ctrl-V (command-V if on Mac) the selected
-text from vim into some other application.
+Since copying text actually copies to your system clipboard, you can also
+ctrl-V (command-V if on Mac) the text you selected from vim into some other
+application.
 
 ## Other core bash functions
 
@@ -166,5 +175,5 @@ Expect files can use the following helper functions:
 
 * Due to the way the upload code works, if a you call a bash function that is still the stub version you must not redirect stderr, else expect-ssh never will detect the proper markers to properly execute function
 * Again if a function is still just a stub, be careful calling it in a pipeline. Each command in a pipeline is executed in its own subshell, so the function is exported in the subshell so parent never "sees" it and the stub remains in the parent.
-* A stub can only work in a pipeline only if it is the first process in the pipeline.
+* A stub can work in a pipeline only if it is the first process in the pipeline.
 * Handlers should not have a return value, else the procedure that invokes the handler will flag it as an error.
