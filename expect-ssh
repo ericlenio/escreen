@@ -181,7 +181,8 @@ proc get_scripts {} {
   foreach funcname $flist {
     set FUNCMAP($funcname,defn) [strip_comments $FUNCMAP($funcname,defn)]
   }
-  set FUNCMAP(:fcnlist) [join [lsort [array names FUNCMAP -regexp {^\w+$}]] "\n"]
+  # note the extra \n at the end: so that md5 computes properly
+  set FUNCMAP(:fcnlist) [join [lsort [array names FUNCMAP -regexp {^\w+$}]] "\n"]\n
   return [array get FUNCMAP]
 }
 

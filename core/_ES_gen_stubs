@@ -5,16 +5,14 @@
 function _ES_gen_stubs() {
   local marker="$(_ES_marker GET_FUNCTION_LIST)"
   local fcnlist_md5=$1
-  local f=$EXPECTSSH_FCN_LIST
-  local fcnlist
-  [ ! -f $f ] && {
+  local fcnlist f
+  [[ ! -f $EXPECTSSH_FCN_LIST || ! ( $(openssl md5 $EXPECTSSH_FCN_LIST) =~ $fcnlist_md5 ) ]] && {
     _ES_send_marker "$marker"
     _ES_rec_rem fcnlist
+    echo "$fcnlist" > $EXPECTSSH_FCN_LIST
   }
-  echo fcnlist:$fcnlist
-  for fcn in $fcnlist; do
-    echo fcn:$fcn
-    _ES_gen_stub $fcn
+  for f in $(cat $EXPECTSSH_FCN_LIST); do
+    _ES_gen_stub $f
   done
 }
 export -f _ES_gen_stubs
