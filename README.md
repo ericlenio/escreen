@@ -36,10 +36,10 @@ so:
 
     set MYBASHPREFS_PASSWORD 2sCuk5iVuRXrGmmUjLfwFj8fZSsoldML
 
-You need be too concerned about this password, nor is it particularly a problem
-if you lose it.  Worst case is you make a new password and all cached files
-will have to be re-cached (which will happen automatically).  Still, keep the
-file secured: `chmod 600 $HOME/.expect-ssh/config`.
+You need not be too concerned about this password, nor is it particularly a
+problem if you lose it.  Worst case is you make a new password and all cached
+files will have to be re-cached (which will happen automatically).  Still, keep
+the file secured: `chmod 600 $HOME/.expect-ssh/config`.
 
 **Step 3: ssh to a remote system.** Run the following to start a new ssh session:
 
