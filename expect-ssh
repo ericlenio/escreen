@@ -87,7 +87,7 @@ proc get_marker {{idx ""}} {
   return $marker
 }
 
-proc _ES_register_marker { marker_key handler } {
+proc _ES_register_marker {marker_key handler} {
   global MARKER
   set idx [llength [array names MARKER -regexp {^(\w+)$}]]
   set MARKER($marker_key) [get_marker $idx]
@@ -96,8 +96,9 @@ proc _ES_register_marker { marker_key handler } {
   #puts "_ES_register_marker: registered new marker $marker_key with handler: $handler idx=$idx"
 }
 
-proc _ES_run_marker_handler { marker_idx } {
+proc _ES_run_marker_handler {marker_idx} {
   global MARKER ANSI_RE_GENERAL
+  regexp {^0*(\d+)} $marker_idx - marker_idx
   set encoded_args ""
   set decoded_args ""
   expect \n
@@ -359,7 +360,6 @@ proc load_mybashprefs {EXPECTSSH_SHLVL {nest_level 0}} {
   global MARKER EXPECTSSH_MYBASHPREFS EXPECTSSH_PROFILE EXPECTSSH_FCN_LIST
   global EXPECTSSH_CORE EXPECTSSH_CORE_FCN_PREFIX
   log_user 1
-  # TO DO: verify we are in bash
   send " echo \$BASH-\r"
   expect {
     -ex "\n-" { send_user "not a bash shell"; return }
@@ -370,8 +370,7 @@ proc load_mybashprefs {EXPECTSSH_SHLVL {nest_level 0}} {
     }
   }
   array set FUNCMAP [get_scripts]
-  # Take just first 8 of the md5: really only to minimize characters sent over
-  # the wire
+  # Take just first 8 of the md5: to minimize characters sent over the wire
   set fcnlist_md5 [format "%.8s" [compute_md5 $FUNCMAP(:fcnlist)]]
 
   set mybashprefs ""
