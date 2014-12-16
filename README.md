@@ -52,6 +52,17 @@ preferences at once? To save time. Because otherwise you have to wait for
 everything to upload. expect-ssh will only upload (and cache) the minimally
 necessary files it needs at the moment.
 
+**Step 3a: just run a local shell.** You can invoke expect-ssh with `-shell` to
+just run a local shell (not ssh-ing anywhere).
+
+## Keyboard shortcuts
+
+There are a few keyboard sequences you can use from a bash prompt.
+* `~u`: to upload a file (presumably you are already ssh'd somewhere). expect-ssh prompts you to pick a local file, and will always upload the file to /tmp on the remote system.
+* `~i`: to force-reload the current profile settings. Generally not necessary though.
+* `~k`: kills expect-ssh. This was added for this use case: expect-ssh is started, then GNU screen is started, later you detach your screen session and want to resume it from another PC under a fresh expect-ssh session.
+* `~d`: toggle debug mode. When toggled on, it is the output of expect's `exp_internal` command.
+
 ## Caching
 
 Any time expect-ssh uploads a file to a remote server, it will cache it under
