@@ -8,7 +8,25 @@
 package require cmdline
 package require md5
 
-regsub -- {.*origin/([\d\.]+).*} [exec bash -c "cd [file dirname $argv0] && git status --porcelain -b|grep '^##'"] {\1} GIT_BRANCH
+# shenanigans to figure out what dir the git checkout is
+proc get_expectssh_home {} {
+  set originalPath [pwd]
+  set scriptPath   $::argv0
+  set workingPath  [file dirname $::argv0]
+  while {![catch {file readlink $scriptPath} result]} {
+    cd $workingPath
+    set scriptPath  [file join [pwd] $result]
+    set workingPath [file dirname $scriptPath]
+  }
+  cd [file dirname $scriptPath]
+  set scriptPath [pwd]
+  cd $originalPath
+  return $scriptPath
+}
+
+set EXPECTSSH_HOME [get_expectssh_home]
+
+regsub -- {.*origin/([\d\.]+).*} [exec bash -c "cd $EXPECTSSH_HOME && git status --porcelain -b|grep '^##'"] {\1} GIT_BRANCH
 
 if {[string length $GIT_BRANCH]==0} {
   puts "Unable to parse git branch, stop."
@@ -140,7 +158,8 @@ proc compute_pw {s} {
   # Combine my password with md5 hash for the password to encrypt the data,
   # with the md5 in the password we can trigger a re-upload of bash prefs
   # should they change. Md5 the result to make a shorter version of the
-  # password.
+  # password. Update: take only first 8 chars for even shorter password, making
+  # the chance for a collision more likely but willing to accept that risk.
   set pass [format "%.8s" [compute_md5 $MYBASHPREFS_PASSWORD-$script_md5]]
   return $pass
 }
@@ -351,6 +370,8 @@ proc load_mybashprefs {EXPECTSSH_SHLVL {nest_level 0}} {
     }
   }
   array set FUNCMAP [get_scripts]
+  # Take just first 8 of the md5: really only to minimize characters sent over
+  # the wire
   set fcnlist_md5 [format "%.8s" [compute_md5 $FUNCMAP(:fcnlist)]]
 
   set mybashprefs ""
@@ -659,10 +680,10 @@ set timeout $opts(timeout)
 if { $def_timeout != $timeout } {
   send_user "Timeout set to: $timeout\n"
 }
-set EXPECTSSH_PROFILE [file dirname $argv0]/$opts(profile)
+set EXPECTSSH_PROFILE $EXPECTSSH_HOME/$opts(profile)
 set EXPECTSSH_PROFILE_OVERRIDES $EXPECTSSH_CONFIGDIR/$opts(profile)
 set EXPECTSSH_CORE_FCN_PREFIX _ES_
-set EXPECTSSH_CORE [file dirname $argv0]/core
+set EXPECTSSH_CORE $EXPECTSSH_HOME/core
 set EXPECTSSH_FCN_LIST $EXPECTSSH_TMPDIR/fcnlist.$env(USER)
 
 #
