@@ -1,0 +1,11 @@
+# vim:filetype=sh
+function vimf() {
+  local patt="$1"
+  if [ -z "$patt" ]; then
+    patt="*"
+  else
+    patt="*$patt*"
+  fi
+  vim $(find . ! -type d ! -wholename '*/.svn*' ! -iregex '.*\.\(jar\|pdf\|swp\|png\|class\|jpg\|gif\)' -name "$patt")
+}
+export -f vimf

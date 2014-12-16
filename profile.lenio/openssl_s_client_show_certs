@@ -1,0 +1,12 @@
+# vim:filetype=sh
+function openssl_s_client_showcerts() {
+  local hostport="$1"
+  local host=${hostport%%:[0-9]*}
+  local port=${hostport##*:}
+  if [ "$host" = "$hostport" -o "$port" = "$hostport" ]; then
+    echo "Usage: ${FUNCNAME[0]} host.example.com:port"
+    return
+  fi
+  echo | openssl s_client -showcerts -connect $host:$port
+}
+export -f openssl_s_client_showcerts

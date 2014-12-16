@@ -98,6 +98,7 @@ proc _ES_register_marker {marker_key handler} {
 
 proc _ES_run_marker_handler {marker_idx} {
   global MARKER ANSI_RE_GENERAL
+  # strip leading zeroes, else will be interpreted as octal
   regexp {^0*(\d+)} $marker_idx - marker_idx
   set encoded_args ""
   set decoded_args ""
