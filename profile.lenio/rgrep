@@ -1,0 +1,5 @@
+# vim:filetype=sh
+function rgrep() {
+  find . -type f ! -wholename './build/*' ! -wholename '*/.svn*' ! -wholename '*.class' ! -wholename '*.jar' ! -wholename '*.swp' | xargs grep "$@" 2>/dev/null
+}
+export -f rgrep
