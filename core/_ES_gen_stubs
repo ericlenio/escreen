@@ -1,0 +1,20 @@
+# vim:filetype=sh
+#
+# _ES_gen_stubs generates a stub function for all of the user's custom functions.
+#
+function _ES_gen_stubs() {
+  local marker="$(_ES_marker GET_FUNCTION_LIST)"
+  local fcnlist_md5=$1
+  local f=$EXPECTSSH_FCN_LIST
+  local fcnlist
+  [ ! -f $f ] && {
+    _ES_send_marker "$marker"
+    _ES_rec_rem fcnlist
+  }
+  echo fcnlist:$fcnlist
+  for fcn in $fcnlist; do
+    echo fcn:$fcn
+    _ES_gen_stub $fcn
+  done
+}
+export -f _ES_gen_stubs
