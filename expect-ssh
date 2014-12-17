@@ -87,6 +87,16 @@ proc get_marker {{idx ""}} {
   return $marker
 }
 
+proc get_marker_word {idx} {
+  global MARKER
+  foreach key [array names MARKER -regexp {^(\w+)$}] {
+    if {$MARKER($key,idx)==$idx} {
+      return $key
+    }
+  }
+  return "?"
+}
+
 proc _ES_register_marker {marker_key handler} {
   global MARKER
   set idx [llength [array names MARKER -regexp {^(\w+)$}]]
@@ -770,8 +780,9 @@ interact {
   # patterns after the -o apply to the spawned process."
   -o
   -nobuffer -re $EXPECTSSH_PROMPT {main_prompt_checker [array get interact_out]}
-  -re $MARKER_RE {
+  -nobuffer -re $MARKER_RE {
     set marker_idx $interact_out(1,string)
+    send_user "[get_marker_word $marker_idx] "
     _ES_run_marker_handler $marker_idx
   }
 }
