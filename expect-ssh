@@ -748,7 +748,7 @@ if {[info exists env(EXPECTSSH_SHLVL)] == 1} {
 set local_shell_only 0
 set stdin_buf ""
 
-if { $opts(shell) == 1 } {
+if { $argc==0 || $opts(shell)==1 } {
   set local_shell_only 1
 }
 if { $opts(debug) == 1 } {
