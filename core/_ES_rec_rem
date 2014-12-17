@@ -15,6 +15,7 @@ function _ES_rec_rem() {
     # function like so: myfunc | less
     printf "\015" >&2
   done
+  echo >&2
   # special case if stdout is piped to something that buffers, like less
   [ ! -t 1 ] && printf ". " >&2
   eval $v='$(echo "$_s"|openssl enc -d -base64|gzip -d -c)'

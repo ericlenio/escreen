@@ -556,11 +556,12 @@ proc send_script {script} {
       -re "\r\n$" {}
       -re "\x0d$" {}
     }
+    send_user "\033\[2K"
     if { $n > -1 } { send_user \r }
     incr n [string length $line]
     send_user [format "%*d/%*d uploaded" $precision $n $precision $c_len]
   }
-  send_user " ... DONE with upload\r\n"
+  #send_user " ... DONE with upload\r\n"
   send ".$delim"
   expect ".$delim"
   log_user 1
