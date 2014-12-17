@@ -52,8 +52,8 @@ preferences at once? To save time. Because otherwise you have to wait for
 everything to upload. expect-ssh will only upload (and cache) the minimally
 necessary files it needs at the moment.
 
-**Step 3a: just run a local shell.** You can invoke expect-ssh with `-shell` to
-just run a local shell (not ssh-ing anywhere).
+**Step 3a: just run a local shell.** You can invoke expect-ssh with `-shell`,
+or no arguments at all, to just run a local shell (not ssh-ing anywhere).
 
 ## Keyboard shortcuts
 
