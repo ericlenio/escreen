@@ -358,7 +358,7 @@ proc escape_ps1_marker {ps1_marker} {
 
 proc load_mybashprefs {EXPECTSSH_SHLVL {nest_level 0}} {
   global EXPECTSSH_PROMPT ANSI_RE_TEXT_FORMATTING EXPECTSSH_PS1_TAIL EXPECTSSH_TMPDIR MYBASHPREFS_PASSWORD
-  global MARKER MARKER_RE EXPECTSSH_MYBASHPREFS EXPECTSSH_PROFILE EXPECTSSH_FCN_LIST
+  global MARKER EXPECTSSH_MYBASHPREFS EXPECTSSH_PROFILE EXPECTSSH_FCN_LIST
   global EXPECTSSH_CORE EXPECTSSH_CORE_FCN_PREFIX
   log_user 1
   send " echo \$BASH-\r"
@@ -482,12 +482,9 @@ proc load_mybashprefs {EXPECTSSH_SHLVL {nest_level 0}} {
       # to openssl's password prompt ...
       if { $password_was_entered == 0 } { exp_continue }
     }
-    -re $MARKER_RE {
-      set marker_idx $expect_out(1,string)
-      _ES_run_marker_handler $marker_idx
-    }
     timeout { send_error "TIMEOUT in proc load_mybashprefs\r\n"; return "NOT OK" }
   }
+  expect_before
   return "OK"
 }
 
@@ -519,7 +516,7 @@ proc script_password_handler {decoded_args} {
   set pw [compute_pw $FUNCMAP($funcname,defn)]
   expect -re "password:$"
   send "$pw\r"
-  send_user "($funcname)\r\n"
+  send_user "($funcname)"
 }
 
 proc strip_comments {script} {
@@ -568,7 +565,7 @@ proc check_prompt_marker {arr} {
 }
 
 proc main_prompt_checker {arr} {
-  global stdin_buf interact_out expect_out load_mybashprefs_args EXPECTSSH_PROMPT
+  global stdin_buf load_mybashprefs_args EXPECTSSH_PROMPT
   set stdin_buf ""
   if { [array size load_mybashprefs_args] > 0 } {
     if { [check_prompt_marker $arr] == 0 } {
@@ -768,7 +765,7 @@ interact {
   # patterns after the -o apply to the spawned process."
   -o
   -nobuffer -re $EXPECTSSH_PROMPT {main_prompt_checker interact_out}
-  -nobuffer -re $MARKER_RE {
+  -re $MARKER_RE {
     set marker_idx $interact_out(1,string)
     _ES_run_marker_handler $marker_idx
   }
