@@ -359,7 +359,7 @@ proc escape_ps1_marker {ps1_marker} {
 proc load_mybashprefs {EXPECTSSH_SHLVL {nest_level 0}} {
   global EXPECTSSH_PROMPT ANSI_RE_TEXT_FORMATTING EXPECTSSH_PS1_TAIL EXPECTSSH_TMPDIR MYBASHPREFS_PASSWORD
   global MARKER EXPECTSSH_MYBASHPREFS EXPECTSSH_PROFILE EXPECTSSH_FCN_LIST
-  global EXPECTSSH_CORE EXPECTSSH_CORE_FCN_PREFIX
+  global EXPECTSSH_CORE EXPECTSSH_CORE_FCN_PREFIX MARKER_RE
   log_user 1
   send " echo \$BASH-\r"
   expect {
@@ -476,6 +476,11 @@ proc load_mybashprefs {EXPECTSSH_SHLVL {nest_level 0}} {
       send_script $mybashprefs 
       expect -re $EXPECTSSH_PROMPT
       return [load_mybashprefs $EXPECTSSH_SHLVL 1]
+    }
+    -re $MARKER_RE {
+      set marker_idx $expect_out(1,string)
+      _ES_run_marker_handler $marker_idx
+      exp_continue
     }
     -re $EXPECTSSH_PROMPT {
       # sometimes the prompt can be detected BEFORE we have had a chance to get
