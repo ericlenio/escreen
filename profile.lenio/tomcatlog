@@ -23,8 +23,6 @@ function tomcatlog() {
     esac
   done
   if [ "$op" = "edit" ]; then
-  tomcat_user=nobody
-  logfile=/var/log/Xorg.0.log
     s $tomcat_user vim -n -i NONE -c 'map <c-z> :e<cr>:echon bufname("%") " was reloaded from disk"<cr>' $logfile
   elif [ "$op" = "clear" ]; then
     sudo truncate --no-create --size 0 $logfile
