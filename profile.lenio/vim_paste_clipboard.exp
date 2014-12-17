@@ -35,7 +35,7 @@ proc vim_paste_clipboard {-} {
       expect {
         -re $ANSI_RE_SHOW_CURSOR {
           # paste contents of unnamed register
-          send ":if col(\"\$\")-col(\".\")==1|call feedkeys(\"p\")|else|call feedkeys(\"P\")|endif|echon \"Paste is complete\"\r"
+          send ":if col(\"\$\")-col(\".\")==1|call feedkeys(\"p\")|else|call feedkeys(\"P\")|endif|echon \"Pasted \" len(@\") \" characters\"\r"
         }
         -re {has changed since editing started.*\(L\)oad File: $} {}
         timeout {send_error "TIMEOUT #1 during paste, aborting"; return}
