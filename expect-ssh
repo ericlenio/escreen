@@ -557,11 +557,11 @@ proc send_script {script} {
 }
 
 # See if the custom prompt is in effect
-proc check_prompt_marker {arr} {
+proc check_prompt_marker {int_out_list} {
   global is_marker_prompt EXPECTSSH_PS1_TAIL
-  upvar $arr arr_ref
+  array set interact_out $int_out_list
   set marker {*}$EXPECTSSH_PS1_TAIL
-  if { [info exists arr_ref(2,string)]==1 && [string trim $arr_ref(2,string)]==$marker } {
+  if { [info exists interact_out(2,string)]==1 && [string trim $interact_out(2,string)]==$marker } {
     set is_marker_prompt 1
   } else {
     set is_marker_prompt 0
@@ -569,11 +569,11 @@ proc check_prompt_marker {arr} {
   return $is_marker_prompt
 }
 
-proc main_prompt_checker {arr} {
+proc main_prompt_checker {int_out_list} {
   global stdin_buf load_mybashprefs_args EXPECTSSH_PROMPT
   set stdin_buf ""
   if { [array size load_mybashprefs_args] > 0 } {
-    if { [check_prompt_marker $arr] == 0 } {
+    if { [check_prompt_marker $int_out_list] == 0 } {
       set rc [load_mybashprefs [expr $load_mybashprefs_args(EXPECTSSH_SHLVL) + 1]]
       if { $rc == "OK" } {
         if { [info exists load_mybashprefs_args(EXPECTSSH_IN_SCREEN)] > 0 && $load_mybashprefs_args(EXPECTSSH_IN_SCREEN)==1 } {
@@ -769,7 +769,7 @@ interact {
   # "All the patterns before the -o apply to the user keystrokes. All the
   # patterns after the -o apply to the spawned process."
   -o
-  -nobuffer -re $EXPECTSSH_PROMPT {main_prompt_checker interact_out}
+  -nobuffer -re $EXPECTSSH_PROMPT {main_prompt_checker [array get interact_out]}
   -re $MARKER_RE {
     set marker_idx $interact_out(1,string)
     _ES_run_marker_handler $marker_idx
