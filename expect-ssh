@@ -373,8 +373,8 @@ proc load_mybashprefs {EXPECTSSH_SHLVL {nest_level 0}} {
   log_user 1
   send " echo \$BASH-\r"
   expect {
-    -ex "\n-" { send_user "not a bash shell"; return }
-    -ex "\n/" {}
+    -re "\n-.*$EXPECTSSH_PROMPT" { send_user "not a bash shell"; return }
+    -re "\n/.*$EXPECTSSH_PROMPT" {}
     timeout {
       send_error "timeout in load_mybashprefs while testing for bash\n"
       return
