@@ -1,4 +1,8 @@
 # vim:filetype=sh
+#
+# Display a marker that expect-ssh picks up on and run the marker's
+# corresponding event handler.
+#
 function _ES_send_marker() {
   local marker="$1"
   local args=$(echo -n "$2"|gzip -9 -c|openssl enc -base64)
