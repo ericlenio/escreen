@@ -47,7 +47,7 @@ EOF
   cat > $printscreen_macro << EOF
 hardcopy_append off
 hardcopy $hardcopy_file
-screen vim $hardcopy_file
+screen bash -c "vim $hardcopy_file"
 EOF
 
   local esc='^Ee'
