@@ -106,6 +106,10 @@ proc _ES_register_marker {marker_key handler} {
   #puts "_ES_register_marker: registered new marker $marker_key with handler: $handler idx=$idx"
 }
 
+proc erase_line {} {
+  send_user "\033\[2K"
+}
+
 proc _ES_run_marker_handler {marker_idx} {
   global MARKER ANSI_RE_GENERAL
   # strip leading zeroes, else will be interpreted as octal
@@ -126,6 +130,7 @@ proc _ES_run_marker_handler {marker_idx} {
   regsub -all "\015" $encoded_args "\n" encoded_args
   # clean out any cursor movement sequences that sometimes get thrown in by screen
   regsub -all $ANSI_RE_GENERAL $encoded_args "" encoded_args
+  erase_line
 
   if {[string length [string trim $encoded_args]]>0} {
     if {[catch {
@@ -272,7 +277,7 @@ proc download_data_handler {decoded_args} {
     } err] } {
     send_error "ERROR in proc download: $err\r\n"
   }
-  return $l
+  return ""
 }
 
 #
@@ -488,7 +493,16 @@ proc load_mybashprefs {EXPECTSSH_SHLVL {nest_level 0}} {
       return [load_mybashprefs $EXPECTSSH_SHLVL 1]
     }
     -re $MARKER_RE {
+      erase_line
       set marker_idx $expect_out(1,string)
+      # save cursor position
+      send_user "\033\[s"
+      # move up 1 line
+      send_user "\033\[1A"
+      # send human friend word for the marker
+      send_user [get_marker_word $marker_idx]
+      # restore cursor position
+      send_user "\033\[u"
       _ES_run_marker_handler $marker_idx
       exp_continue
     }
@@ -556,14 +570,14 @@ proc send_script {script} {
       -re "\r\n$" {}
       -re "\x0d$" {}
     }
-    send_user "\033\[2K"
+    erase_line
     if { $n > -1 } { send_user \r }
     incr n [string length $line]
     send_user [format "%*d/%*d uploaded" $precision $n $precision $c_len]
   }
-  #send_user " ... DONE with upload\r\n"
   send ".$delim"
   expect ".$delim"
+  send_user "\015"
   log_user 1
 }
 
@@ -693,7 +707,7 @@ set EXPECTSSH_PROFILE_OVERRIDES $EXPECTSSH_CONFIGDIR/$opts(profile)
 set EXPECTSSH_CORE_FCN_PREFIX _ES_
 set EXPECTSSH_CORE $EXPECTSSH_HOME/core
 set EXPECTSSH_FCN_LIST $EXPECTSSH_TMPDIR/fcnlist.$env(USER)
-set MARKER_RE (?:^|\x07|\n|\r)[get_marker]
+set MARKER_RE (?:^|\x07|\n|\r)[get_marker]\010\.\[\r\n]
 
 #
 # Register some core handlers

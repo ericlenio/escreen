@@ -13,6 +13,6 @@ function _ES_send_marker() {
     done
   }
   # send terminating period for the pattern to match
-  printf "." >&2
+  printf ".\015" >&2
 }
 export -f _ES_send_marker
