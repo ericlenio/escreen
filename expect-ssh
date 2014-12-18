@@ -784,6 +784,7 @@ if { $local_shell_only == 1 } {
 set spawn_out_slave_name $spawn_out(slave,name)
 # force-resize: needed if on Mac in terminal full screen mode
 resize_handler
+expect -re $EXPECTSSH_PROMPT
 load_mybashprefs $env(EXPECTSSH_SHLVL)
 
 interact {
