@@ -708,7 +708,7 @@ set EXPECTSSH_PROFILE_OVERRIDES $EXPECTSSH_CONFIGDIR/$opts(profile)
 set EXPECTSSH_CORE_FCN_PREFIX _ES_
 set EXPECTSSH_CORE $EXPECTSSH_HOME/core
 set EXPECTSSH_FCN_LIST $EXPECTSSH_TMPDIR/fcnlist.$env(USER)
-set MARKER_RE (?:^|\x07|\n|\r|$ANSI_RE_GENERAL)[get_marker]\010\.\[\r\n]
+set MARKER_RE (?:^|\x07|\n|\r|$ANSI_RE_GENERAL)[get_marker]\x08\.\[\r\n]
 
 #
 # Register some core handlers
