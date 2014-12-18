@@ -88,7 +88,7 @@ EOF
 )"
 export -f psql_ld
 if [ '$assume_ssh' = 0 ]; then
-  export PS1='"'"$PS1"'"'
+  #export PS1='"'"$PS1"'"'
   echo
   echo "*************************************************************************"
   echo "* You are logged in to: $(hostname)"
