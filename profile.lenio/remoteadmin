@@ -1,0 +1,124 @@
+# vim:filetype=sh
+# Usage: remoteadmin [filter] [command ...]
+# where filter is used as a simple search filter against all currently
+# connected VMs. The user is prompted to pick the VM from a list and further
+# prompted to run either ssh or sftp to that VM.
+#
+# If a command is given we assume it is to be run on the remote VM identified
+# by the filter (and the assumption is that the filter will match on exactly 1
+# VM).
+#
+# Programmer note: this script is designed to work on Linux, Cygwin, and Mac OS
+# X. So do not use any obscure syntax or 3rd party tools which may not exist in
+# some environments, e.g., Mac OS X's bash does not support associative arrays.
+#
+#exec > >(tee >(grep ^: >$cmds) | grep -v ^:)
+#trap "rm -f $stdout $cmds; echo $stdout was deleted" EXIT INT
+
+function remoteadmin() {
+  local exec ssh_params assume_ssh
+  declare -a exec
+  declare -a ssh_params
+  local ssh_params_file=$HOME/.remoteadmin/ssh_options
+
+  local filter="$1"
+  shift
+  if [ -z "$filter" ]; then
+    filter="."
+  fi
+
+  if [ ${#@} -gt 0 ]; then
+    assume_ssh=1
+  else
+    assume_ssh=0
+  fi
+
+
+  function psql_ld() {
+    local cmd="$(sudo lwsa --get_psql_connect --silent)"
+    echo $cmd
+    eval $cmd
+  }
+
+  function get_extra_ssh_params() {
+    local hostname=$1
+    local hostname2
+    local line
+    if [ -f $ssh_params_file ]; then
+      while read -r line; do
+        if [[ $line =~ ^([-\.[:alnum:]]+)=(.+) ]]; then
+          hostname2=${BASH_REMATCH[1]}
+          if [ $hostname = $hostname2 ]; then
+            printf %s "${BASH_REMATCH[2]}"
+            return
+          fi
+        fi
+      done < $ssh_params_file
+    fi
+  }
+
+  local cmdfile=/tmp/remoteadmin.$USER
+  ssh -q -A -t remoteadmin@remoteadmin.lincware.com show_activity_log2 $filter $USER | (tee $cmdfile)
+  local ssh_op ssh_port http_port hostname
+  eval $(grep ^ssh_op= $cmdfile)
+  rm -f $cmdfile
+  # At this point, ssh_op, ssh_port, http_port, and hostname should all be set
+
+  case $ssh_op in
+    1)
+      extra_params="$(get_extra_ssh_params $hostname)"
+      if [ -n "$extra_params" ]; then
+        echo "Passing extra params to ssh: $extra_params"
+      fi
+      exec=(ssh -t -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oProxyCommand="/usr/bin/ssh -q -A -T remoteadmin@remoteadmin.lincware.com remoteadmin_port=$ssh_port" $extra_params lincdoc@remoteadmin.lincware.com)
+      bashrc=$HOME/.remoteadmin/bashrc
+      if [ ! -f $bashrc ]; then
+        bashrc=/dev/null
+      fi
+      last_arg_idx=$((${#exec[@]}-1))
+      if [[ ${exec[0]} = ssh && "${exec[$last_arg_idx]}" = lincdoc@* ]]; then
+        #exec[${#exec[@]}]='-v'
+        exec[${#exec[@]}]='bash'
+        exec[${#exec[@]}]='-l'
+        exec[${#exec[@]}]='-c'
+        exec[${#exec[@]}]='false
+eval "$(base64 --decode << EOF
+'"$((cat $bashrc; declare -f psql_ld)|base64)"'
+EOF
+)"
+export -f psql_ld
+if [ '$assume_ssh' = 0 ]; then
+  export PS1='"'"$PS1"'"'
+  echo
+  echo "*************************************************************************"
+  echo "* You are logged in to: $(hostname)"
+  echo "* Useful commands: (3.1+ only)"
+  echo "* get_ldsupport_pw: show the ldsupport password"
+  echo "* get_lwsa_password: show the lwsa password"
+  echo "* psql_ld: psql to the default lincdoc database"
+  echo "*************************************************************************"
+  exec /bin/bash --norc --noprofile
+else
+  true
+  '"$@"'
+fi
+'
+      fi
+  #echo n=${#exec[@]}
+      #exec "${exec[@]}"
+      # not exec-ing so that bash ssh function takes precedence
+      "${exec[@]}"
+      ;;
+    2)
+      exec sftp -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oProxyCommand="/usr/bin/ssh -q -A -T remoteadmin@remoteadmin.lincware.com remoteadmin_port=$ssh_port" lincdoc@remoteadmin.lincware.com
+      ;;
+    3)
+      #ldsupport_password=$(get_RA_attr ldsupport_password)
+      exec=(ssh -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oProxyCommand="/usr/bin/ssh -q -A -T remoteadmin@remoteadmin.lincware.com remoteadmin_port=$ssh_port" $extra_params lincdoc@remoteadmin.lincware.com sudo -u postgres psql -tAc "\"select config from ld_admin.ld_config_map where key = 'ldsupport-crypt-pw'\"" lincdoc )
+      ldsupport_password=$("${exec[@]}")
+      echo ldsupport_password=%xx%
+      echo
+      decrypt_ldsupport_pw $ldsupport_password
+      ;;
+  esac
+}
