@@ -7,10 +7,7 @@ function _ES_bootstrap() {
   local upmarker="$(_ES_marker UPLOAD_SCRIPT)"
   local funcname=$1
   local f=$_ES_FCN_PREFIX$funcname
-  local h s l pw
-  local import
-  # Associative array will have funcname, pw, script
-  declare -A import
+  local h s l fname pw script
   if [ -f $f ]; then
     _ES_send_marker "$pwmarker" $funcname
     s="$(openssl enc -d -a -aes256 -in $f|gzip -d -c)" && {
@@ -27,15 +24,15 @@ function _ES_bootstrap() {
   # loop here is not necessary but if needed later, it is here.
   echo "$s" | {
     while IFS=$'\n' read -r l || [ -n "$l" ]; do
-      # each line resolves to set the "import" associative array
+      # each line resolves to set fname, pw, and script
       eval "$l"
-      f=$_ES_FCN_PREFIX${import[funcname]}
+      f=$_ES_FCN_PREFIX$fname
       [ ! -f $f ] && touch $f && chmod 666 $f
       # cache the function
-      echo "${import[script]}" > $f
+      echo "$script" > $f
       # source the function to current session
       # small security risk here with password in the environment
-      eval "$(echo "${import[script]}"|pw="${import[pw]}" openssl enc -d -a -aes256 -pass env:pw|gzip -d -c)" && _ES_set_loaded ${import[funcname]}
+      eval "$(echo "$script"|pw="$pw" openssl enc -d -a -aes256 -pass env:pw|gzip -d -c)" && _ES_set_loaded $fname
     done
   }
   "$@"
