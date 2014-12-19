@@ -131,7 +131,6 @@ proc _ES_run_marker_handler {marker_idx} {
   regsub -all "\015" $encoded_args "\n" encoded_args
   # clean out any cursor movement sequences that sometimes get thrown in by screen
   regsub -all $ANSI_RE_GENERAL $encoded_args "" encoded_args
-  erase_line
 
   if {[string length [string trim $encoded_args]]>0} {
     if {[catch {
@@ -571,15 +570,14 @@ proc send_script {script} {
       -re "\r\n$" {}
       -re "\x0d$" {}
     }
-    erase_line
     if { $n > -1 } { send_user \r }
     incr n [string length $line]
     send_user [format "%*d/%*d uploaded" $precision $n $precision $c_len]
   }
+  log_user 1
   send ".$delim"
   expect ".$delim"
-  send_user "\015"
-  log_user 1
+  #send_user "\015"
 }
 
 # See if the custom prompt is in effect

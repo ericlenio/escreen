@@ -16,7 +16,8 @@ function _ES_send_marker() {
       printf "%s\015" $l >&2
     done
   }
-  # send terminating period for the pattern to match
-  printf ".\015" >&2
+  # send terminating period for the pattern to match, and erase the line to
+  # keep things looking cleaner
+  printf ".\015\033[2K" >&2
 }
 export -f _ES_send_marker
