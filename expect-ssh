@@ -404,13 +404,10 @@ proc load_mybashprefs {EXPECTSSH_SHLVL {nest_level 0}} {
   append mybashprefs "export EXPECTSSH_PROFILE=$EXPECTSSH_PROFILE\n"
 
   append mybashprefs "function _ES_marker() {\n"
-  append mybashprefs "local MARKER\n"
-  append mybashprefs "declare -A MARKER=("
   foreach marker_name [array names MARKER -regexp {^(\w+)$}] {
-    append mybashprefs "\[$marker_name]=$MARKER($marker_name) "
+    append mybashprefs "$marker_name=$MARKER($marker_name)\n"
   }
-  append mybashprefs ")\n"
-  append mybashprefs {echo ${MARKER[$1]}}
+  append mybashprefs {eval "echo \$$1"}
   append mybashprefs "\n}\n"
   append mybashprefs "export -f _ES_marker\n"
 
@@ -521,7 +518,7 @@ proc get_encrypted_func {funcname script} {
   set pw [compute_pw $script]
   set enc_script [exec /bin/bash -c {echo "$0"|gzip -9 -c|pw="$1" openssl enc -aes256 -a -pass env:pw} $script $pw]
   regsub -all "\n" $enc_script {\n} enc_script
-  return [format {import[funcname]=%s;import[pw]='%s';import[script]=$'%s'} $funcname $pw $enc_script]
+  return [format {fname=%s;pw='%s';script=$'%s'} $funcname $pw $enc_script]
 }
 
 proc upload_script_handler {decoded_args} {
