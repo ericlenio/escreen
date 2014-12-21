@@ -1,4 +1,5 @@
 # vim:filetype=sh
+#
 # Usage: remoteadmin [filter] [command ...]
 # where filter is used as a simple search filter against all currently
 # connected VMs. The user is prompted to pick the VM from a list and further
@@ -48,7 +49,7 @@ function remoteadmin() {
       while read -r line; do
         if [[ $line =~ ^([-\.[:alnum:]]+)=(.+) ]]; then
           hostname2=${BASH_REMATCH[1]}
-          if [ $hostname = $hostname2 ]; then
+          if [ ${hostname,,} = ${hostname2,,} ]; then
             printf %s "${BASH_REMATCH[2]}"
             return
           fi
