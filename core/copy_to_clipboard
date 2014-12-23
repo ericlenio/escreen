@@ -15,5 +15,11 @@ function copy_to_clipboard() {
   local c=$(perl -pe 'chomp if eof' -- "$f")
   [ -z "$c" ] && c="-"
   _ES_send_marker "$marker" "$c"
+  # This read acts as a block so if on a slower connection it gives the handler
+  # enough time to write out a status line, like copy_to_clipboard_handler
+  # which tells how many bytes were copied to the clipboard.
+  read -d ' '
+  # erase it
+  printf "\015"
 }
 export -f copy_to_clipboard
