@@ -110,9 +110,9 @@ proc erase_line {} {
   send_user "\033\[2K"
 }
 
-proc _ES_run_marker_handler {marker_idx} {
-  send_log "ENTERING _ES_run_marker_handler:$marker_idx:[get_marker_word $marker_idx]\n"
+proc _ES_run_marker_handler {marker_idx status_line} {
   global MARKER ANSI_RE_GENERAL
+  send_user $status_line
   # strip leading zeroes, else will be interpreted as octal
   regexp {^0*(\d+)} $marker_idx - marker_idx
   set encoded_args ""
@@ -125,6 +125,9 @@ proc _ES_run_marker_handler {marker_idx} {
     -re {([^\.]{1,255})} {
       append encoded_args $expect_out(1,string)
       exp_continue
+    }
+    timeout {
+      send_error "TIMEOUT reading arguments\r\n"
     }
   }
   # convert all \015 back to \n
@@ -492,15 +495,16 @@ proc load_mybashprefs {EXPECTSSH_SHLVL {nest_level 0}} {
     -re $MARKER_RE {
       erase_line
       set marker_idx $expect_out(1,string)
+      set status_line ""
       # save cursor position
-      send_user "\033\[s"
+      append status_line "\033\[s"
       # move up 1 line
-      send_user "\033\[1A"
+      append status_line "\033\[1A"
       # send human friend word for the marker
-      send_user [get_marker_word $marker_idx]
+      append status_line [get_marker_word $marker_idx]
       # restore cursor position
-      send_user "\033\[u"
-      _ES_run_marker_handler $marker_idx
+      append status_line "\033\[u"
+      _ES_run_marker_handler $marker_idx $status_line
       exp_continue
     }
     -re $EXPECTSSH_PROMPT {
@@ -794,7 +798,6 @@ interact {
   -nobuffer -re $EXPECTSSH_PROMPT {main_prompt_checker [array get interact_out]}
   -nobuffer -re $MARKER_RE {
     set marker_idx $interact_out(1,string)
-    send_user "[get_marker_word $marker_idx] "
-    _ES_run_marker_handler $marker_idx
+    _ES_run_marker_handler $marker_idx [get_marker_word $marker_idx]
   }
 }
