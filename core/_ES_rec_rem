@@ -8,7 +8,7 @@ function _ES_rec_rem() {
   # terminal does not scroll
   local _s
   while true; do
-    read -d ' ' l
+    read -d ' ' l </dev/tty
     [ "$l" = . ] && break
     _s+=$l$'\n'
     # print to stderr in case stdout has been redirected, e.g. user invoked
