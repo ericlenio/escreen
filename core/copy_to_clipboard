@@ -19,7 +19,5 @@ function copy_to_clipboard() {
   # enough time to write out a status line, like copy_to_clipboard_handler
   # which tells how many bytes were copied to the clipboard.
   read -d ' '
-  # erase it
-  printf "\015"
 }
 export -f copy_to_clipboard

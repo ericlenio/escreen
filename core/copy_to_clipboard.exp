@@ -32,6 +32,6 @@ proc copy_to_clipboard_handler {clipboard_data} {
   }
   send_user "$l bytes copied to the clipboard\r\n"
   # copy_to_clipboard is doing a read operation delimited on a space, so send
-  # that space now
-  send " "
+  # that space now, and ctrl-u to erase it
+  send " \x15"
 }
