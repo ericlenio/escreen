@@ -71,6 +71,22 @@ array set load_mybashprefs_args {}
 ##
 ##
 
+proc run_tests {} {
+  global EXPECTSSH_HOME env EXPECTSSH_PROMPT
+  set env(EXPECTSSH_SHLVL) ""
+  send_error "START test framework\n"
+  eval [list spawn -noecho] $EXPECTSSH_HOME/expect-ssh -shell
+  expect -re $EXPECTSSH_PROMPT {
+    if { [check_prompt_marker [array get expect_out]] == 0 } {
+      exp_continue
+    }
+  }
+  send uname\r
+  expect -re $EXPECTSSH_PROMPT
+  send exit\r
+  send_error "END test framework\n"
+}
+
 #
 # Optional arg is an index number, if not given then just return the regex of a
 # generic marker.
@@ -680,6 +696,7 @@ set options {
   { shell "" "don't ssh but instead just run a bash shell" }
   { profile.arg profile.lenio "choose which profile to use for custom functions/markers/handlers" }
   { timeout.arg 10 "expect pattern timeout value" }
+  { test "" "run test cases (for developers only)" }
 }
 
 set usage "expect-ssh: an ssh wrapper/replacement tool.\n"
@@ -763,6 +780,10 @@ if {[info exists env(EXPECTSSH_SHLVL)] == 1} {
 set local_shell_only 0
 set stdin_buf ""
 
+if { $opts(test) == 1 } {
+  run_tests
+  exit
+}
 if { $argc==0 || $opts(shell)==1 } {
   set local_shell_only 1
 }
