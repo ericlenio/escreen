@@ -16,9 +16,8 @@ function copy_to_clipboard() {
   [ -z "$c" ] && c="-"
   _ES_send_marker "$marker" "$c"
   # This read acts as a block so if on a slower connection it gives the handler
-  # enough time to write out a status line, like copy_to_clipboard_handler
-  # which tells how many bytes were copied to the clipboard (in the line we are
-  # about to read).
+  # enough time to write out a status line. The handler will send the status
+  # line in this read, and we just let it go to stderr so user sees it.
   read >&2 </dev/tty
 }
 export -f copy_to_clipboard
