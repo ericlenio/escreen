@@ -26,6 +26,8 @@ function get_ldsupport_pw() {
     local args=$(printf "ld_url {%s} enc_pass {%s}" "$ld_url" "$enc_pass")
     _ES_send_marker "$marker" "$args"
   else
+    local p=/etc/profile.d/lincware.sh
+    [ -e $p ] && . $p
     local version=$(show-version)
     if [[ "$version" = 3* ]]; then
       local pid=$(pgrep -U remoteadmin ssh)
