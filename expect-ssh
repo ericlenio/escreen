@@ -50,7 +50,7 @@ if {[regexp {overlay_flag} $overlay_test]==1} {
 
 set spawn_out_slave_name 0
 # for prompt, "\u001b[0m" is a possible "end of color" sequence
-set ANSI_RE_TEXT_FORMATTING {\u001b\[(?:\d+;?)*[m]}
+set ANSI_RE_TEXT_FORMATTING {\u001b\[(?:\d+;?)*m}
 set ANSI_RE_CURSOR_POSITIONING {\u001b\\\[\d+;\d+[Hf]}
 set ANSI_RE_GENERAL {\u001b\[[^a-zA-Z]*[a-zA-Z]}
 set ANSI_RE_SHOW_CURSOR {\u001b\[\?25h}
@@ -62,7 +62,6 @@ set LOGFILE $EXPECTSSH_TMPDIR/$env(USER).log
 match_max 10000
 set EXPECTSSH_CONFIGDIR "$env(HOME)/.expect-ssh"
 set rcfile "$EXPECTSSH_CONFIGDIR/config"
-set is_marker_prompt 0
 array set load_mybashprefs_args {}
 
 ##
@@ -75,7 +74,7 @@ proc run_tests {} {
   global EXPECTSSH_HOME env EXPECTSSH_PROMPT
   set env(EXPECTSSH_SHLVL) ""
   send_error "START test framework\n"
-  eval [list spawn -noecho] $EXPECTSSH_HOME/expect-ssh -shell
+  eval [list spawn -noecho] $EXPECTSSH_HOME/expect-ssh -shell -tmpdir
   expect -re $EXPECTSSH_PROMPT {
     if { [check_prompt_marker [array get expect_out]] == 0 } {
       exp_continue
@@ -390,6 +389,18 @@ proc escape_ps1_marker {ps1_marker} {
   return [regsub -all {(\\033\[[^a-zA-Z]*[a-zA-Z])} $ps1_marker {\\[\1\\]}]
 }
 
+#
+# Make a regexp out of the PS1 tail: basically, escape all left square brackets
+# and handle bash's treatment of \$, which will render a dollar sign in the
+# prompt except when root is in effect (then bash renders a pound sign).
+proc ps1_tail_regexp {} {
+  global EXPECTSSH_PS1_TAIL
+  # handle left square bracket
+  set ps1_tail_regexp [regsub -all {\x5b} $EXPECTSSH_PS1_TAIL {\\\0}]
+  # handle \$
+  return [regsub -all {\\\$} $ps1_tail_regexp {[\$#]}]
+}
+
 proc load_mybashprefs {EXPECTSSH_SHLVL {nest_level 0}} {
   global EXPECTSSH_PROMPT ANSI_RE_TEXT_FORMATTING EXPECTSSH_PS1_TAIL EXPECTSSH_TMPDIR MYBASHPREFS_PASSWORD
   global MARKER EXPECTSSH_MYBASHPREFS EXPECTSSH_PROFILE EXPECTSSH_FCN_LIST
@@ -598,23 +609,20 @@ proc send_script {script} {
 }
 
 # See if the custom prompt is in effect
-proc check_prompt_marker {int_out_list} {
-  global is_marker_prompt EXPECTSSH_PS1_TAIL
-  array set interact_out $int_out_list
-  set marker {*}$EXPECTSSH_PS1_TAIL
-  if { [info exists interact_out(2,string)]==1 && [string trim $interact_out(2,string)]==$marker } {
-    set is_marker_prompt 1
-  } else {
-    set is_marker_prompt 0
+proc check_prompt_marker {prompt_output_list} {
+  array set prompt_output $prompt_output_list
+  set ps1_tail_regexp [ps1_tail_regexp]
+  if {[info exists prompt_output(1,string)]==1 && [string length $prompt_output(1,string)]>0} {
+    return 1
   }
-  return $is_marker_prompt
+  return 0
 }
 
-proc main_prompt_checker {int_out_list} {
+proc main_prompt_checker {prompt_output_list} {
   global stdin_buf load_mybashprefs_args EXPECTSSH_PROMPT
   set stdin_buf ""
   if { [array size load_mybashprefs_args] > 0 } {
-    if { [check_prompt_marker $int_out_list] == 0 } {
+    if { [check_prompt_marker $prompt_output_list] == 0 } {
       set rc [load_mybashprefs [expr $load_mybashprefs_args(EXPECTSSH_SHLVL) + 1]]
       if { $rc == "OK" } {
         if { [info exists load_mybashprefs_args(EXPECTSSH_IN_SCREEN)] > 0 && $load_mybashprefs_args(EXPECTSSH_IN_SCREEN)==1 } {
@@ -623,7 +631,7 @@ proc main_prompt_checker {int_out_list} {
           send \r
           expect -re $EXPECTSSH_PROMPT
         }
-        if { [info exists load_mybashprefs_args(CMD_ARRAY)] > 0
+        if {[info exists load_mybashprefs_args(CMD_ARRAY)] > 0
           && $load_mybashprefs_args(CMD_ARRAY) != "declare -a CMD_ARRAY='()'"
           && [string length $load_mybashprefs_args(CMD_ARRAY)]>0
           } {
@@ -697,6 +705,7 @@ set options {
   { profile.arg profile.lenio "choose which profile to use for custom functions/markers/handlers" }
   { timeout.arg 10 "expect pattern timeout value" }
   { test "" "run test cases (for developers only)" }
+  { tmpdir "" "create a new temp directory for temp space; auto-delete when expect-ssh finishes" }
 }
 
 set usage "expect-ssh: an ssh wrapper/replacement tool.\n"
@@ -761,10 +770,15 @@ if {[file isdirectory $EXPECTSSH_PROFILE_OVERRIDES]==1} {
   }
 }
 
+# note: check_prompt_marker has logic that depends on the parenthesized
+# patterns in EXPECTSSH_PROMPT: namely, the first grouped expression is
+# indicative that the preferred PS1 prompt has been loaded.
 set EXPECTSSH_PROMPT "(?:"
-append EXPECTSSH_PROMPT "((?!:)(?:#|\\\$)(?:$ANSI_RE_TEXT_FORMATTING)* (?:$ANSI_RE_GENERAL)*$)"
+append EXPECTSSH_PROMPT "("
+append EXPECTSSH_PROMPT [ps1_tail_regexp]
+append EXPECTSSH_PROMPT ")(?:$ANSI_RE_GENERAL)*$"
 append EXPECTSSH_PROMPT "|"
-append EXPECTSSH_PROMPT "([regsub -all {([\[])} $EXPECTSSH_PS1_TAIL [join { {\\} {\1} } {}]])(?:$ANSI_RE_GENERAL)*$"
+append EXPECTSSH_PROMPT "((?!:)(?:#|\\\$)(?:$ANSI_RE_TEXT_FORMATTING)* (?:$ANSI_RE_GENERAL)*$)"
 append EXPECTSSH_PROMPT ")"
 
 if {[info exists env(EXPECTSSH_SHLVL)] == 1} {
