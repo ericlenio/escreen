@@ -8,6 +8,27 @@
 package require cmdline
 package require md5
 
+
+# if stdin is not a terminal, or $EXPECTSSH_SHLVL exists, then we just
+# want to do regular ssh.
+#set overlay_test [exec bash -c {
+  #[ ! -d $EXPECTSSH_TMPDIR ] && { mkdir $EXPECTSSH_TMPDIR; chmod 1777 $EXPECTSSH_TMPDIR; }
+  #[ ! -t 0 -o -n "$EXPECTSSH_SHLVL" ] && echo overlay_flag
+  #true
+#}]
+
+#if {[regexp {overlay_flag} $overlay_test]==1} {
+  ## overlay the expect process with ssh, effectively leaving this script
+  #eval overlay /usr/bin/ssh $argv
+#}
+
+
+##
+##
+## DEFINE ALL PROCS
+##
+##
+
 # shenanigans to figure out what dir the git checkout is
 proc get_expectssh_home {} {
   set originalPath [pwd]
@@ -24,51 +45,41 @@ proc get_expectssh_home {} {
   return $scriptPath
 }
 
-set EXPECTSSH_HOME [get_expectssh_home]
-
-regsub -- {.*origin/([\d\.]+).*} [exec bash -c "cd $EXPECTSSH_HOME && git status --porcelain -b|grep '^##'"] {\1} GIT_BRANCH
-
-if {[string length $GIT_BRANCH]==0} {
-  puts "Unable to parse git branch, stop."
-  exit 1
-}
-set env(EXPECTSSH_TMPDIR) /tmp/.expect-ssh-$GIT_BRANCH
-set EXPECTSSH_TMPDIR $env(EXPECTSSH_TMPDIR)
-set EXPECTSSH_MYBASHPREFS $EXPECTSSH_TMPDIR/mybashprefs.$env(USER)
-# if stdin is not a terminal, or $EXPECTSSH_SHLVL exists, then we just
-# want to do regular ssh.
-set overlay_test [exec bash -c {
-  [ ! -d $EXPECTSSH_TMPDIR ] && { mkdir $EXPECTSSH_TMPDIR; chmod 1777 $EXPECTSSH_TMPDIR; }
-  [ ! -t 0 -o -n "$EXPECTSSH_SHLVL" ] && echo overlay_flag
-  true
-}]
-
-if {[regexp {overlay_flag} $overlay_test]==1} {
-  # overlay the expect process with ssh, effectively leaving this script
-  eval overlay /usr/bin/ssh $argv
+proc get_git_branch {} {
+  regsub -- {.*origin/([\d\.]+).*} [exec bash -c "cd [get_expectssh_home] && git status --porcelain -b|grep '^##'"] {\1} GIT_BRANCH
+  if {[string length $GIT_BRANCH]==0} {
+    puts "Unable to parse git branch, stop."
+    exit 1
+  }
+  return $GIT_BRANCH
 }
 
-set spawn_out_slave_name 0
-# for prompt, "\u001b[0m" is a possible "end of color" sequence
-set ANSI_RE_TEXT_FORMATTING {\u001b\[(?:\d+;?)*m}
-set ANSI_RE_CURSOR_POSITIONING {\u001b\\\[\d+;\d+[Hf]}
-set ANSI_RE_GENERAL {\u001b\[[^a-zA-Z]*[a-zA-Z]}
-set ANSI_RE_SHOW_CURSOR {\u001b\[\?25h}
+proc cleanup_tmpdir {} {
+  global EXPECTSSH_TMPDIR opts
+  if {$opts(tmpdir)==0} {return}
+  set tmpdir $EXPECTSSH_TMPDIR
+  if {[catch {
+    file delete -force $tmpdir
+    puts "expect-ssh: $tmpdir was deleted."
+  } err]} {
+    puts "Error while deleting $tmpdir: $err"
+  }
+}
 
-array set MARKER {}
-
-set OS [exec uname -s]
-set LOGFILE $EXPECTSSH_TMPDIR/$env(USER).log
-match_max 10000
-set EXPECTSSH_CONFIGDIR "$env(HOME)/.expect-ssh"
-set rcfile "$EXPECTSSH_CONFIGDIR/config"
-array set load_mybashprefs_args {}
-
-##
-##
-## DEFINE ALL PROCS
-##
-##
+proc init_tmpdir {opts_tmpdir} {
+  set GIT_BRANCH [get_git_branch]
+  set suffix [expr {$opts_tmpdir==1 ? "-[pid]" : ""}]
+  set tmpdir /tmp/.expect-ssh-$GIT_BRANCH$suffix
+  if {$opts_tmpdir==1} {
+    puts "Using temp dir: $tmpdir"
+    trap {cleanup_tmpdir} [list INT TERM QUIT]
+  }
+  exec bash -c {
+    [ ! -d $0 ] && { mkdir $0; chmod 1777 $0; }
+    true
+  } $tmpdir
+  return $tmpdir
+}
 
 proc run_tests {} {
   global EXPECTSSH_HOME env EXPECTSSH_PROMPT
@@ -650,7 +661,7 @@ proc process_keystroke {c} {
   # bash prefs if user types in that sequence ... cuts down on false positives
   # if say we are inside vim and use that sequence. Must do it by monitoring 1
   # keystroke at a time, putting keystrokes into buffer variable stdin_buf.
-  global stdin_buf env LOGFILE EXPECTSSH_PROMPT
+  global stdin_buf env EXPECTSSH_LOGFILE EXPECTSSH_PROMPT
   append stdin_buf $c
   set buflen [string length $stdin_buf]
   if { $stdin_buf == "~i" } {
@@ -666,15 +677,15 @@ proc process_keystroke {c} {
   } elseif { $stdin_buf == "~d" } {
     # toggle debug mode
     set curr [exp_internal -info]
-    if { [string first "$LOGFILE" "$curr"] >= 0 } {
+    if { [string first "$EXPECTSSH_LOGFILE" "$curr"] >= 0 } {
       send_user "DEBUG MODE is now OFF\r"
       send_log \n
       exp_internal 0
     } else {
       # truncate the file first
-      close [open $LOGFILE "w"]
-      exp_internal -f $LOGFILE 0
-      send_user "DEBUG MODE: sending output for this session to $LOGFILE"
+      close [open $EXPECTSSH_LOGFILE "w"]
+      exp_internal -f $EXPECTSSH_LOGFILE 0
+      send_user "DEBUG MODE: sending output for this session to $EXPECTSSH_LOGFILE"
       send_log \n
     }
     set stdin_buf ""
@@ -698,20 +709,22 @@ proc process_keystroke {c} {
 ## END OF PROCS
 ##
 ##
+set EXPECTSSH_CONFIGDIR "$env(HOME)/.expect-ssh"
+set rcfile "$EXPECTSSH_CONFIGDIR/config"
 
 set options {
-  { debug "" "turn on debug mode" }
-  { shell "" "don't ssh but instead just run a bash shell" }
+  { debug "turn on debug mode" }
+  { shell "don't ssh but instead just run a bash shell" }
   { profile.arg profile.lenio "choose which profile to use for custom functions/markers/handlers" }
   { timeout.arg 10 "expect pattern timeout value" }
-  { test "" "run test cases (for developers only)" }
-  { tmpdir "" "create a new temp directory for temp space; auto-delete when expect-ssh finishes" }
+  { test "run test cases (for developers only)" }
+  { tmpdir "create a new temp directory for temp space; auto-delete when expect-ssh finishes" }
 }
 
 set usage "expect-ssh: an ssh wrapper/replacement tool.\n"
 append usage "All arguments other than the ones below are passed directly to ssh.\n"
 append usage "While inside any session, type these at a prompt:\n"
-append usage "  ~d      toggle debug mode (writes to $LOGFILE)\n"
+append usage "  ~d      toggle debug mode\n"
 append usage "  ~i      force reload bash functions/preferences\n"
 append usage "  ~u      upload file (to ssh session)\n"
 append usage "  ~k      kill expect: useful if running screen, and you\n"
@@ -728,6 +741,21 @@ set timeout $opts(timeout)
 if { $def_timeout != $timeout } {
   send_user "Timeout set to: $timeout\n"
 }
+set spawn_out_slave_name 0
+# for prompt, "\u001b[0m" is a possible "end of color" sequence
+set ANSI_RE_TEXT_FORMATTING {\u001b\[(?:\d+;?)*m}
+set ANSI_RE_CURSOR_POSITIONING {\u001b\\\[\d+;\d+[Hf]}
+set ANSI_RE_GENERAL {\u001b\[[^a-zA-Z]*[a-zA-Z]}
+set ANSI_RE_SHOW_CURSOR {\u001b\[\?25h}
+array set MARKER {}
+set OS [exec uname -s]
+match_max 10000
+array set load_mybashprefs_args {}
+set EXPECTSSH_HOME [get_expectssh_home]
+set env(EXPECTSSH_TMPDIR) [init_tmpdir $opts(tmpdir)]
+set EXPECTSSH_TMPDIR $env(EXPECTSSH_TMPDIR)
+set EXPECTSSH_MYBASHPREFS $EXPECTSSH_TMPDIR/mybashprefs.$env(USER)
+set EXPECTSSH_LOGFILE $EXPECTSSH_TMPDIR/$env(USER).log
 set EXPECTSSH_PROFILE $EXPECTSSH_HOME/$opts(profile)
 set EXPECTSSH_PROFILE_OVERRIDES $EXPECTSSH_CONFIGDIR/$opts(profile)
 set EXPECTSSH_CORE_FCN_PREFIX _ES_
@@ -803,12 +831,12 @@ if { $argc==0 || $opts(shell)==1 } {
 }
 if { $opts(debug) == 1 } {
   # truncate the file first
-  close [open $LOGFILE "w"]
-  exp_internal -f $LOGFILE 0
-  send_user "DEBUG MODE: sending output for this session to $LOGFILE\n"
+  close [open $EXPECTSSH_LOGFILE "w"]
+  exp_internal -f $EXPECTSSH_LOGFILE 0
+  send_user "DEBUG MODE: sending output for this session to $EXPECTSSH_LOGFILE\n"
 }
 
-trap { resize_handler } WINCH
+trap {resize_handler} WINCH
 
 if { $local_shell_only == 1 } {
   eval [list spawn -noecho] /bin/bash
@@ -822,17 +850,23 @@ resize_handler
 expect -re $EXPECTSSH_PROMPT
 load_mybashprefs $env(EXPECTSSH_SHLVL)
 
-interact {
-  # "If two or more patterns can match the same output, only one action will
-  # be executed. The action corresponds to the pattern that appears first in
-  # the command."
-  -re "." { process_keystroke $interact_out(0,string) }
-  # "All the patterns before the -o apply to the user keystrokes. All the
-  # patterns after the -o apply to the spawned process."
-  -o
-  -nobuffer -re $EXPECTSSH_PROMPT {main_prompt_checker [array get interact_out]}
-  -nobuffer -re $MARKER_RE {
-    set marker_idx $interact_out(1,string)
-    _ES_run_marker_handler $marker_idx [get_marker_word $marker_idx]
+if {[catch {
+  interact {
+    # "If two or more patterns can match the same output, only one action will
+    # be executed. The action corresponds to the pattern that appears first in
+    # the command."
+    -re "." { process_keystroke $interact_out(0,string) }
+    # "All the patterns before the -o apply to the user keystrokes. All the
+    # patterns after the -o apply to the spawned process."
+    -o
+    -nobuffer -re $EXPECTSSH_PROMPT {main_prompt_checker [array get interact_out]}
+    -nobuffer -re $MARKER_RE {
+      set marker_idx $interact_out(1,string)
+      _ES_run_marker_handler $marker_idx [get_marker_word $marker_idx]
+    }
   }
+} err]} {
+  send_error $::errorInfo\n
 }
+
+cleanup_tmpdir
