@@ -10,6 +10,7 @@ function _ES_gen_stubs() {
     _ES_send_marker "$marker"
     _ES_rec_rem fcnlist
     echo "$fcnlist" > $EXPECTSSH_FCN_LIST
+    chmod 666 $EXPECTSSH_FCN_LIST
   }
   for f in $(cat $EXPECTSSH_FCN_LIST); do
     _ES_gen_stub $f
