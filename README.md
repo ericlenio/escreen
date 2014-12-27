@@ -1,8 +1,8 @@
 expect-ssh
 ==========
 
-expect-ssh is an [expect](http://expect.sourceforge.net/) script that wraps ssh
-to accomplish consistent bash shell settings when ssh-ing to remote servers. If
+expect-ssh is an [expect](http://expect.sourceforge.net/) script that wraps bash
+to accomplish consistent shell settings when ssh-ing to remote servers. If
 you have ever spent lots of time setting up your shell with the perfect
 settings for .bashrc, .bash_profile, .vimrc, etc., and then found yourself
 mass-copying these files to other machines you ssh to, then having to deal with
@@ -22,6 +22,7 @@ session), and similarly download files from a ssh session.
 * Assumes you use bash as your main shell
 * Depends on some basic standard Unix programs like gzip, grep, cut
 * Also must have openssl installed
+* Useful to have vim and screen, as they have been enhanced by expect-ssh
 
 # How it works
 
@@ -41,19 +42,20 @@ problem if you lose it.  Worst case is you make a new password and all cached
 files will have to be re-cached (which will happen automatically).  Still, keep
 the file secured: `chmod 600 $HOME/.expect-ssh/config`.
 
-**Step 3: ssh to a remote system.** Run the following to start a new ssh session:
+**Step 3: start expect-ssh.** Run the following to start a new session, which
+will load all your preferences, set the PS1 prompt, and create stub functions.
+You can interact with the shell as per normal.
 
-    expect-ssh myserver.example.com
-    
-At the first shell prompt in the ssh session, expect-ssh will proceed to upload
-expect-ssh core functions to the remote system, plus the profile's basic
-settings from `.bashrc`. Why not upload the entire profile and all of your
-preferences at once? To save time. Because otherwise you have to wait for
-everything to upload. expect-ssh will only upload (and cache) the minimally
-necessary files it needs at the moment.
+    expect-ssh
 
-**Step 3a: just run a local shell.** You can invoke expect-ssh with `-shell`,
-or no arguments at all, to just run a local shell (not ssh-ing anywhere).
+**Step 4: use vim, ssh, screen, etc.**
+
+If you ssh to another system, at the first shell prompt in the ssh session,
+expect-ssh will proceed to upload expect-ssh core functions to the remote
+system, plus the profile's basic settings from `.bashrc`. Why not upload the
+entire profile and all of your preferences at once? To save time. Because
+otherwise you have to wait for everything to upload. expect-ssh will only
+upload (and cache) the minimally necessary files it needs at the moment.
 
 ## Keyboard shortcuts
 
