@@ -525,7 +525,12 @@ proc load_mybashprefs {EXPECTSSH_SHLVL {nest_level 0}} {
       send " exec 4> >(openssl enc -d -base64 | gzip -d -c | openssl enc -a -aes256 -pass fd:3 -out \$f)\r"
       send { while true; do read -d' ' l; [ "$l" = . ] && break; printf "%s\n" $l >&4; printf "\015"; done; exec 3<&- 4>&-}
       send \r
-      expect -re \r\n$
+      expect {
+        -re \r\n$ {}
+        timeout {
+          send_error "TIMEOUT in proc load_mybashprefs\r\n"
+        }
+      }
       send_script $mybashprefs 
       expect -re $EXPECTSSH_PROMPT
       return [load_mybashprefs $EXPECTSSH_SHLVL 1]
@@ -608,6 +613,9 @@ proc send_script {script} {
       # first time in this loop it could by \r\n
       -re "\r\n$" {}
       -re "\x0d$" {}
+      timeout {
+        send_error "TIMEOUT in send_script\r\n"
+      }
     }
     if { $n > -1 } { send_user \r }
     incr n [string length $line]
