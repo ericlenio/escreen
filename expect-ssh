@@ -85,7 +85,7 @@ proc run_tests {} {
   global EXPECTSSH_HOME env EXPECTSSH_PROMPT
   set env(EXPECTSSH_SHLVL) ""
   send_error "START test framework\n"
-  eval [list spawn -noecho] $EXPECTSSH_HOME/expect-ssh -shell -tmpdir
+  eval [list spawn -noecho] $EXPECTSSH_HOME/expect-ssh -tmpdir
   expect -re $EXPECTSSH_PROMPT {
     if { [check_prompt_marker [array get expect_out]] == 0 } {
       exp_continue
@@ -722,25 +722,26 @@ set rcfile "$EXPECTSSH_CONFIGDIR/config"
 
 set options {
   { debug "turn on debug mode" }
-  { shell "don't ssh but instead just run a bash shell" }
   { profile.arg profile.lenio "choose which profile to use for custom functions/markers/handlers" }
   { timeout.arg 10 "expect pattern timeout value" }
-  { test "run test cases (for developers only)" }
+  { test "run test cases (for devs only)" }
   { tmpdir "create a new temp directory for temp space; auto-delete when expect-ssh finishes" }
 }
 
-set usage "expect-ssh: an ssh wrapper/replacement tool.\n"
-append usage "All arguments other than the ones below are passed directly to ssh.\n"
+set usage "expect-ssh: a bash/screen/ssh utility tool.\n"
 append usage "While inside any session, type these at a prompt:\n"
-append usage "  ~d      toggle debug mode\n"
-append usage "  ~i      force reload bash functions/preferences\n"
-append usage "  ~u      upload file (to ssh session)\n"
-append usage "  ~k      kill expect: useful if running screen, and you\n"
-append usage "          want to resume screen from another desktop\n"
+append usage "  ~d toggle debug mode\n"
+append usage "  ~i force reload bash functions/preferences\n"
+append usage "  ~u upload file (to ssh session)\n"
+append usage "  ~k kill expect: useful if running screen, and you\n"
+append usage "     want to resume screen from another desktop\n"
 append usage "Upon starting, Expect statements can be placed in\n"
 append usage "$rcfile and they get sourced. Options:\n"
 
-array set opts [::cmdline::getKnownOptions argv $options $usage]
+if {[catch {array set opts [::cmdline::getKnownOptions argv $options $usage]} usage_msg]} {
+  puts $usage_msg
+  exit
+}
 set def_timeout $timeout
 set timeout $opts(timeout)
 #set send_slow {1 .1}
@@ -770,9 +771,8 @@ set EXPECTSSH_CORE_FCN_PREFIX _ES_
 set EXPECTSSH_CORE $EXPECTSSH_HOME/core
 set EXPECTSSH_FCN_LIST $EXPECTSSH_TMPDIR/fcnlist.$env(USER)
 set MARKER_RE (?:^|\x07|\n|\r|$ANSI_RE_GENERAL)[get_marker]\x08\.\[\r\n]
-
 #
-# Register some core handlers
+# Register core handlers
 #
 _ES_register_marker LOAD_MYBASHPREFS load_mybashprefs_handler
 _ES_register_marker UPLOAD_SCRIPT upload_script_handler
@@ -784,7 +784,6 @@ _ES_register_marker GET_FUNCTION_LIST function_list_handler
 if {[file exists $rcfile]} {
   source $rcfile
 }
-
 # 
 # Source core .exp files
 #
@@ -805,7 +804,6 @@ if {[file isdirectory $EXPECTSSH_PROFILE_OVERRIDES]==1} {
     source $expfile
   }
 }
-
 # note: check_prompt_marker has logic that depends on the parenthesized
 # patterns in EXPECTSSH_PROMPT: namely, the first grouped expression is
 # indicative that the preferred PS1 prompt has been loaded.
@@ -827,15 +825,11 @@ if {[info exists env(EXPECTSSH_SHLVL)] == 1} {
 #  eval [list system] /usr/bin/ssh $argv
 #  exit
 #}
-set local_shell_only 0
 set stdin_buf ""
 
 if { $opts(test) == 1 } {
   run_tests
   exit
-}
-if { $argc==0 || $opts(shell)==1 } {
-  set local_shell_only 1
 }
 if { $opts(debug) == 1 } {
   # truncate the file first
@@ -846,11 +840,7 @@ if { $opts(debug) == 1 } {
 
 trap {resize_handler} WINCH
 
-if { $local_shell_only == 1 } {
-  eval [list spawn -noecho] /bin/bash
-} else {
-  eval [list spawn -noecho] /usr/bin/ssh $argv
-}
+eval [list spawn -noecho] /bin/bash
 # spawn command above will set spawn_out
 set spawn_out_slave_name $spawn_out(slave,name)
 # force-resize: needed if on Mac in terminal full screen mode
