@@ -834,6 +834,7 @@ if { $opts(test) == 1 } {
 if { $opts(debug) == 1 } {
   # truncate the file first
   close [open $EXPECTSSH_LOGFILE "w"]
+  file attributes $EXPECTSSH_LOGFILE -permissions 0600
   exp_internal -f $EXPECTSSH_LOGFILE 0
   send_user "DEBUG MODE: sending output for this session to $EXPECTSSH_LOGFILE\n"
 }
