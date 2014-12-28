@@ -37,10 +37,10 @@ proc get_download_filename {default_file_name} {
   set bashscript {function get_download_file() {
     read -e -p 'Save downloaded file to (leave blank to cancel): ' f
     if [ -z "$f" ]; then return; fi
-    if [ -e "$f" -a ! -w "$f" ]; then echo "$f is not writable"; return; fi
+    if [ -e "$f" -a ! -w "$f" ]; then echo "ERROR: $f is not writable"; return; fi
     local dir=$(dirname "$f")
     if [ -z "$dir" ]; then dir=$(pwd); fi
-    if [ ! -e "$f" -a ! -w "$dir" ]; then echo "Directory $dir is not writable"; return; fi
+    if [ ! -e "$f" -a ! -w "$dir" ]; then echo "ERROR: directory $dir is not writable"; return; fi
     echo "File will be downloaded to: $f"
     }
     get_download_file

@@ -1,7 +1,7 @@
 # vim:filetype=sh
 function download() {
-  local marker1="$(_ES_marker DOWNLOAD_DEFAULT_FILE)"
-  local marker2="$(_ES_marker DOWNLOAD_DATA)"
+  local m1="$(_ES_marker DOWNLOAD_DEFAULT_FILE)"
+  local m2="$(_ES_marker DOWNLOAD_DATA)"
   local file="$1"
   if [ ! -e "$file" ]; then
     echo "Error: no such file, or file is not readable: $file"
@@ -9,7 +9,7 @@ function download() {
   fi
   local locfile=$(basename "$file")
   local args=$(printf "default_file_name {%s}" "$locfile")
-  _ES_send_marker "$marker1" "$args"
+  _ES_send_marker "$m1" "$args"
   local outfile
   # Only continue if a valid download filename was picked in get_download_filename
   read outfile
@@ -20,7 +20,7 @@ function download() {
   for l in $(gzip -9 -c "$file" | openssl enc -base64); do
     c+=$l$'\n'
   done
-  _ES_send_marker "$marker2" "outfile {$outfile} content {$c}"
+  _ES_send_marker "$m2" "outfile {$outfile} content {$c}"
   # This read acts as a block so if on a slower connection it gives the handler
   # enough time to write out a status line. The handler will send the status
   # line in this read, and we just let it go to stderr so user sees it.

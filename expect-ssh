@@ -81,6 +81,14 @@ proc init_tmpdir {opts_tmpdir} {
   return $tmpdir
 }
 
+proc open_logfile {} {
+  global EXPECTSSH_LOGFILE
+  # truncate the file first
+  close [open $EXPECTSSH_LOGFILE "w"]
+  file attributes $EXPECTSSH_LOGFILE -permissions 0600
+  exp_internal -f $EXPECTSSH_LOGFILE 0
+}
+
 proc run_tests {} {
   global EXPECTSSH_HOME env EXPECTSSH_PROMPT
   set env(EXPECTSSH_SHLVL) ""
@@ -163,7 +171,14 @@ proc _ES_run_marker_handler {marker_idx status_line} {
 
   if {[string length [string trim $encoded_args]]>0} {
     if {[catch {
-      set decoded_args [exec sh -c "printf '%s' \"\$0\" | /usr/bin/openssl enc -base64 -d | gzip -d -c" $encoded_args]
+      #set decoded_args [exec sh -c "printf '%s' \"\$0\" | /usr/bin/openssl enc -base64 -d | gzip -d -c" $encoded_args]
+      set chan [open "|/usr/bin/openssl enc -base64 -d | gzip -d -c" r+]
+      fconfigure $chan -translation binary -encoding binary
+      puts $chan $encoded_args
+      flush $chan
+      chan close $chan write
+      set decoded_args [read $chan]
+      close $chan
     } err]} {
       send_error "ERROR decoding args: $err\r\n"
       return
@@ -631,9 +646,7 @@ proc process_keystroke {c} {
       send_log \n
       exp_internal 0
     } else {
-      # truncate the file first
-      close [open $EXPECTSSH_LOGFILE "w"]
-      exp_internal -f $EXPECTSSH_LOGFILE 0
+      open_logfile
       send_user "DEBUG MODE: sending output for this session to $EXPECTSSH_LOGFILE"
       send_log \n
     }
@@ -773,10 +786,7 @@ if { $opts(test) == 1 } {
   exit
 }
 if { $opts(debug) == 1 } {
-  # truncate the file first
-  close [open $EXPECTSSH_LOGFILE "w"]
-  file attributes $EXPECTSSH_LOGFILE -permissions 0600
-  exp_internal -f $EXPECTSSH_LOGFILE 0
+  open_logfile
   send_user "DEBUG MODE: sending output for this session to $EXPECTSSH_LOGFILE\n"
 }
 
