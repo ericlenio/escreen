@@ -7,6 +7,7 @@
 # apt-get install tcllib
 package require cmdline
 package require md5
+package require uuid
 
 
 # if stdin is not a terminal, or $EXPECTSSH_SHLVL exists, then we just
@@ -46,7 +47,7 @@ proc get_expectssh_home {} {
 }
 
 proc get_git_branch {} {
-  regsub -- {.*origin/([\d\.]+).*} [exec bash -c "cd [get_expectssh_home] && git status --porcelain -b|grep '^##'"] {\1} GIT_BRANCH
+  regsub -- {^## ([\d\.]+\d).*} [exec bash -c "cd [get_expectssh_home] && git status --porcelain -b|grep '^##'"] {\1} GIT_BRANCH
   if {[string length $GIT_BRANCH]==0} {
     puts "Unable to parse git branch, stop."
     exit 1
@@ -72,7 +73,7 @@ proc init_tmpdir {opts_tmpdir} {
   set tmpdir /tmp/.expect-ssh-$GIT_BRANCH$suffix
   if {$opts_tmpdir==1} {
     puts "Using temp dir: $tmpdir"
-    trap {cleanup_tmpdir} [list INT TERM QUIT]
+    #trap {cleanup_tmpdir} [list INT TERM QUIT]
   }
   exec bash -c {
     [ ! -d $0 ] && { mkdir $0; chmod 1777 $0; }
@@ -144,47 +145,75 @@ proc erase_line {} {
   send_user "\033\[2K"
 }
 
+proc clean_xmitted_string {s} {
+  global ANSI_RE_GENERAL
+  # convert all \015 back to \n
+  regsub -all "\015" $s "\n" s
+  # clean out any cursor movement sequences that sometimes get thrown in by screen
+  regsub -all $ANSI_RE_GENERAL $s "" s
+  return $s
+}
+
+proc read_from_pipe {chan decoded_args_var status_var} {
+  upvar $decoded_args_var decoded_args
+  upvar $status_var status
+  set l [gets $chan]
+  append decoded_args $l
+  if {[eof $chan]} {
+    close $chan
+    set status DONE
+    return
+  }
+  # gets will strip the \n, need to put it back
+  if {[string length $l]>0} {
+    append decoded_args \n
+  }
+}
+
+proc write_to_pipe {chan lock_var} {
+  upvar $lock_var LOCK
+  if {$LOCK==1} {
+    return
+  }
+  set LOCK 1
+  #set id [::uuid::uuid generate]
+  expect {
+    -re {([^\.\n]*)\.} {
+      set s0 [clean_xmitted_string $expect_out(1,string)]
+      puts $chan $s0
+      chan close $chan write
+    }
+    -re {([^\.\n]{1,255})} {
+      set s [clean_xmitted_string $expect_out(1,string)]
+      puts $chan $s
+    }
+    -ex "" {}
+    timeout {
+      send_error "TIMEOUT in write_to_pipe\r\n"
+    }
+  }
+  set LOCK 0
+}
+
 proc _ES_run_marker_handler {marker_idx status_line} {
   global MARKER ANSI_RE_GENERAL
   send_user $status_line
   # strip leading zeroes, else will be interpreted as octal
   regexp {^0*(\d+)} $marker_idx - marker_idx
-  set encoded_args ""
-  set decoded_args ""
+  variable encoded_args ""
+  variable decoded_args ""
+  variable LOCK 0
+  variable status ""
   expect \n
-  expect {
-    -re {([^\.]*)\.} {
-      append encoded_args $expect_out(1,string)
-    }
-    -re {([^\.]{1,255})} {
-      append encoded_args $expect_out(1,string)
-      exp_continue
-    }
-    timeout {
-      send_error "TIMEOUT reading arguments\r\n"
-    }
-  }
-  # convert all \015 back to \n
-  regsub -all "\015" $encoded_args "\n" encoded_args
-  # clean out any cursor movement sequences that sometimes get thrown in by screen
-  regsub -all $ANSI_RE_GENERAL $encoded_args "" encoded_args
-
-  if {[string length [string trim $encoded_args]]>0} {
-    if {[catch {
-      #set decoded_args [exec sh -c "printf '%s' \"\$0\" | /usr/bin/openssl enc -base64 -d | gzip -d -c" $encoded_args]
-      set chan [open "|/usr/bin/openssl enc -base64 -d | gzip -d -c" r+]
-      fconfigure $chan -translation binary -encoding binary
-      puts $chan $encoded_args
-      flush $chan
-      chan close $chan write
-      set decoded_args [read $chan]
-      close $chan
-    } err]} {
-      send_error "ERROR decoding args: $err\r\n"
-      return
-    }
-  }
-
+  set chan [open "| /usr/bin/openssl enc -base64 -d | gzip -d -c" r+]
+  fconfigure $chan -translation binary -encoding binary -blocking 0
+  # The script for a file event is executed at global level (outside the
+  # context of any Tcl procedure) in the interpreter in which the fileevent
+  # command was invoked. If an error occurs while executing the script then the
+  # bgerror mechanism is used to report the error.
+  fileevent $chan writable [list write_to_pipe $chan LOCK]
+  fileevent $chan readable [list read_from_pipe $chan decoded_args status]
+  vwait status
   # find the handler and run it
   foreach key [array names MARKER -regexp {^(\w+)$}] {
     if {$marker_idx == $MARKER($key,idx)} {
@@ -680,7 +709,9 @@ set options {
   { timeout.arg 10 "expect pattern timeout value" }
   { test "run test cases (for devs only)" }
   { tmpdir "create a new temp directory for temp space; auto-delete when expect-ssh finishes" }
+  { logfile.arg "" "write log to this file" }
 }
+append options "{killfile.arg /tmp/expect-ssh-kill-$env(USER) \"small script to kill an errant expect-ssh session\"}"
 
 set usage "expect-ssh: a bash/screen/ssh utility tool.\n"
 append usage "While inside any session, type these at a prompt:\n"
@@ -712,19 +743,30 @@ set ANSI_RE_GENERAL {\u001b\[[^a-zA-Z]*[a-zA-Z]}
 set ANSI_RE_SHOW_CURSOR {\u001b\[\?25h}
 array set MARKER {}
 set OS [exec uname -s]
-match_max 10000
 array set load_mybashprefs_args {}
 set EXPECTSSH_HOME [get_expectssh_home]
 set env(EXPECTSSH_TMPDIR) [init_tmpdir $opts(tmpdir)]
 set EXPECTSSH_TMPDIR $env(EXPECTSSH_TMPDIR)
 set EXPECTSSH_MYBASHPREFS $EXPECTSSH_TMPDIR/mybashprefs.$env(USER)
-set EXPECTSSH_LOGFILE $EXPECTSSH_TMPDIR/$env(USER).log
+if {[string length $opts(logfile)]>0} {
+  set EXPECTSSH_LOGFILE $opts(logfile)
+  puts "Log file set to: $opts(logfile)"
+} else {
+  set EXPECTSSH_LOGFILE $EXPECTSSH_TMPDIR/$env(USER).log
+}
 set EXPECTSSH_PROFILE $EXPECTSSH_HOME/$opts(profile)
 set EXPECTSSH_PROFILE_OVERRIDES $EXPECTSSH_CONFIGDIR/$opts(profile)
 set EXPECTSSH_CORE_FCN_PREFIX _ES_
 set EXPECTSSH_CORE $EXPECTSSH_HOME/core
 set EXPECTSSH_FCN_LIST $EXPECTSSH_TMPDIR/fcnlist.$env(USER)
 set MARKER_RE (?:^|\x07|\n|\r|$ANSI_RE_GENERAL)[get_marker]\x08\.\[\r\n]
+if {[string length $opts(killfile)]>0} {
+  set chan [open $opts(killfile) w]
+  puts $chan "kill -KILL [pid]"
+  puts $chan "echo 'just killed [pid]'"
+  close $chan
+  file attributes $opts(killfile) -permissions 0700
+}
 #
 # Register core handlers
 #
@@ -793,6 +835,7 @@ if { $opts(debug) == 1 } {
 trap {resize_handler} WINCH
 
 spawn -noecho /bin/bash
+match_max 10000
 # spawn command above will set spawn_out
 set spawn_out_slave_name $spawn_out(slave,name)
 # force-resize: needed if on Mac in terminal full screen mode
