@@ -14,9 +14,11 @@ proc download_data_handler {decoded_args} {
   array set args $decoded_args
   set outfile $args(outfile)
   set l -1
+send_log "chk:$outfile\r\n"
   if { [catch {
     set chan [open "|/usr/bin/openssl enc -base64 -d | gzip -d -c > \"$outfile\"" w]
     fconfigure $chan -translation binary -encoding binary
+send_log "chk:about to puts:[string length $args(content)]\r\n"
     puts $chan $args(content)
     flush $chan
     close $chan
@@ -24,7 +26,7 @@ proc download_data_handler {decoded_args} {
     # bash is doing a read operation, send along a status line too
     send "DONE...downloaded to $outfile, $l bytes\r"
     } err] } {
-    send_error "ERROR in proc download: $err\r\n"
+    send_error "ERROR in download_data_handler: $err\r\n"
   }
   return ""
 }
