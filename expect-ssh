@@ -156,12 +156,12 @@ proc clean_xmitted_string {s} {
 
 proc read_from_pipe {chan decoded_args_var status_var} {
   upvar $decoded_args_var decoded_args
-  upvar $status_var status
+  upvar $status_var STATUS
   set l [gets $chan]
   append decoded_args $l
   if {[eof $chan]} {
     close $chan
-    set status DONE
+    set STATUS DONE
     return
   }
   # gets will strip the \n, need to put it back
@@ -203,7 +203,7 @@ proc _ES_run_marker_handler {marker_idx status_line} {
   variable encoded_args ""
   variable decoded_args ""
   variable LOCK 0
-  variable status ""
+  variable STATUS ""
   expect \n
   set chan [open "| /usr/bin/openssl enc -base64 -d | gzip -d -c" r+]
   fconfigure $chan -translation binary -encoding binary -blocking 0
@@ -212,8 +212,8 @@ proc _ES_run_marker_handler {marker_idx status_line} {
   # command was invoked. If an error occurs while executing the script then the
   # bgerror mechanism is used to report the error.
   fileevent $chan writable [list write_to_pipe $chan LOCK]
-  fileevent $chan readable [list read_from_pipe $chan decoded_args status]
-  vwait status
+  fileevent $chan readable [list read_from_pipe $chan decoded_args STATUS]
+  vwait STATUS
   # find the handler and run it
   foreach key [array names MARKER -regexp {^(\w+)$}] {
     if {$marker_idx == $MARKER($key,idx)} {
