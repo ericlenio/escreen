@@ -195,7 +195,6 @@ proc _ES_run_marker_handler {marker_idx status_line} {
   # command was invoked. If an error occurs while executing the script then the
   # bgerror mechanism is used to report the error.
   fileevent $chan readable [list read_from_pipe $chan decoded_args STATUS]
-  variable one_time 0
   expect {
     #-re \x03 {
       #send_error "INTERRUPT\r\n"
@@ -203,11 +202,17 @@ proc _ES_run_marker_handler {marker_idx status_line} {
     -re {^([^\.]{1,255})} {
       set s [clean_xmitted_string $expect_out(1,string)]
       puts $chan $s
-      incr one_time
       exp_continue
     }
-    -ex . {
-      if {$one_time==0} {exp_continue}
+    # period followed by erase line means we have the terminating sequence
+    -re {(?x)
+      \.(?:
+      # this is what the remote end sends ...
+      \x0d\x1b\[2K
+      |
+      # but gnu screen translates it to this ...
+      \x08\x1b\[K
+      )} {
       chan close $chan write
     }
     timeout {
@@ -534,7 +539,7 @@ proc load_mybashprefs {EXPECTSSH_SHLVL {nest_level 0}} {
       # to openssl's password prompt ...
       if { $password_was_entered == 0 } { exp_continue }
     }
-    timeout { send_error "TIMEOUT in proc load_mybashprefs\r\n"; return "NOT OK" }
+    timeout { send_error "TIMEOUT2 in proc load_mybashprefs\r\n"; return "NOT OK" }
   }
   expect_before
   return "OK"
