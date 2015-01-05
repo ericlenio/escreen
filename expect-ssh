@@ -170,7 +170,7 @@ proc read_from_pipe {chan decoded_args_var status_var} {
 }
 
 proc _ES_run_marker_handler {marker_idx status_line} {
-  global MARKER ANSI_RE_GENERAL
+  global MARKER
   send_user $status_line
   # strip leading zeroes, else will be interpreted as octal
   regexp {^0*(\d+)} $marker_idx - marker_idx
@@ -178,12 +178,8 @@ proc _ES_run_marker_handler {marker_idx status_line} {
   variable decoded_args ""
   variable STATUS ""
   expect \n
-  set chan [open "| /usr/bin/openssl enc -base64 -d | gzip -d -c" r+]
+  variable chan [open "| /usr/bin/openssl enc -base64 -d | gzip -d -c" r+]
   fconfigure $chan -translation binary -encoding binary -blocking 0
-  # The script for a file event is executed at global level (outside the
-  # context of any Tcl procedure) in the interpreter in which the fileevent
-  # command was invoked. If an error occurs while executing the script then the
-  # bgerror mechanism is used to report the error.
   expect {
     -re {([^\.\n]*)\.} {
       set s0 [clean_xmitted_string $expect_out(1,string)]
@@ -200,6 +196,10 @@ proc _ES_run_marker_handler {marker_idx status_line} {
       send_error "TIMEOUT in write_to_pipe\r\n"
     }
   }
+  # The script for a file event is executed at global level (outside the
+  # context of any Tcl procedure) in the interpreter in which the fileevent
+  # command was invoked. If an error occurs while executing the script then the
+  # bgerror mechanism is used to report the error.
   fileevent $chan readable [list read_from_pipe $chan decoded_args STATUS]
   vwait STATUS
   # find the handler and run it
