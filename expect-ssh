@@ -164,35 +164,9 @@ proc read_from_pipe {chan decoded_args_var status_var} {
     set STATUS DONE
     return
   }
-  # gets will strip the \n, need to put it back
   if {[string length $l]>0} {
     append decoded_args \n
   }
-}
-
-proc write_to_pipe {chan lock_var} {
-  upvar $lock_var LOCK
-  if {$LOCK==1} {
-    return
-  }
-  set LOCK 1
-  #set id [::uuid::uuid generate]
-  expect {
-    -re {([^\.\n]*)\.} {
-      set s0 [clean_xmitted_string $expect_out(1,string)]
-      puts $chan $s0
-      chan close $chan write
-    }
-    -re {([^\.\n]{1,255})} {
-      set s [clean_xmitted_string $expect_out(1,string)]
-      puts $chan $s
-    }
-    -ex "" {}
-    timeout {
-      send_error "TIMEOUT in write_to_pipe\r\n"
-    }
-  }
-  set LOCK 0
 }
 
 proc _ES_run_marker_handler {marker_idx status_line} {
@@ -202,7 +176,6 @@ proc _ES_run_marker_handler {marker_idx status_line} {
   regexp {^0*(\d+)} $marker_idx - marker_idx
   variable encoded_args ""
   variable decoded_args ""
-  variable LOCK 0
   variable STATUS ""
   expect \n
   set chan [open "| /usr/bin/openssl enc -base64 -d | gzip -d -c" r+]
@@ -211,7 +184,22 @@ proc _ES_run_marker_handler {marker_idx status_line} {
   # context of any Tcl procedure) in the interpreter in which the fileevent
   # command was invoked. If an error occurs while executing the script then the
   # bgerror mechanism is used to report the error.
-  fileevent $chan writable [list write_to_pipe $chan LOCK]
+  expect {
+    -re {([^\.\n]*)\.} {
+      set s0 [clean_xmitted_string $expect_out(1,string)]
+      puts $chan $s0
+      chan close $chan write
+    }
+    -re {([^\.]{1,255})} {
+      set s [clean_xmitted_string $expect_out(1,string)]
+      puts $chan $s
+      exp_continue
+    }
+    -ex "" {}
+    timeout {
+      send_error "TIMEOUT in write_to_pipe\r\n"
+    }
+  }
   fileevent $chan readable [list read_from_pipe $chan decoded_args STATUS]
   vwait STATUS
   # find the handler and run it
