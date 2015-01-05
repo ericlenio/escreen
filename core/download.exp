@@ -1,3 +1,6 @@
+_ES_register_marker DOWNLOAD_DEFAULT_FILE download_default_file_handler
+_ES_register_marker DOWNLOAD_DATA download_data_handler
+
 proc download_default_file_handler {decoded_args} {
   array set args $decoded_args
   set outfile [get_download_filename $args(default_file_name)]
@@ -14,11 +17,9 @@ proc download_data_handler {decoded_args} {
   array set args $decoded_args
   set outfile $args(outfile)
   set l -1
-send_log "chk:$outfile\r\n"
   if { [catch {
     set chan [open "|/usr/bin/openssl enc -base64 -d | gzip -d -c > \"$outfile\"" w]
     fconfigure $chan -translation binary -encoding binary
-send_log "chk:about to puts:[string length $args(content)]\r\n"
     puts $chan $args(content)
     flush $chan
     close $chan
