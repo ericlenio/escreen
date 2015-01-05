@@ -171,36 +171,50 @@ proc read_from_pipe {chan decoded_args_var status_var} {
 
 proc _ES_run_marker_handler {marker_idx status_line} {
   global MARKER
+  # save cursor position
+  send_user "\033\[s"
+  # move up 1 line
+  send_user "\033\[1A"
+  # move to column 1
+  send_user "\033\[1`"
+  # send status line
   send_user $status_line
+  # restore cursor position
+  send_user "\033\[u"
   # strip leading zeroes, else will be interpreted as octal
   regexp {^0*(\d+)} $marker_idx - marker_idx
   variable encoded_args ""
   variable decoded_args ""
   variable STATUS ""
-  expect \n
+  # Open channel for read/write to decode the payload that goes with the event
+  # handler we are about to invoke.
   variable chan [open "| /usr/bin/openssl enc -base64 -d | gzip -d -c" r+]
   fconfigure $chan -translation binary -encoding binary -blocking 0
-  expect {
-    -re {([^\.\n]*)\.} {
-      set s0 [clean_xmitted_string $expect_out(1,string)]
-      puts $chan $s0
-      chan close $chan write
-    }
-    -re {([^\.]{1,255})} {
-      set s [clean_xmitted_string $expect_out(1,string)]
-      puts $chan $s
-      exp_continue
-    }
-    -ex "" {}
-    timeout {
-      send_error "TIMEOUT in write_to_pipe\r\n"
-    }
-  }
   # The script for a file event is executed at global level (outside the
   # context of any Tcl procedure) in the interpreter in which the fileevent
   # command was invoked. If an error occurs while executing the script then the
   # bgerror mechanism is used to report the error.
   fileevent $chan readable [list read_from_pipe $chan decoded_args STATUS]
+  variable one_time 0
+  expect {
+    #-re \x03 {
+      #send_error "INTERRUPT\r\n"
+    #}
+    -re {^([^\.]{1,255})} {
+      set s [clean_xmitted_string $expect_out(1,string)]
+      puts $chan $s
+      incr one_time
+      exp_continue
+    }
+    -ex . {
+      if {$one_time==0} {exp_continue}
+      chan close $chan write
+    }
+    timeout {
+      send_error "TIMEOUT in _ES_run_marker_handler decoding payload data\r\n"
+      exp_continue
+    }
+  }
   vwait STATUS
   # find the handler and run it
   foreach key [array names MARKER -regexp {^(\w+)$}] {
@@ -511,15 +525,7 @@ proc load_mybashprefs {EXPECTSSH_SHLVL {nest_level 0}} {
     -re $MARKER_RE {
       erase_line
       set marker_idx $expect_out(1,string)
-      set status_line ""
-      # save cursor position
-      append status_line "\033\[s"
-      # move up 1 line
-      append status_line "\033\[1A"
-      # send human friend word for the marker
-      append status_line [get_marker_word $marker_idx]
-      # restore cursor position
-      append status_line "\033\[u"
+      set status_line [get_marker_word $marker_idx]
       _ES_run_marker_handler $marker_idx $status_line
       exp_continue
     }
@@ -747,7 +753,8 @@ set EXPECTSSH_PROFILE_OVERRIDES $EXPECTSSH_CONFIGDIR/$opts(profile)
 set EXPECTSSH_CORE_FCN_PREFIX _ES_
 set EXPECTSSH_CORE $EXPECTSSH_HOME/core
 set EXPECTSSH_FCN_LIST $EXPECTSSH_TMPDIR/fcnlist.$env(USER)
-set MARKER_RE (?:^|\x07|\n|\r|$ANSI_RE_GENERAL)[get_marker]\x08\.\[\r\n]
+#set MARKER_RE (?:^|\x07|\n|\r|$ANSI_RE_GENERAL)[get_marker]\x08\.\[\r\n]
+set MARKER_RE (?:^|\x07|\n|\r|$ANSI_RE_GENERAL)[get_marker]\x08\.\r(?:$ANSI_RE_CURSOR_POSITIONING)*\n
 if {[string length $opts(killfile)]>0} {
   set chan [open $opts(killfile) w]
   puts $chan "kill -KILL [pid]"
@@ -760,8 +767,6 @@ if {[string length $opts(killfile)]>0} {
 #
 _ES_register_marker LOAD_MYBASHPREFS load_mybashprefs_handler
 _ES_register_marker UPLOAD_SCRIPT upload_script_handler
-_ES_register_marker DOWNLOAD_DEFAULT_FILE download_default_file_handler
-_ES_register_marker DOWNLOAD_DATA download_data_handler
 _ES_register_marker GET_SCRIPT_PW script_password_handler
 _ES_register_marker GET_FUNCTION_LIST function_list_handler
 
