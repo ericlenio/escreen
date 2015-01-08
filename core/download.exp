@@ -17,18 +17,14 @@ proc download_data_handler {decoded_args} {
   array set args $decoded_args
   set outfile $args(outfile)
   set l -1
-  if { [catch {
-    set chan [open "|/usr/bin/openssl enc -base64 -d | gzip -d -c > \"$outfile\"" w]
-    fconfigure $chan -translation binary -encoding binary
-    puts $chan $args(content)
-    flush $chan
-    close $chan
-    set l [file size $outfile]
-    # bash is doing a read operation, send along a status line too
-    send "DONE...downloaded to $outfile, $l bytes\r"
-    } err] } {
-    send_error "ERROR in download_data_handler: $err\r\n"
-  }
+  set chan [open "|/usr/bin/openssl enc -base64 -d | gzip -d -c > \"$outfile\"" w]
+  fconfigure $chan -translation binary -encoding binary
+  puts $chan $args(content)
+  flush $chan
+  close $chan
+  set l [file size $outfile]
+  # bash is doing a read operation, send along a status line too
+  send "DONE...downloaded to $outfile, $l bytes\r"
   return ""
 }
 
