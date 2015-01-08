@@ -146,31 +146,55 @@ proc erase_line {} {
 }
 
 proc clean_xmitted_string {s} {
-  global ANSI_RE_GENERAL
+  global ANSI_RE_GENERAL ANSI_RE_TEXT_FORMATTING ANSI_RE_CURSOR_POSITIONING
+  # if gnu screen active, sometimes the status line changes and so we remove that
+  regsub -all $ANSI_RE_CURSOR_POSITIONING.*$ANSI_RE_TEXT_FORMATTING $s "" s
+  # clean out any other cursor movement sequences that sometimes get thrown in
+  # by screen
+  regsub -all $ANSI_RE_GENERAL $s "" s
   # convert all \015 back to \n
   regsub -all "\015" $s "\n" s
-  # clean out any cursor movement sequences that sometimes get thrown in by screen
-  regsub -all $ANSI_RE_GENERAL $s "" s
   return $s
 }
 
-proc read_from_pipe {chan decoded_args_var status_var} {
+proc read_from_pipe {chan LOG_var BYTES_READ_var decoded_args_var status_var} {
+  upvar $LOG_var LOG
+  upvar $BYTES_READ_var BYTES_READ
   upvar $decoded_args_var decoded_args
   upvar $status_var STATUS
-  set l [gets $chan]
-  append decoded_args $l
-  if {[eof $chan]} {
-    close $chan
-    set STATUS DONE
+  catch {
+    set l [gets $chan]
+    return
+  } err
+  if {[string length $err]>0} {
+    send_error "read_from_pipe: channel $chan: $err\r\n"
+send_log $LOG
     return
   }
-  if {[string length $l]>0} {
+  append decoded_args $l
+  incr BYTES_READ [string length $l]
+  append LOG "R:[string length $l]:$BYTES_READ\n"
+  if {[eof $chan]} {
+    set b [fblocked $chan]
+    send_error "read_from_pipe:EOF detected in $chan, fblocked=$b\r\n"
+    append LOG "read_from_pipe:EOF detected in $chan, fblocked=$b\r\n"
+    if {$b==1} {
+      send_error "read_from_pipe:EOF detected in $chan, but fblocked==1\r\n"
+    } else {
+      close $chan
+      set STATUS DONE
+      append LOG "read_from_pipe:CLOSE:$chan\n"
+    }
+    return
+  }
+  # unlikely to be blocked, but perhaps
+  if {[fblocked $chan]==0 && [string length $l]>0} {
     append decoded_args \n
   }
 }
 
 proc _ES_run_marker_handler {marker_idx status_line} {
-  global MARKER
+  global MARKER LOG
   # save cursor position
   send_user "\033\[s"
   # move up 1 line
@@ -186,6 +210,9 @@ proc _ES_run_marker_handler {marker_idx status_line} {
   variable encoded_args ""
   variable decoded_args ""
   variable STATUS ""
+  variable LOG "LOG:START\n"
+  variable BYTES_READ 0
+  variable BYTES_WRITTEN 0
   # Open channel for read/write to decode the payload that goes with the event
   # handler we are about to invoke.
   variable chan [open "| /usr/bin/openssl enc -base64 -d | gzip -d -c" r+]
@@ -194,29 +221,45 @@ proc _ES_run_marker_handler {marker_idx status_line} {
   # context of any Tcl procedure) in the interpreter in which the fileevent
   # command was invoked. If an error occurs while executing the script then the
   # bgerror mechanism is used to report the error.
-  fileevent $chan readable [list read_from_pipe $chan decoded_args STATUS]
+  fileevent $chan readable [list read_from_pipe $chan LOG BYTES_READ decoded_args STATUS]
   expect {
-    #-re \x03 {
-      #send_error "INTERRUPT\r\n"
-    #}
-    -re {^([^\.]{1,255})} {
+    -re {^([^\.]{1,})} {
+append LOG "W:uncleaned:$expect_out(1,string)\n"
       set s [clean_xmitted_string $expect_out(1,string)]
-      puts $chan $s
-      exp_continue
+append LOG "W:[string length $s]:$BYTES_WRITTEN:$s.\n"
+      if {[eof $chan]==0} {
+        catch {
+          puts $chan $s
+          incr BYTES_WRITTEN [string length $s]
+          return
+        } err
+        if {[string length $err]>0} {
+send_log $LOG
+          send_error "ERROR in _ES_run_marker_handler: cannot write to channel $chan: $err\r\n"
+  set c1 [clock microseconds]
+        } else {
+          exp_continue
+        }
+      } else {
+        send_error "_ES_run_marker_handler: channel $chan was closed, aborting handler\r\n"
+        return
+      }
     }
     # period followed by erase line means we have the terminating sequence
     -re {(?x)
       \.(?:
-      # this is what the remote end sends ...
+      # this is what _ES_send_marker sends ...
       \x0d\x1b\[2K
       |
       # but gnu screen translates it to this ...
       \x08\x1b\[K
       )} {
+      send_log "CLOSE channel $chan now\r\n"
+      append LOG "CLOSE channel $chan (for writing)\n"
       chan close $chan write
     }
     timeout {
-      send_error "TIMEOUT in _ES_run_marker_handler decoding payload data\r\n"
+      send_error "TIMEOUT in _ES_run_marker_handler decoding payload data, retrying...\r\n"
       exp_continue
     }
   }
@@ -230,6 +273,7 @@ proc _ES_run_marker_handler {marker_idx status_line} {
       } err
       if {[string length $err]>0} {
         send_error "ERROR invoking handler $handler: $err\r\n"
+        send_log "decoded_args=<$decoded_args>\r\n"
       }
       return
     }
@@ -737,7 +781,7 @@ if { $def_timeout != $timeout } {
 set spawn_out_slave_name 0
 # for prompt, "\u001b[0m" is a possible "end of color" sequence
 set ANSI_RE_TEXT_FORMATTING {\u001b\[(?:\d+;?)*m}
-set ANSI_RE_CURSOR_POSITIONING {\u001b\\\[\d+;\d+[Hf]}
+set ANSI_RE_CURSOR_POSITIONING {\u001b\[(?:\d+;\d+[Hf]|\d+[ABCD])}
 set ANSI_RE_GENERAL {\u001b\[[^a-zA-Z]*[a-zA-Z]}
 set ANSI_RE_SHOW_CURSOR {\u001b\[\?25h}
 array set MARKER {}
@@ -833,6 +877,7 @@ if { $opts(debug) == 1 } {
 trap {resize_handler} WINCH
 
 spawn -noecho /bin/bash
+
 match_max 10000
 # spawn command above will set spawn_out
 set spawn_out_slave_name $spawn_out(slave,name)
