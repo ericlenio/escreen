@@ -176,7 +176,6 @@ send_log $LOG
   append LOG "R:[string length $l]:$BYTES_READ\n"
   if {[eof $chan]} {
     set b [fblocked $chan]
-    send_error "read_from_pipe:EOF detected in $chan, fblocked=$b\r\n"
     append LOG "read_from_pipe:EOF detected in $chan, fblocked=$b\r\n"
     if {$b==1} {
       send_error "read_from_pipe:EOF detected in $chan, but fblocked==1\r\n"
@@ -214,7 +213,8 @@ proc _ES_run_marker_handler {marker_idx status_line} {
   variable BYTES_READ 0
   variable BYTES_WRITTEN 0
   # Open channel for read/write to decode the payload that goes with the event
-  # handler we are about to invoke.
+  # handler we are about to invoke. To debug problems, it can be useful to put
+  # tee in this pipeline (before openssl).
   variable chan [open "| /usr/bin/openssl enc -base64 -d | gzip -d -c" r+]
   fconfigure $chan -translation binary -encoding binary -blocking 0
   # The script for a file event is executed at global level (outside the
@@ -222,38 +222,48 @@ proc _ES_run_marker_handler {marker_idx status_line} {
   # command was invoked. If an error occurs while executing the script then the
   # bgerror mechanism is used to report the error.
   fileevent $chan readable [list read_from_pipe $chan LOG BYTES_READ decoded_args STATUS]
+  variable base64_chars {[0-9a-zA-Z\+/=\015]}
   expect {
-    -re {^([^\.]{1,})} {
-append LOG "W:uncleaned:$expect_out(1,string)\n"
-      set s [clean_xmitted_string $expect_out(1,string)]
-append LOG "W:[string length $s]:$BYTES_WRITTEN:$s.\n"
-      if {[eof $chan]==0} {
-        catch {
-          puts $chan $s
-          incr BYTES_WRITTEN [string length $s]
-          return
-        } err
-        if {[string length $err]>0} {
-send_log $LOG
-          send_error "ERROR in _ES_run_marker_handler: cannot write to channel $chan: $err\r\n"
-  set c1 [clock microseconds]
-        } else {
-          exp_continue
-        }
-      } else {
-        send_error "_ES_run_marker_handler: channel $chan was closed, aborting handler\r\n"
+    -re ^($base64_chars{64,})$ {
+      catch {
+        puts -nonewline $chan [regsub -all "\015" $expect_out(1,string) "\n"]
+      } err
+      if {[string length $err]>0} {
+        #append LOG "W:[string length $s]:$BYTES_WRITTEN:$s.\n"
+        send_error "Error writing $chan: $err\r\n\n"
         return
+      } else {
+        exp_continue
+      }
+    }
+    # this regexp to scrub gnu screen output: it forces the last 64 chars to be
+    # valid base64 chars, to cover the case where a long gnu screen caption
+    # refresh might be chunked into 2 or more expect payloads
+    -re (.*$base64_chars{64,})$ {
+      set s [clean_xmitted_string $expect_out(1,string)]
+      catch {puts $chan $s} err
+      if {[string length $err]} {
+        #append LOG "W:[string length $s]:$BYTES_WRITTEN:$s.\n"
+        send_error "Error writing $chan: $err\r\n\n"
+        return
+      } else {
+        exp_continue
       }
     }
     # period followed by erase line means we have the terminating sequence
     -re {(?x)
+      (.*)?
       \.(?:
-      # this is what _ES_send_marker sends ...
-      \x0d\x1b\[2K
-      |
-      # but gnu screen translates it to this ...
-      \x08\x1b\[K
+        # this is what _ES_send_marker sends to erase line ...
+        \x0d\x1b\[2K
+        |
+        # but gnu screen translates it to this ...
+        \x08\x1b\[K
       )} {
+      if {[info exists expect_out(1,string)]} {
+        set s [clean_xmitted_string $expect_out(1,string)]
+        puts $chan $s
+      }
       send_log "CLOSE channel $chan now\r\n"
       append LOG "CLOSE channel $chan (for writing)\n"
       chan close $chan write
