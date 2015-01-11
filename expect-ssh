@@ -1,6 +1,15 @@
 #!/usr/bin/expect
 # vim:filetype=expect
 #
+# fork, and in parent make it become the event handler server, and 
+# the child becomes the normal expect-ssh process.
+# trap SIGCHLD in parent, to force exit when expect-ssh ends.
+# need a way to get open port if ssh-ing to another host.
+# port 0: http://wiki.tcl.tk/2230
+# When initializing a function:
+# function l() {
+#   
+#
 # Drop in replacement script for ssh, with helpful integrations to use bash,
 # sudo, screen, and vim more effectively. Run with -help to see arguments.
 #
@@ -884,7 +893,35 @@ if { $opts(debug) == 1 } {
   send_user "DEBUG MODE: sending output for this session to $EXPECTSSH_LOGFILE\n"
 }
 
+set named_pipe $EXPECTSSH_TMPDIR/$env(USER).pipe
+if {[file exists $named_pipe]==0} {
+  exec mkfifo -m 600 $named_pipe
+}
+set command_server_pid [fork]
+switch $command_server_pid {
+  -1 { send_error "Fork attempt failed\n"
+    exit
+  }
+  0 {
+    # child: run server
+    set sock [socket -server Command_Server -myaddr localhost 0]
+    # -sockname returns address, hostname, and port number
+    set port [lindex [fconfigure $sock -sockname] 2]
+    send_error "Server is listening on port: $port\n"
+    set chan [open $named_pipe w]
+    puts $chan $port
+    close $chan
+    vwait forever
+    exit
+  }
+}
+
 trap {resize_handler} WINCH
+set chan [open $named_pipe r]
+gets $chan EXPECTSSH_PORT
+close $chan
+send_error EXPECTSSH_PORT=$EXPECTSSH_PORT\n
+set env(EXPECTSSH_PORT) $EXPECTSSH_PORT
 
 spawn -noecho /bin/bash
 
@@ -915,4 +952,6 @@ if {[catch {
   send_error $::errorInfo\n
 }
 
+exec kill $command_server_pid
+send_error "Killed command server: $command_server_pid\n"
 cleanup_tmpdir
