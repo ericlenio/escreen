@@ -1,0 +1,4 @@
+proc Command_Server {client_sock client_addr client_port} {
+  puts "Accept $client_sock from $client_addr:$client_port"
+  close $client_sock
+}
