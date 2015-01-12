@@ -7,9 +7,7 @@ function _ES_gen_stubs() {
   local fcnlist_md5=$1
   local fcnlist f
   [[ ! -f $EXPECTSSH_FCN_LIST || ! ( $(openssl md5 $EXPECTSSH_FCN_LIST) =~ $fcnlist_md5 ) ]] && {
-    _ES_send_marker "$marker"
-    _ES_rec_rem fcnlist
-    echo "$fcnlist" > $EXPECTSSH_FCN_LIST
+    _ES_send_marker "$marker" > $EXPECTSSH_FCN_LIST
     chmod 666 $EXPECTSSH_FCN_LIST
   }
   for f in $(cat $EXPECTSSH_FCN_LIST); do

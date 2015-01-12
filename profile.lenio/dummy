@@ -1,0 +1,3 @@
+function dummy() {
+  echo "inside dummy function: $(date)"
+}

@@ -39,6 +39,7 @@ eval "$(openssl enc -d -base64 << EOF
 EOF
 )"
 
+export EXPECTSSH_PORT='"$EXPECTSSH_PORT"'
 export EXPECTSSH_LOADED_FUNCS='"$EXPECTSSH_LOADED_FUNCS"'
 export -f '"$EXPECTSSH_LOADED_FUNCS"'
 "$@" </dev/tty'
