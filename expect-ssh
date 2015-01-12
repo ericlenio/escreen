@@ -8,10 +8,21 @@
 # port 0: http://wiki.tcl.tk/2230
 # When initializing a function:
 # function l() {
-#   
+# }
 #
-# Drop in replacement script for ssh, with helpful integrations to use bash,
-# sudo, screen, and vim more effectively. Run with -help to see arguments.
+# launch expect-ssh, command server listens on port 1313
+# start screen
+# ssh -R35343:localhost:1313 clouda
+# ssh -R24388:localhost:1313 cloudw1
+# go home
+# launch expect-ssh, command server listens on port 2389
+# ssh back to work: -R34306:localhost:2389
+# kill old expect-ssh
+# resume original gnu screen: screen -d -r
+# set up netcat relay:
+#   mkfifo backpipe
+#   nc -l -p 1313 0<backpipe | nc localhost -p 2389 1>backpipe
+#   
 #
 # apt-get install tcllib
 package require cmdline
@@ -64,16 +75,20 @@ proc get_git_branch {} {
   return $GIT_BRANCH
 }
 
-proc cleanup_tmpdir {} {
-  global EXPECTSSH_TMPDIR opts
-  if {$opts(tmpdir)==0} {return}
-  set tmpdir $EXPECTSSH_TMPDIR
-  if {[catch {
-    file delete -force $tmpdir
-    puts "expect-ssh: $tmpdir was deleted."
-  } err]} {
-    puts "Error while deleting $tmpdir: $err"
+proc cleanup_and_exit {} {
+  global EXPECTSSH_TMPDIR opts command_server_pid
+  exec kill $command_server_pid
+  send_error "Killed command server: $command_server_pid\n"
+  if {$opts(tmpdir)==1} {
+    set tmpdir $EXPECTSSH_TMPDIR
+    if {[catch {
+      file delete -force $tmpdir
+      puts "expect-ssh: $tmpdir was deleted."
+    } err]} {
+      puts "Error while deleting $tmpdir: $err"
+    }
   }
+  exit
 }
 
 proc init_tmpdir {opts_tmpdir} {
@@ -82,7 +97,6 @@ proc init_tmpdir {opts_tmpdir} {
   set tmpdir /tmp/.expect-ssh-$GIT_BRANCH$suffix
   if {$opts_tmpdir==1} {
     puts "Using temp dir: $tmpdir"
-    #trap {cleanup_tmpdir} [list INT TERM QUIT]
   }
   exec bash -c {
     [ ! -d $0 ] && { mkdir $0; chmod 1777 $0; }
@@ -144,7 +158,8 @@ proc get_marker_word {idx} {
 proc _ES_register_marker {marker_key handler} {
   global MARKER
   set idx [llength [array names MARKER -regexp {^(\w+)$}]]
-  set MARKER($marker_key) [get_marker $idx]
+  #set MARKER($marker_key) [get_marker $idx]
+  set MARKER($marker_key) [format "%02d" $idx]
   set MARKER($marker_key,idx) $idx
   set MARKER($marker_key,handler) $handler
   #puts "_ES_register_marker: registered new marker $marker_key with handler: $handler idx=$idx"
@@ -199,105 +214,6 @@ send_log $LOG
   if {[fblocked $chan]==0 && [string length $l]>0} {
     append decoded_args \n
   }
-}
-
-proc _ES_run_marker_handler {marker_idx status_line} {
-  global MARKER LOG
-  # save cursor position
-  send_user "\033\[s"
-  # move up 1 line
-  send_user "\033\[1A"
-  # move to column 1
-  send_user "\033\[1`"
-  # send status line
-  send_user $status_line
-  # restore cursor position
-  send_user "\033\[u"
-  # strip leading zeroes, else will be interpreted as octal
-  regexp {^0*(\d+)} $marker_idx - marker_idx
-  variable encoded_args ""
-  variable decoded_args ""
-  variable STATUS ""
-  variable LOG "LOG:START\n"
-  variable BYTES_READ 0
-  variable BYTES_WRITTEN 0
-  # Open channel for read/write to decode the payload that goes with the event
-  # handler we are about to invoke. To debug problems, it can be useful to put
-  # tee in this pipeline (before openssl).
-  variable chan [open "| /usr/bin/openssl enc -base64 -d | gzip -d -c" r+]
-  fconfigure $chan -translation binary -encoding binary -blocking 0
-  # The script for a file event is executed at global level (outside the
-  # context of any Tcl procedure) in the interpreter in which the fileevent
-  # command was invoked. If an error occurs while executing the script then the
-  # bgerror mechanism is used to report the error.
-  fileevent $chan readable [list read_from_pipe $chan LOG BYTES_READ decoded_args STATUS]
-  variable base64_chars {[0-9a-zA-Z\+/=\015]}
-  expect {
-    -re ^($base64_chars{64,})$ {
-      catch {
-        puts -nonewline $chan [regsub -all "\015" $expect_out(1,string) "\n"]
-      } err
-      if {[string length $err]>0} {
-        #append LOG "W:[string length $s]:$BYTES_WRITTEN:$s.\n"
-        send_error "Error writing $chan: $err\r\n\n"
-        return
-      } else {
-        exp_continue
-      }
-    }
-    # this regexp to scrub gnu screen output: it forces the last 64 chars to be
-    # valid base64 chars, to cover the case where a long gnu screen caption
-    # refresh might be chunked into 2 or more expect payloads
-    -re (.*$base64_chars{64,})$ {
-      set s [clean_xmitted_string $expect_out(1,string)]
-      catch {puts $chan $s} err
-      if {[string length $err]} {
-        #append LOG "W:[string length $s]:$BYTES_WRITTEN:$s.\n"
-        send_error "Error writing $chan: $err\r\n\n"
-        return
-      } else {
-        exp_continue
-      }
-    }
-    # period followed by erase line means we have the terminating sequence
-    -re {(?x)
-      (.*)?
-      \.(?:
-        # this is what _ES_send_marker sends to erase line ...
-        \x0d\x1b\[2K
-        |
-        # but gnu screen translates it to this ...
-        \x08\x1b\[K
-      )} {
-      if {[info exists expect_out(1,string)]} {
-        set s [clean_xmitted_string $expect_out(1,string)]
-        puts $chan $s
-      }
-      send_log "CLOSE channel $chan now\r\n"
-      append LOG "CLOSE channel $chan (for writing)\n"
-      chan close $chan write
-    }
-    timeout {
-      send_error "TIMEOUT in _ES_run_marker_handler decoding payload data, retrying...\r\n"
-      exp_continue
-    }
-  }
-  vwait STATUS
-  # find the handler and run it
-  foreach key [array names MARKER -regexp {^(\w+)$}] {
-    if {$marker_idx == $MARKER($key,idx)} {
-      set handler $MARKER($key,handler)
-      catch {
-        eval [list $handler $decoded_args]
-      } err
-      if {[string length $err]>0} {
-        send_error "ERROR invoking handler $handler: $err\r\n"
-        send_log "decoded_args=<$decoded_args>\r\n"
-      }
-      return
-    }
-  }
-  send_error "ERROR in _ES_run_marker_handler: no handler found for idx=$marker_idx\r\n"
 }
 
 proc resize_handler {} {
@@ -435,7 +351,7 @@ proc upload_file {} {
   expect -re $EXPECTSSH_PROMPT
 }
 
-proc load_mybashprefs_handler {decoded_args} {
+proc load_mybashprefs_handler {client_sock decoded_args} {
   global load_mybashprefs_args
   #
   # We have a request to load bash prefs into the current shell, but we
@@ -590,13 +506,6 @@ proc load_mybashprefs {EXPECTSSH_SHLVL {nest_level 0}} {
       expect -re $EXPECTSSH_PROMPT
       return [load_mybashprefs $EXPECTSSH_SHLVL 1]
     }
-    -re $MARKER_RE {
-      erase_line
-      set marker_idx $expect_out(1,string)
-      set status_line [get_marker_word $marker_idx]
-      _ES_run_marker_handler $marker_idx $status_line
-      exp_continue
-    }
     -re $EXPECTSSH_PROMPT {
       # sometimes the prompt can be detected BEFORE we have had a chance to get
       # to openssl's password prompt ...
@@ -611,32 +520,32 @@ proc load_mybashprefs {EXPECTSSH_SHLVL {nest_level 0}} {
 proc get_encrypted_func {funcname script} {
   set pw [compute_pw $script]
   set enc_script [exec /bin/bash -c {echo "$0"|gzip -9 -c|pw="$1" openssl enc -aes256 -a -pass env:pw} $script $pw]
-  regsub -all "\n" $enc_script {\n} enc_script
-  return [format {fname=%s;pw='%s';script=$'%s'} $funcname $pw $enc_script]
+  #regsub -all "\n" $enc_script {\n} enc_script
+  #return [format {fname=%s;pw='%s';script=$'%s'} $funcname $pw $enc_script]
+  return $enc_script
 }
 
-proc upload_script_handler {decoded_args} {
+proc upload_script_handler {client_sock decoded_args} {
   set funcname $decoded_args
   array set FUNCMAP [get_scripts]
   set script ""
-  append script "[get_encrypted_func $funcname $FUNCMAP($funcname,defn)]\n"
-  send_script $script
+  append script "[get_encrypted_func $funcname $FUNCMAP($funcname,defn)]"
+  puts $client_sock $script
   return ""
 }
 
-proc function_list_handler {-} {
+proc function_list_handler {client_sock -} {
   array set FUNCMAP [get_scripts]
-  send_script $FUNCMAP(:fcnlist)
+  puts $client_sock $FUNCMAP(:fcnlist)
   return ""
 }
 
-proc script_password_handler {decoded_args} {
+proc script_password_handler {client_sock decoded_args} {
   set funcname $decoded_args
   array set FUNCMAP [get_scripts]
   set pw [compute_pw $FUNCMAP($funcname,defn)]
-  expect -re "password:$"
-  send "$pw\r"
-  send_user "($funcname)"
+  puts -nonewline $client_sock $pw
+  return
 }
 
 proc strip_comments {script} {
@@ -728,7 +637,7 @@ proc process_keystroke {c} {
     stty echo
     puts "Type YES to kill expect: "
     gets stdin ans
-    if { $ans == "YES" } { exit } else { stty -echo }
+    if { $ans == "YES" } { cleanup_and_exit } else { stty -echo }
   } elseif { $stdin_buf == "~d" } {
     # toggle debug mode
     set curr [exp_internal -info]
@@ -820,16 +729,9 @@ set EXPECTSSH_PROFILE $EXPECTSSH_HOME/$opts(profile)
 set EXPECTSSH_PROFILE_OVERRIDES $EXPECTSSH_CONFIGDIR/$opts(profile)
 set EXPECTSSH_CORE_FCN_PREFIX _ES_
 set EXPECTSSH_CORE $EXPECTSSH_HOME/core
-set EXPECTSSH_FCN_LIST $EXPECTSSH_TMPDIR/fcnlist.$env(USER)
+set EXPECTSSH_FCN_LIST $EXPECTSSH_TMPDIR/$env(USER).fcnlist
 #set MARKER_RE (?:^|\x07|\n|\r|$ANSI_RE_GENERAL)[get_marker]\x08\.\[\r\n]
 set MARKER_RE (?:^|\x07|\n|\r|$ANSI_RE_GENERAL)[get_marker]\x08\.\r(?:$ANSI_RE_CURSOR_POSITIONING)*\n
-if {[string length $opts(killfile)]>0} {
-  set chan [open $opts(killfile) w]
-  puts $chan "kill -KILL [pid]"
-  puts $chan "echo 'just killed [pid]'"
-  close $chan
-  file attributes $opts(killfile) -permissions 0700
-}
 #
 # Register core handlers
 #
@@ -908,12 +810,21 @@ switch $command_server_pid {
     # -sockname returns address, hostname, and port number
     set port [lindex [fconfigure $sock -sockname] 2]
     send_error "Server is listening on port: $port\n"
+    # tell parent what the port number is
     set chan [open $named_pipe w]
     puts $chan $port
     close $chan
     vwait forever
     exit
   }
+}
+
+if {[string length $opts(killfile)]>0} {
+  set chan [open $opts(killfile) w]
+  puts $chan "kill -KILL [pid] $command_server_pid"
+  puts $chan "echo 'just killed processes [pid], $command_server_pid'"
+  close $chan
+  file attributes $opts(killfile) -permissions 0700
 }
 
 trap {resize_handler} WINCH
@@ -943,15 +854,9 @@ if {[catch {
     # patterns after the -o apply to the spawned process."
     -o
     -nobuffer -re $EXPECTSSH_PROMPT {main_prompt_checker [array get interact_out]}
-    -nobuffer -re $MARKER_RE {
-      set marker_idx $interact_out(1,string)
-      _ES_run_marker_handler $marker_idx [get_marker_word $marker_idx]
-    }
   }
 } err]} {
   send_error $::errorInfo\n
 }
 
-exec kill $command_server_pid
-send_error "Killed command server: $command_server_pid\n"
-cleanup_tmpdir
+cleanup_and_exit

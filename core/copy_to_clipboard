@@ -15,9 +15,5 @@ function copy_to_clipboard() {
   local c=$(perl -pe 'chomp if eof' -- "$f")
   [ -z "$c" ] && c="-"
   _ES_send_marker "$marker" "$c"
-  # This read acts as a block so if on a slower connection it gives the handler
-  # enough time to write out a status line. The handler will send the status
-  # line in this read, and we just let it go to stderr so user sees it.
-  read >&2 </dev/tty
 }
 export -f copy_to_clipboard

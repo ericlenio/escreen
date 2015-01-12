@@ -1,6 +1,6 @@
 _ES_register_marker COPY_TO_CLIPBOARD copy_to_clipboard_handler
 
-proc copy_to_clipboard_handler {clipboard_data} {
+proc copy_to_clipboard_handler {client_sock clipboard_data} {
   global OS
   set max_clipboard_data_len 1000000
   set content {}
@@ -31,5 +31,5 @@ proc copy_to_clipboard_handler {clipboard_data} {
     return
   }
   # copy_to_clipboard is doing a read operation, send along a status line too
-  send "$l bytes copied to the clipboard\r"
+  puts $client_sock "$l bytes copied to the clipboard\r"
 }

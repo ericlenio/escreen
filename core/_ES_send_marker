@@ -4,22 +4,19 @@
 # corresponding event handler.
 #
 function _ES_send_marker() {
-  local marker="$1"
   local l
-  # pass a \010 (backspace) character to erase last character of the pattern so
-  # that expect-ssh only processes this signal 1 time ... else when inside
-  # screen it would potentially get re-executed from a resumed session.
-  printf "%s\010.\n" "$marker" >&2
-  # if stdin is a terminal, use the 2nd arg to this function as the parameter
-  # string for the event handler; else stdin itself is the event handler
-  # parameter string
-  { [ -t 0 ] && printf "$2" || cat -; } | gzip -9 -c | openssl enc -base64 | {
-    while IFS=$'\n' read -r l || [ -n "$l" ]; do
-      printf "%s\015" $l >&2
-    done
-  }
-  # send terminating period for the pattern to match, and erase the line to
-  # keep things looking cleaner
-  printf ".\015\033[2K" >&2
+  {
+    echo "$1"
+    # if stdin is a terminal, use the 2nd arg to this function as the parameter
+    # string for the event handler; else stdin itself is the event handler
+    # parameter string
+    #{ [ -t 0 ] && printf "$2" || cat -; } | gzip -9 -c | openssl enc -base64 | {
+    printf "$2" | gzip -9 -c | openssl enc -base64 | {
+      while IFS=$'\n' read -r l || [ -n "$l" ]; do
+        printf "%s\n" $l
+      done
+    }
+    echo .
+  } | nc localhost $EXPECTSSH_PORT
 }
 export -f _ES_send_marker
