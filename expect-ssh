@@ -155,6 +155,11 @@ proc get_marker_word {idx} {
   return "?"
 }
 
+proc get_marker_idx {word} {
+  global MARKER
+  return $MARKER($word,idx)
+}
+
 proc _ES_register_marker {marker_key handler} {
   global MARKER
   set idx [llength [array names MARKER -regexp {^(\w+)$}]]
@@ -381,6 +386,171 @@ proc ps1_tail_regexp {} {
   set ps1_tail_regexp [regsub -all {\x5b} $EXPECTSSH_PS1_TAIL {\\\0}]
   # handle \$
   return [regsub -all {\\\$} $ps1_tail_regexp {[\$#]}]
+}
+
+#
+# This handler assumes that it has already been confirmed that bash
+# exists.
+proc bootstrap_shell_handler {client_sock -} {
+  global EXPECTSSH_MYBASHPREFS
+  set EXPECTSSH_SHLVL 0
+  puts $client_sock "echo 'Bootstrapping shell'"
+  puts $client_sock "bash << 'EOF'"
+  set fcnlist_md5 [get_fcnlist_md5]
+  set mybashprefs [get_bash_core]
+  set pass [compute_pw $mybashprefs]
+  puts $client_sock "f=$EXPECTSSH_MYBASHPREFS;EXPECTSSH_SHLVL=$EXPECTSSH_SHLVL;fcnlist_md5=$fcnlist_md5;pw=$pw"
+  puts $client_sock {if [ -e $f ]; then
+  c="$(echo -n $pw | openssl enc -a -d -aes256 -in $f -pass stdin)" && eval "${c}" && _ES_core $EXPECTSSH_SHLVL $fcnlist_md5"
+}
+  puts $client_sock "exec bash </dev/tty"
+  puts $client_sock "EOF"
+  return
+
+
+  send " f=$EXPECTSSH_MYBASHPREFS; c=\"\$(openssl enc -a -d -aes256 -in \$f)\" && eval \"\${c}\" && _ES_core $EXPECTSSH_SHLVL $fcnlist_md5\r"
+  set password_was_entered 0
+  expect {
+    -re "password:$" {
+      send $pass\r
+      set password_was_entered 1
+      exp_continue
+    }
+    -re "(?:bad decrypt|bad magic number|error reading input file|No such file or directory).*$EXPECTSSH_PROMPT" {
+      if { $nest_level > 0 } {
+        # do not get in recursive loop attempting to upload + write out bash prefs
+        return "NOT OK"
+      }
+      # compress all the bash commands, base64 encode, pass over the wire,
+      # base64 decode, uncompress, then encrypt + base64 encode and write to
+      # disk ... but watch out if this base64 string exceeds 4096 bytes (1024
+      # for mac) which seems to be the terminal driver limit
+      # (http://expect.sourceforge.net/FAQ.html#q76) "terminal input queue"
+      # "typeahead buffer" MAX_INPUT
+      # "getconf -a|grep MAX_INPUT" may help determine this value
+      send "c=\$(history|tail -1|awk '{print \$1}') && history -d \$c && history -d \$((\$c-1)) && HISTCONTROL=ignoreboth:erasedups\r"
+      expect -re $EXPECTSSH_PROMPT
+      send " d=$EXPECTSSH_TMPDIR; \[ ! -d \$d ] && { mkdir \$d; chmod 1777 \$d; }\r"
+      expect -re $EXPECTSSH_PROMPT
+      #send_user "uploading $EXPECTSSH_MYBASHPREFS ...\n"
+      # Note the leading space so it is not saved in bash history
+      send " touch \$f; chmod 666 \$f\r"
+      expect -re $EXPECTSSH_PROMPT
+      log_user 0
+      send " exec 3< <(echo '$pass')\r"
+      expect -re {(.*\r)}
+      # Hide password from being displayed
+      regsub {'(.*)'} $expect_out(1,string) '[regsub -all . $pass *]' echoline
+      send_user $echoline\n
+      log_user 1
+      expect -re $EXPECTSSH_PROMPT
+      # Delimit the input with a space, and after each line is sent send \r so
+      # the terminal does not scroll
+      send " exec 4> >(openssl enc -d -base64 | gzip -d -c | openssl enc -a -aes256 -pass fd:3 -out \$f)\r"
+      send { while true; do read -d' ' l; [ "$l" = . ] && break; printf "%s\n" $l >&4; printf "\015"; done; exec 3<&- 4>&-}
+      send \r
+      expect {
+        -re \r\n$ {}
+        timeout {
+          send_error "TIMEOUT in proc load_mybashprefs\r\n"
+        }
+      }
+      send_script $mybashprefs 
+      expect -re $EXPECTSSH_PROMPT
+      return [load_mybashprefs $EXPECTSSH_SHLVL 1]
+    }
+    -re $EXPECTSSH_PROMPT {
+      # sometimes the prompt can be detected BEFORE we have had a chance to get
+      # to openssl's password prompt ...
+      if { $password_was_entered == 0 } { exp_continue }
+    }
+    timeout { send_error "TIMEOUT2 in proc load_mybashprefs\r\n"; return "NOT OK" }
+  }
+  expect_before
+  return "OK"
+}
+
+proc bootstrap_shell {port} {
+  global EXPECTSSH_PROMPT
+  expect -re $EXPECTSSH_PROMPT
+  send " echo \$BASH-\r"
+  expect {
+    -re "\n-.*$EXPECTSSH_PROMPT" { send_user "not a bash shell"; return }
+    -re "\n/.*$EXPECTSSH_PROMPT" {}
+    timeout {
+      send_error "timeout in bootstrap_shell while testing for bash\n"
+      return
+    }
+  }
+  set marker [get_marker_idx BOOTSTRAP_SHELL]
+  send " eval \"\$(echo -n $marker | nc localhost $port)\"\r"
+}
+
+proc get_fcnlist_md5 {} {
+  # Take just first 8 of the md5: to minimize characters sent over the wire
+  set fcnlist_md5 [format "%.8s" [compute_md5 $FUNCMAP(:fcnlist)]]
+}
+
+proc get_bash_core {} {
+  global EXPECTSSH_PROMPT ANSI_RE_TEXT_FORMATTING EXPECTSSH_PS1_TAIL EXPECTSSH_TMPDIR MYBASHPREFS_PASSWORD
+  global MARKER EXPECTSSH_MYBASHPREFS EXPECTSSH_PROFILE EXPECTSSH_FCN_LIST
+  global EXPECTSSH_CORE EXPECTSSH_CORE_FCN_PREFIX MARKER_RE
+  log_user 1
+  set fcnlist_md5 [get_fcnlist_md5]
+
+  set mybashprefs ""
+
+  # 
+  # Everything is wrapped in function _ES_core
+  #
+  append mybashprefs "function _ES_core() {\n"
+  append mybashprefs "export _ES_FCN_PREFIX=$FUNCMAP(:remote_file_prefix)\n"
+  append mybashprefs "export EXPECTSSH_SHLVL=\$1\n"
+  append mybashprefs "export fcnlist_md5=\$2\n"
+  append mybashprefs "export EXPECTSSH_TMPDIR=$EXPECTSSH_TMPDIR\n"
+  append mybashprefs "export EXPECTSSH_FCN_LIST=$EXPECTSSH_FCN_LIST\n"
+  append mybashprefs "export EXPECTSSH_PS1_TAIL='[escape_ps1_marker $EXPECTSSH_PS1_TAIL]'\n"
+  append mybashprefs "export EXPECTSSH_PROFILE=$EXPECTSSH_PROFILE\n"
+
+  append mybashprefs "function _ES_marker() {\n"
+  foreach marker_name [array names MARKER -regexp {^(\w+)$}] {
+    append mybashprefs "$marker_name=$MARKER($marker_name)\n"
+  }
+  append mybashprefs {eval "echo \$$1"}
+  append mybashprefs "\n}\n"
+  append mybashprefs "export -f _ES_marker\n"
+
+  ## see if previous command in history was the line to decode bashprefs, and if so delete it from history
+  #append mybashprefs {history -p '!!'|grep -q ^' c=' && TMP=$(history|tail -1|awk '{print $1}') && history -d $TMP && unset TMP}
+  #append mybashprefs \n
+  #append mybashprefs {export PS1='${debian_chroot:+($debian_chroot)}\u@\H:\[\033[1;32m\]\w}
+  ## NOTE: all non-printing characters in the prompt must be surrounded with \[ \]
+  ## otherwise the line spacing gets all weird when typing out long bash commands
+  #append mybashprefs [regsub -all {\\033\[[^a-zA-Z]*[a-zA-Z]} $EXPECTSSH_PS1_TAIL [join { {\[} {\0} {\]} } {}]]
+  #append mybashprefs "'\n"
+
+  foreach funcname [glob -nocomplain -directory $EXPECTSSH_CORE -tails *] {
+    if {[regexp "^$EXPECTSSH_CORE_FCN_PREFIX" $funcname]==0} { continue }
+    if {[regexp {^\w+$} $funcname]==0} { continue }
+    append mybashprefs [slurp_file $EXPECTSSH_CORE/$funcname]
+  }
+
+  append mybashprefs "_ES_gen_stubs \$fcnlist_md5\n"
+
+  set bashrc $EXPECTSSH_PROFILE/.bashrc
+  if {[file exists $bashrc]} {
+    append mybashprefs [slurp_file $bashrc]
+  }
+
+  # unset $c, set below
+  append mybashprefs "unset c\n"
+  #
+  # END of function _ES_core
+  #
+  append mybashprefs "}\n"
+  append mybashprefs "export -f _ES_core\n"
+  set mybashprefs [strip_comments $mybashprefs]
+  return $mybashprefs
 }
 
 proc load_mybashprefs {EXPECTSSH_SHLVL {nest_level 0}} {
@@ -735,6 +905,7 @@ set MARKER_RE (?:^|\x07|\n|\r|$ANSI_RE_GENERAL)[get_marker]\x08\.\r(?:$ANSI_RE_C
 #
 # Register core handlers
 #
+_ES_register_marker BOOTSTRAP_SHELL bootstrap_shell_handler
 _ES_register_marker LOAD_MYBASHPREFS load_mybashprefs_handler
 _ES_register_marker UPLOAD_SCRIPT upload_script_handler
 _ES_register_marker GET_SCRIPT_PW script_password_handler
@@ -843,6 +1014,7 @@ set spawn_out_slave_name $spawn_out(slave,name)
 resize_handler
 expect -re $EXPECTSSH_PROMPT
 load_mybashprefs $env(EXPECTSSH_SHLVL)
+#bootstrap_shell $EXPECTSSH_PORT
 
 if {[catch {
   interact {
