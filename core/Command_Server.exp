@@ -31,11 +31,12 @@ proc read_from_client_sock {chan BYTES_READ_var decoded_args_var status_var} {
 proc Command_Server {client_sock client_addr client_port} {
   global MARKER
   fconfigure $client_sock -translation binary -encoding binary
-  #puts "Accept $client_sock from $client_addr:$client_port"
+  puts "Command_Server: accept $client_sock from $client_addr:$client_port"
   gets $client_sock line
   variable marker_idx [lindex [eval list $line] 0]
   # strip leading zero, else may be interpreted as octal
-  regexp {^0*(\d+)} $marker_idx - marker_idx
+  regexp {^0?(\d+)} $marker_idx - marker_idx
+  puts "Command_Server: marker_idx:$marker_idx"
   variable marker [get_marker_word $marker_idx]
   variable decoded_args ""
   variable STATUS ""
