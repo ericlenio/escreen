@@ -1,5 +1,5 @@
 #! /usr/bin/nodejs
-// vim:filetype=js
+// vim:filetype=javascript
 //var opt = require('node-getopt');
 //require('shelljs/global');
 var util=require('util');
@@ -31,12 +31,16 @@ var esh = {
     return h.digest('hex').toLowerCase();
   },
   computePassword : function(s) {
+    // MY_PASSWORD should be defined in esh.eshRcFile
     return this.computeHash( MY_PASSWORD + s ).substr(0,6);
   },
 };
 
 if (fs.existsSync(esh.eshRcFile)) {
   eval(fs.readFileSync(esh.eshRcFile).toString());
+} else {
+  console.log( "Please create " + esh.eshRcFile + ", with MY_PASSWORD value." );
+  process.exit(1);
 }
 
 esh.registerHandler=function(evt_id,f) {
@@ -50,18 +54,37 @@ esh.registerHandler( "BOOTSTRAP_SHELL", function(evt) {
   buf+="export ESH_TMP="+ESH_TMP+"\n";
   buf+="export ESH_PORT="+esh.port+"\n";
   buf+=util.format("f=%s\n",esh.eshCore);
+  var core=esh.getEshCore();
+  var pw=esh.computePassword(core);
   buf+=util.format(
-    '[ -f $f ] && c="$(openssl enc -a -d -aes256 -in $f)" && eval "$c" && _ES_core 0 %s\n',
+    'b1() { ' +
+    // safety net: check 1st arg
+    '[ $1 = 111 ] && return;' +
+    '[ -f $f ] && c="$(openssl enc -a -d -aes256 -in $f -pass pass:%s)" && { eval "$c" && _ES_core 0 %s; } || { ',
+    pw,
     'fcnlist_md5'
     );
-  var core=esh.getEshCore();
+  buf+=util.format("[ ! -d $ESH_TMP ] && mkdir $ESH_TMP && chmod 1777 $ESH_TMP;");
+  buf+=util.format("b UPLOAD_CORE | openssl enc -a -aes256 -out %s -pass pass:%s;",esh.eshCore,pw);
+  buf+=util.format("ls -la %s;",esh.eshCore);
+  buf+="b1 1$1;";
+  buf+=" }; }; b1 1\n";
   zlib.gzip( buf, function(_,zipped) {
+    s.end( new Buffer(zipped) );
+  });
+});
+
+esh.registerHandler( "UPLOAD_CORE", function(evt) {
+  var s=evt.socket;
+  var core=esh.getEshCore();
+  zlib.gzip( core, function(_,zipped) {
     s.end( new Buffer(zipped) );
   });
 });
 
 var server = net.createServer({allowHalfOpen:true}, function (socket) {
   console.log("Connection from " + socket.remoteAddress + " at " + new Date() );
+  socket.setNoDelay(true);
   // Define a little object to capture this event
   var evt = {
     socket : socket,
@@ -91,7 +114,10 @@ server.listen(0, "localhost", null, function(e) {
   //});
   var bash = require('child_process').spawn("bash", [
     "-c",
-    'eval "$(echo BOOTSTRAP_SHELL | nc localhost ' + esh.port + ' | gzip -d -c)"; exec bash'
+    //'eval "$(echo BOOTSTRAP_SHELL | nc localhost ' + esh.port + ' | gzip -d -c)"; exec bash'
+    util.format(
+      'b() { exec 3<>/dev/tcp/localhost/%s; echo $1 >&3; gzip -d -c <&3; exec 3>&-; }; eval "$(b BOOTSTRAP_SHELL)"; exec bash',
+      esh.port )
   ], {
     stdio: 'inherit'
   });
