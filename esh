@@ -1,4 +1,4 @@
-#! /usr/bin/nodejs
+#! /usr/bin/env node
 // vim:filetype=javascript
 // To do:
 //   change auth token every X hours
@@ -214,7 +214,8 @@ server.listen(0, "localhost", null, function(e) {
       // _esh_b is a bootstrap function to request some resource from the esh
       // server, sending the response to stdout; by default the server sends
       // the response gzip'd, except for passwords
-      '_esh_b() { exec 3<>/dev/tcp/localhost/%s; echo %s "$*" >&3; [ $1 = pw ] && cat <&3 || gzip -d -c <&3; exec 3>&-; }; eval "$(_esh_b BS1)"; exec bash --norc --noprofile',
+      'ESH_PORT=%s;' +
+      '_esh_b() { exec 3<>/dev/tcp/localhost/$ESH_PORT; echo %s "$*" >&3; [ $1 = pw ] && cat <&3 || gzip -d -c <&3; exec 3>&-; }; eval "$(_esh_b BS1)"; exec bash --norc --noprofile',
       esh.port,esh.authToken )
   ], {
     stdio: 'inherit'
