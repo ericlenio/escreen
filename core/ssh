@@ -25,9 +25,9 @@ echo has_bash:$has_bash
       if [ "$has_bash" = 1 ]; then
         if [ "$last_arg" = "$cmdline_ssh_host" ]; then
           # set up channel to Command_Server
-          local remote_cmd_port=$(/usr/bin/ssh -S $cp_mask -O forward -R0:localhost:$ESH_PORT $cmdline_ssh_host)
-echo remote_cmd_port:$remote_cmd_port
-          /usr/bin/ssh -t -S $cp_mask "$@" "ESH_PORT=$remote_cmd_port; $(declare -f _esh_b); eval \$(_esh_b BS1); /bin/bash --norc --noprofile" </dev/tty
+          local rem_port=$(/usr/bin/ssh -S $cp_mask -O forward -R0:localhost:$ESH_PORT $cmdline_ssh_host)
+echo rem_port:$rem_port
+          /usr/bin/ssh -t -S $cp_mask "$@" "ESH_PORT=$rem_port;$(declare -f _esh_b);eval \"\$(_esh_b BS1)\"; /bin/bash --norc --noprofile" </dev/tty
         else
           /usr/bin/ssh -S $cp_mask "$@"
         fi
@@ -36,9 +36,7 @@ echo remote_cmd_port:$remote_cmd_port
       fi
       # tear down the ControlMaster
       /usr/bin/ssh -S $cp_mask -O exit $cmdline_ssh_host
-      if [ "$EXPECTSSH_IN_SCREEN" = 1 -o -n "$STY" ]; then
-        printf "\033k${HOSTNAME}\033\134"
-      fi
+      [ "$EXPECTSSH_IN_SCREEN" = 1 -o -n "$STY" ] && printf "\033k${HOSTNAME}\033\134"
     }
     rm -f $cp_prefix*
   else
