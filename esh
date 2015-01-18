@@ -13,7 +13,7 @@ var zlib=require('zlib');
 var net=require('net');
 var crypto=require('crypto');
 var ESH_TMP="/tmp/esh";
-var ESH_CORE_FCN_PREFIX="_ES_";
+var ESH_CORE_FCN_PREFIX="_";
 
 var esh = {
   authToken : "",
@@ -52,12 +52,11 @@ var esh = {
   getCore : function() {
     var dir=util.format("%s/core",this.eshHome);
     var ls=fs.readdirSync(dir);
-    var s="echo LOADING CORE\n";
+    var s="";
     for (var i=0; i<ls.length; i++) {
       if (ls[i].search("^"+ESH_CORE_FCN_PREFIX)<0) continue;
       s+=fs.readFileSync(dir+"/"+ls[i]);
     }
-    //s+=util.format(". %s\n",this.getBashrcFile());
     return s;
   },
   computeHash : function(s) {
@@ -103,26 +102,33 @@ esh.registerHandler=function(evt_id,f) {
 esh.registerHandler( "BS1", function(evt) {
   var s=evt.socket;
   var buf="";
-  buf+="echo 'bootstrapping shell now ...'\n";
-  buf+="ESH_TMP="+ESH_TMP+"\n";
-  buf+="[ ! -d $ESH_TMP ] && mkdir $ESH_TMP && chmod 1777 $ESH_TMP;";
+  //buf+="echo 'bootstrapping shell now ...'\n";
+  buf+="t="+ESH_TMP+"\n";
+  //buf+="ESH_FCNLIST="+ESH_TMP+"\n";
+  buf+="[ ! -d $t ] && mkdir $t && chmod 1777 $t;";
+  // function _esh_l: load the cached file and eval it
   // arg 1: cache file name
-  // optional arg 2: if non-blank, do not attempt to eval the file
-  buf+='l() { ' +
+  // optional arg 2: if non-blank, cat the file instead of eval-ing
+  buf+='_esh_l() { ' +
+    'local f p c;' +
     'f=$1;' +
-    // get the password
-    'p=pass:$(b pw ${f/*.});' +
+    'o="openssl enc -a -aes256 -pass pass:$(_esh_b pw ${f/*.})";' +
     // try to use the cached file first ...
-    '[ -f $f ] && c="$(openssl enc -a -d -aes256 -in $f -pass $p 2>/dev/null)" || ' +
+    '[ -f $f ] && c="$($o -d -in $f 2>/dev/null)" || ' +
     // cached file does not exist or is expired, so re-cache it
-    '{ c="$(b up ${f/*.})"; echo "$c" | openssl enc -a -aes256 -pass $p >$f; };' +
-    '[ -z "$2" ] && eval "$c";' +
+    '{ c="$(_esh_b up ${f/*.})"; echo "$c" | $o >$f; chmod 666 $f; };' +
+    '[ -z "$2" ] && eval "$c" || echo "$c";' +
     '};'
     ;
 
-  buf+='l ' + esh.getCachedCoreFile() + ';';
-  buf+='l ' + esh.getCachedBashrcFile() + ';';
-  buf+='l ' + esh.getCachedFcnlistFile() + ' 1;';
+  buf+='_esh_l ' + esh.getCachedCoreFile() + ';';
+  buf+='_esh_l ' + esh.getCachedBashrcFile() + ';';
+  buf+=util.format(
+    'for f in $(_esh_l %s 1); do _ES_gen_stub $t/%s.f.$f; done;',
+    esh.getCachedFcnlistFile(),
+    process.env.USER
+    );
+  buf+='_esh_init;'
 
   var z=esh.getZlib();
   z.pipe(s);
@@ -130,7 +136,7 @@ esh.registerHandler( "BS1", function(evt) {
 });
 
 esh.registerHandler( "up", function(evt,key) {
-console.log("up:"+key);
+  console.log("up:"+key);
   var s=evt.socket;
   var buf=esh.getSource(key);
   var z=esh.getZlib();
@@ -183,10 +189,10 @@ server.listen(0, "localhost", null, function(e) {
   var bash = require('child_process').spawn("bash", [
     "-c",
     util.format(
-      // b is a bootstrap function to request some resource from the esh
+      // _esh_b is a bootstrap function to request some resource from the esh
       // server, sending the response to stdout; by default the server sends
       // the response gzip'd, except for passwords
-      'b() { exec 3<>/dev/tcp/localhost/%s; echo %s "$*" >&3; [ $1 = pw ] && cat <&3 || gzip -d -c <&3; exec 3>&-; }; eval "$(b BS1)"; exec bash --norc --noprofile',
+      '_esh_b() { exec 3<>/dev/tcp/localhost/%s; echo %s "$*" >&3; [ $1 = pw ] && cat <&3 || gzip -d -c <&3; exec 3>&-; }; eval "$(_esh_b BS1)"; exec bash --norc --noprofile',
       esh.port,esh.authToken )
   ], {
     stdio: 'inherit'

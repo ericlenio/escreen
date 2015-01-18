@@ -3,10 +3,11 @@
 # _ES_gen_stub generates a stub function for each user's custom function.
 #
 function _ES_gen_stub() {
-  local funcname=$1
+  local funcfile=$1
+  local funcname=${funcfile/*.}
   if [ -z "$(declare -F $funcname)" ]; then
     local f="function $funcname() { "
-    f+='_ES_bootstrap '$funcname' "$@";'
+    f+='_ES_bootstrap '$funcfile' "$@";'
     f+='}'
     eval $f
     export -f $funcname

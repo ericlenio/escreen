@@ -3,13 +3,11 @@
 # _ES_bootstrap bootstraps a function
 #
 function _ES_bootstrap() {
-  local pwmarker="$(_ES_marker GET_SCRIPT_PW)"
-  local upmarker="$(_ES_marker UPLOAD_SCRIPT)"
-  local funcname=$1
-  local f=$_ES_FCN_PREFIX$funcname
+  local f=$1
+  local funcname=${funcfile/*.}
   local s l fname pw script
   if [ -f $f ]; then
-    if s="$(_ES_send_marker $pwmarker $funcname | openssl enc -d -a -aes256 -in $f -pass stdin | gzip -d -c)"; then
+    if s="$(_esh_pw $funcname | openssl enc -d -a -aes256 -in $f -pass stdin | gzip -d -c)"; then
       eval "$s" && _ES_set_loaded $funcname && "$@"
       return
     fi
