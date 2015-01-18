@@ -35,6 +35,7 @@ var esh = {
       for (var j=0; j<ls.length; j++) {
         if (ls[j].search('^\\w+$')<0) continue;
         if (list.indexOf(ls[j])>=0) continue;
+        if (ls[j]=="README") continue;
         list.push(ls[j]);
       }
     }
@@ -124,8 +125,7 @@ esh.registerHandler( "BS1", function(evt) {
   var s=evt.socket;
   var buf="";
   //buf+="echo 'bootstrapping shell now ...'\n";
-  buf+="t="+ESH_TMP+"\n";
-  //buf+="ESH_FCNLIST="+ESH_TMP+"\n";
+  buf+="t="+ESH_TMP+";";
   buf+="[ ! -d $t ] && mkdir $t && chmod 1777 $t;";
   // function _esh_l: load the cached file and eval it
   // arg 1: cache file name
