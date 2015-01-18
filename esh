@@ -1,5 +1,8 @@
 #! /usr/bin/nodejs
 // vim:filetype=javascript
+// To do:
+//   change auth token every X hours
+//
 //var opt = require('node-getopt');
 //require('shelljs/global');
 var util=require('util');
@@ -9,21 +12,36 @@ var zlib=require('zlib');
 var net=require('net');
 var crypto=require('crypto');
 var ESH_TMP="/tmp/esh";
+var ESH_CORE_FCN_PREFIX="_ES_";
 
 var esh = {
-  handlers:[],
+  authToken : "",
+  getProfileDir : function() {return util.format("%s/profile.lenio",this.eshHome)},
+  handlers : [],
   eshRcFile : util.format("%s/.eshrc",process.env.HOME),
+  getFcnlistFile : function() {return util.format("%s/%s.fcnlist",ESH_TMP,process.env.USER);},
   eshCore : util.format("%s/%s.eshCore",ESH_TMP,process.env.LOGNAME),
   eshHome : path.dirname(process.argv[1]),
-  getEshCore : function() {
-    var dir = util.format("%s/core",this.eshHome);
-    var ls = fs.readdirSync(dir);
-    var s = "";
-    for (var i=0; i<ls.length; i++) {
-      if (ls[i].search("^_ES_")<0) continue;
-      s+=fs.readFileSync(dir+"/"+ls[i]);
+  getBashrcFile : function() {return util.format("%s/%s.bashrc",ESH_TMP,process.env.USER);},
+  getBashrc : function() {
+    var f=this.getProfileDir()+"/.bashrc";
+    var s="";
+    if (fs.existsSync(f)) {
+      s=fs.readFileSync(f);
     }
     return s;
+  },
+  getEshCore : function() {
+    var dir=util.format("%s/core",this.eshHome);
+    var ls=fs.readdirSync(dir);
+    var s="";
+    for (var i=0; i<ls.length; i++) {
+      if (ls[i].search("^"+ESH_CORE_FCN_PREFIX)<0) continue;
+      s+=fs.readFileSync(dir+"/"+ls[i]);
+    }
+    var bs="_ES_core() {\n";
+    bs+=util.format("f=%s\n",esh.getBashrc());
+    return bs;
   },
   computeHash : function(s) {
     var h = crypto.createHash('sha1');
@@ -34,6 +52,21 @@ var esh = {
     // MY_PASSWORD should be defined in esh.eshRcFile
     return this.computeHash( MY_PASSWORD + s ).substr(0,6);
   },
+  generateAuthToken : function() {
+    return crypto.randomBytes(3).toString('hex');
+  },
+  getZlib : function() {
+    return zlib.createGzip({level:zlib.Z_BEST_COMPRESSION});
+  },
+  getSource : function(key) {
+    var buf="";
+    if (key=="core") {
+      buf=this.getEshCore();
+    } else if (key=="bashrc") {
+      buf=this.getBashrc();
+    }
+    return buf;
+  }
 };
 
 if (fs.existsSync(esh.eshRcFile)) {
@@ -47,39 +80,46 @@ esh.registerHandler=function(evt_id,f) {
   esh.handlers[evt_id]=f;
 };
 
-esh.registerHandler( "BOOTSTRAP_SHELL", function(evt) {
+// Bootstrap stage 1
+esh.registerHandler( "BS1", function(evt) {
   var s=evt.socket;
   var buf="";
   buf+="echo 'bootstrapping shell now ...'\n";
-  buf+="export ESH_TMP="+ESH_TMP+"\n";
-  buf+="export ESH_PORT="+esh.port+"\n";
+  buf+="ESH_TMP="+ESH_TMP+"\n";
+  buf+="[ ! -d $ESH_TMP ] && mkdir $ESH_TMP && chmod 1777 $ESH_TMP;";
+  //buf+="export ESH_PORT="+esh.port+"\n";
   buf+=util.format("f=%s\n",esh.eshCore);
-  var core=esh.getEshCore();
-  var pw=esh.computePassword(core);
-  buf+=util.format(
-    'b1() { ' +
-    // safety net: check 1st arg
-    '[ $1 = 111 ] && return;' +
-    '[ -f $f ] && c="$(openssl enc -a -d -aes256 -in $f -pass pass:%s)" && { eval "$c" && _ES_core 0 %s; } || { ',
-    pw,
-    'fcnlist_md5'
-    );
-  buf+=util.format("[ ! -d $ESH_TMP ] && mkdir $ESH_TMP && chmod 1777 $ESH_TMP;");
-  buf+=util.format("b UPLOAD_CORE | openssl enc -a -aes256 -out %s -pass pass:%s;",esh.eshCore,pw);
-  buf+=util.format("ls -la %s;",esh.eshCore);
-  buf+="b1 1$1;";
-  buf+=" }; }; b1 1\n";
-  zlib.gzip( buf, function(_,zipped) {
-    s.end( new Buffer(zipped) );
-  });
+  //var pw=esh.computePassword(core);
+  buf+='l() { ' +
+    'f=$1;' +
+    // get the password
+    'p=pass:$(b pw ${f/*.});' +
+    // try to use the cached file first ...
+    '[ -f $f ] && c="$(openssl enc -a -d -aes256 -in $f -pass $p)" || ' +
+    // cached file does not exist or is expired, so re-cache it
+    '{ c="$(b up ${f/*.})"; echo "$c" | openssl enc -a -aes256 -pass $p >$f; };' +
+    'eval "$c";' +
+    '};'
+    ;
+  buf+='l $f;';
+  buf+='l ' + esh.getBashrcFile() + ';';
+  var z=esh.getZlib();
+  z.pipe(s);
+  z.end(buf);
 });
 
-esh.registerHandler( "UPLOAD_CORE", function(evt) {
+esh.registerHandler( "up", function(evt,key) {
   var s=evt.socket;
-  var core=esh.getEshCore();
-  zlib.gzip( core, function(_,zipped) {
-    s.end( new Buffer(zipped) );
-  });
+  var buf=esh.getSource(key);
+  var z=esh.getZlib();
+  z.pipe(s);
+  z.end(buf);
+});
+
+esh.registerHandler( "pw", function(evt,key) {
+  var s=evt.socket;
+  var buf=esh.computePassword(esh.getSource(key));
+  s.end(buf);
 });
 
 var server = net.createServer({allowHalfOpen:true}, function (socket) {
@@ -92,8 +132,17 @@ var server = net.createServer({allowHalfOpen:true}, function (socket) {
       var err;
       try {
         if (evt.evt_id==undefined) {
-          evt.evt_id = new String(data).trim();
-          esh.handlers[evt.evt_id](evt);
+          var m=new String(data).trim().split(" ");
+console.log("m:" +JSON.stringify(m));
+          if (m[0]!=esh.authToken) {
+            console.log("ERROR: unmatched auth token");
+            setTimeout( function() { socket.end("bad auth token"); }, 5000 );
+            return;
+          }
+          evt.evt_id = m[1];
+          m.splice(0,2);
+          // Call the handler
+          esh.handlers[evt.evt_id](evt,m);
         }
       } catch (err) {
         console.log( "EXCEPTION: data:" + data + "Message: " + err );
@@ -108,16 +157,13 @@ var server = net.createServer({allowHalfOpen:true}, function (socket) {
 
 server.listen(0, "localhost", null, function(e) {
   esh.port = server.address().port;
-  console.log("TCP server listening on port " + esh.port + " at localhost.");
-  //var bash = require('child_process').spawn("bash", [], {
-    //stdio: 'inherit'
-  //});
+  esh.authToken = esh.generateAuthToken();
+  console.log("esh server listening on port=%s, auth token=%s",esh.port,esh.authToken);
   var bash = require('child_process').spawn("bash", [
     "-c",
-    //'eval "$(echo BOOTSTRAP_SHELL | nc localhost ' + esh.port + ' | gzip -d -c)"; exec bash'
     util.format(
-      'b() { exec 3<>/dev/tcp/localhost/%s; echo $1 >&3; gzip -d -c <&3; exec 3>&-; }; eval "$(b BOOTSTRAP_SHELL)"; exec bash',
-      esh.port )
+      'b() { exec 3<>/dev/tcp/localhost/%s; echo %s "$*" >&3; [ $1 = pw ] && cat <&3 || gzip -d -c <&3; exec 3>&-; }; eval "$(b BS1)"; exec bash',
+      esh.port,esh.authToken )
   ], {
     stdio: 'inherit'
   });
