@@ -24,15 +24,21 @@ var esh = {
     return util.format("%s/%s.fcnlist",ESH_TMP,process.env.USER);
   },
   getFcnlist: function() {
-    var dir=this.getProfileDir();
-    var ls=fs.readdirSync(dir);
-    var s="";
-    for (var i=0; i<ls.length; i++) {
-      if (ls[i].search('^\\w+$')<0) continue;
-      if (s.length>0) s+="\n";
-      s+=ls[i];
+    var list=[];
+    var dirs=new Array(
+      this.getProfileDir(),
+      this.getCoreDir()
+    );
+    for (var i in dirs) {
+      var dir=dirs[i];
+      var ls=fs.readdirSync(dir);
+      for (var j=0; j<ls.length; j++) {
+        if (ls[j].search('^\\w+$')<0) continue;
+        if (list.indexOf(ls[j])>=0) continue;
+        list.push(ls[j]);
+      }
     }
-    return s;
+    return list.join("\n");
   },
   eshHome : path.dirname(process.argv[1]),
   getCachedBashrcFile : function() {
