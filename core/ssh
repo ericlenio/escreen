@@ -27,8 +27,7 @@ echo has_bash:$has_bash
           # set up channel to Command_Server
           local remote_cmd_port=$(/usr/bin/ssh -S $cp_mask -O forward -R0:localhost:$ESH_PORT $cmdline_ssh_host)
 echo remote_cmd_port:$remote_cmd_port
-          local marker=$(_ES_marker BOOTSTRAP_SHELL)
-          /usr/bin/ssh -t -S $cp_mask "$@" "echo -n $marker | nc localhost $ESH_PORT | /bin/bash -s" </dev/tty
+          /usr/bin/ssh -t -S $cp_mask "$@" "ESH_PORT=$remote_cmd_port; $(declare -f _esh_b); eval \$(_esh_b BS1); /bin/bash --norc --noprofile" </dev/tty
         else
           /usr/bin/ssh -S $cp_mask "$@"
         fi
