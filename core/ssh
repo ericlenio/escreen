@@ -7,7 +7,7 @@ function ssh() {
     local last_arg=${@:$#}
     [ -z "$last_arg" ] && { echo "no arguments to ssh?"; return; }
 echo last_arg:$last_arg
-    /usr/bin/ssh -R0:localhost:$EXPECTSSH_PORT -oControlMaster=yes -S $cp_mask -n -N "$@" 2>&1 | {
+    /usr/bin/ssh -R0:localhost:$ESH_PORT -oControlMaster=yes -S $cp_mask -n -N "$@" 2>&1 | {
       # wait for ControlPath file to exist
       while [ -z "$(ls $cp_prefix* 2>/dev/null)" ]; do
         sleep 1
@@ -25,10 +25,10 @@ echo has_bash:$has_bash
       if [ "$has_bash" = 1 ]; then
         if [ "$last_arg" = "$cmdline_ssh_host" ]; then
           # set up channel to Command_Server
-          local remote_cmd_port=$(/usr/bin/ssh -S $cp_mask -O forward -R0:localhost:$EXPECTSSH_PORT $cmdline_ssh_host)
+          local remote_cmd_port=$(/usr/bin/ssh -S $cp_mask -O forward -R0:localhost:$ESH_PORT $cmdline_ssh_host)
 echo remote_cmd_port:$remote_cmd_port
           local marker=$(_ES_marker BOOTSTRAP_SHELL)
-          /usr/bin/ssh -t -S $cp_mask "$@" "echo -n $marker | nc localhost $EXPECTSSH_PORT | /bin/bash -s" </dev/tty
+          /usr/bin/ssh -t -S $cp_mask "$@" "echo -n $marker | nc localhost $ESH_PORT | /bin/bash -s" </dev/tty
         else
           /usr/bin/ssh -S $cp_mask "$@"
         fi
