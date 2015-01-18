@@ -2,6 +2,7 @@
 // vim:filetype=javascript
 // To do:
 //   change auth token every X hours
+//   strip whitespace from functions
 //
 //var opt = require('node-getopt');
 //require('shelljs/global');
@@ -19,29 +20,45 @@ var esh = {
   getProfileDir : function() {return util.format("%s/profile.lenio",this.eshHome)},
   handlers : [],
   eshRcFile : util.format("%s/.eshrc",process.env.HOME),
-  getFcnlistFile : function() {return util.format("%s/%s.fcnlist",ESH_TMP,process.env.USER);},
-  eshCore : util.format("%s/%s.eshCore",ESH_TMP,process.env.LOGNAME),
+  getCachedFcnlistFile : function() {
+    return util.format("%s/%s.fcnlist",ESH_TMP,process.env.USER);
+  },
+  getFcnlist: function() {
+    var dir=this.getProfileDir();
+    var ls=fs.readdirSync(dir);
+    var s="";
+    for (var i=0; i<ls.length; i++) {
+      if (ls[i].search('^\\w+$')<0) continue;
+      if (s.length>0) s+="\n";
+      s+=ls[i];
+    }
+    return s;
+  },
   eshHome : path.dirname(process.argv[1]),
-  getBashrcFile : function() {return util.format("%s/%s.bashrc",ESH_TMP,process.env.USER);},
+  getCachedBashrcFile : function() {
+    return util.format("%s/%s.bashrc",ESH_TMP,process.env.USER);
+  },
   getBashrc : function() {
-    var f=this.getProfileDir()+"/.bashrc";
+    var f=util.format("%s/bashrc",this.getProfileDir());
     var s="";
     if (fs.existsSync(f)) {
       s=fs.readFileSync(f);
     }
     return s;
   },
-  getEshCore : function() {
+  getCachedCoreFile : function() {
+    return util.format("%s/%s.core",ESH_TMP,process.env.USER);
+  },
+  getCore : function() {
     var dir=util.format("%s/core",this.eshHome);
     var ls=fs.readdirSync(dir);
-    var s="";
+    var s="echo LOADING CORE\n";
     for (var i=0; i<ls.length; i++) {
       if (ls[i].search("^"+ESH_CORE_FCN_PREFIX)<0) continue;
       s+=fs.readFileSync(dir+"/"+ls[i]);
     }
-    var bs="_ES_core() {\n";
-    bs+=util.format("f=%s\n",esh.getBashrc());
-    return bs;
+    //s+=util.format(". %s\n",this.getBashrcFile());
+    return s;
   },
   computeHash : function(s) {
     var h = crypto.createHash('sha1');
@@ -61,9 +78,11 @@ var esh = {
   getSource : function(key) {
     var buf="";
     if (key=="core") {
-      buf=this.getEshCore();
+      buf=this.getCore();
     } else if (key=="bashrc") {
       buf=this.getBashrc();
+    } else if (key=="fcnlist") {
+      buf=this.getFcnlist();
     }
     return buf;
   }
@@ -87,28 +106,31 @@ esh.registerHandler( "BS1", function(evt) {
   buf+="echo 'bootstrapping shell now ...'\n";
   buf+="ESH_TMP="+ESH_TMP+"\n";
   buf+="[ ! -d $ESH_TMP ] && mkdir $ESH_TMP && chmod 1777 $ESH_TMP;";
-  //buf+="export ESH_PORT="+esh.port+"\n";
-  buf+=util.format("f=%s\n",esh.eshCore);
-  //var pw=esh.computePassword(core);
+  // arg 1: cache file name
+  // optional arg 2: if non-blank, do not attempt to eval the file
   buf+='l() { ' +
     'f=$1;' +
     // get the password
     'p=pass:$(b pw ${f/*.});' +
     // try to use the cached file first ...
-    '[ -f $f ] && c="$(openssl enc -a -d -aes256 -in $f -pass $p)" || ' +
+    '[ -f $f ] && c="$(openssl enc -a -d -aes256 -in $f -pass $p 2>/dev/null)" || ' +
     // cached file does not exist or is expired, so re-cache it
     '{ c="$(b up ${f/*.})"; echo "$c" | openssl enc -a -aes256 -pass $p >$f; };' +
-    'eval "$c";' +
+    '[ -z "$2" ] && eval "$c";' +
     '};'
     ;
-  buf+='l $f;';
-  buf+='l ' + esh.getBashrcFile() + ';';
+
+  buf+='l ' + esh.getCachedCoreFile() + ';';
+  buf+='l ' + esh.getCachedBashrcFile() + ';';
+  buf+='l ' + esh.getCachedFcnlistFile() + ' 1;';
+
   var z=esh.getZlib();
   z.pipe(s);
   z.end(buf);
 });
 
 esh.registerHandler( "up", function(evt,key) {
+console.log("up:"+key);
   var s=evt.socket;
   var buf=esh.getSource(key);
   var z=esh.getZlib();
@@ -123,7 +145,7 @@ esh.registerHandler( "pw", function(evt,key) {
 });
 
 var server = net.createServer({allowHalfOpen:true}, function (socket) {
-  console.log("Connection from " + socket.remoteAddress + " at " + new Date() );
+  //console.log("Connection from " + socket.remoteAddress + " at " + new Date() );
   socket.setNoDelay(true);
   // Define a little object to capture this event
   var evt = {
@@ -133,7 +155,6 @@ var server = net.createServer({allowHalfOpen:true}, function (socket) {
       try {
         if (evt.evt_id==undefined) {
           var m=new String(data).trim().split(" ");
-console.log("m:" +JSON.stringify(m));
           if (m[0]!=esh.authToken) {
             console.log("ERROR: unmatched auth token");
             setTimeout( function() { socket.end("bad auth token"); }, 5000 );
@@ -162,7 +183,10 @@ server.listen(0, "localhost", null, function(e) {
   var bash = require('child_process').spawn("bash", [
     "-c",
     util.format(
-      'b() { exec 3<>/dev/tcp/localhost/%s; echo %s "$*" >&3; [ $1 = pw ] && cat <&3 || gzip -d -c <&3; exec 3>&-; }; eval "$(b BS1)"; exec bash',
+      // b is a bootstrap function to request some resource from the esh
+      // server, sending the response to stdout; by default the server sends
+      // the response gzip'd, except for passwords
+      'b() { exec 3<>/dev/tcp/localhost/%s; echo %s "$*" >&3; [ $1 = pw ] && cat <&3 || gzip -d -c <&3; exec 3>&-; }; eval "$(b BS1)"; exec bash --norc --noprofile',
       esh.port,esh.authToken )
   ], {
     stdio: 'inherit'
