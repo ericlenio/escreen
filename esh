@@ -49,8 +49,11 @@ var esh = {
   getCachedCoreFile : function() {
     return util.format("%s/%s.core",ESH_TMP,process.env.USER);
   },
+  getCoreDir : function() {
+    return util.format("%s/core",this.eshHome);
+  },
   getCore : function() {
-    var dir=util.format("%s/core",this.eshHome);
+    var dir=this.getCoreDir();
     var ls=fs.readdirSync(dir);
     var s="";
     for (var i=0; i<ls.length; i++) {
@@ -82,6 +85,18 @@ var esh = {
       buf=this.getBashrc();
     } else if (key=="fcnlist") {
       buf=this.getFcnlist();
+    } else {
+      var dirs=new Array(
+        this.getProfileDir(),
+        this.getCoreDir()
+      );
+      for (var i in dirs) {
+        var f=util.format("%s/%s",dirs[i],key);
+        if (fs.existsSync(f)) {
+          buf=fs.readFileSync(f);
+          break;
+        }
+      }
     }
     return buf;
   }
@@ -117,6 +132,7 @@ esh.registerHandler( "BS1", function(evt) {
     '[ -f $f ] && c="$($o -d -in $f 2>/dev/null)" || ' +
     // cached file does not exist or is expired, so re-cache it
     '{ c="$(_esh_b up ${f/*.})"; echo "$c" | $o >$f; chmod 666 $f; };' +
+    //'echo "c:<<$c>>" >&2;' +
     '[ -z "$2" ] && eval "$c" || echo "$c";' +
     '};'
     ;
