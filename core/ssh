@@ -5,6 +5,7 @@ function ssh() {
     local cp_mask=$cp_prefix%r:%h:%n:%p
     rm -f $cp_prefix*
     local last_arg=${@:$#}
+    [ -z "$last_arg" ] && { echo "no arguments to ssh?"; return; }
 echo last_arg:$last_arg
     /usr/bin/ssh -R0:localhost:$EXPECTSSH_PORT -oControlMaster=yes -S $cp_mask -n -N "$@" 2>&1 | {
       # wait for ControlPath file to exist
