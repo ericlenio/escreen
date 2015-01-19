@@ -46,8 +46,7 @@ var esh = {
       '[ ${1:0:1} = z ] && gzip -d -c <&3 || cat <&3;' +
       'exec 3>&-;' +
       ' };' +
-      'eval "$(_esh_b zI)";' +
-      'exec bash --norc --noprofile',
+      'eval "$(_esh_b zI)";',
       port,this.authToken);
   },
   getProfileDir : function() {return util.format("%s/profile.lenio",this.eshHome)},
@@ -296,7 +295,7 @@ server.listen(0, "localhost", null, function(e) {
   var port = server.address().port;
   esh.authToken = esh.generateAuthToken();
   console.log("esh server listening on port=%s, auth token=%s",port,esh.authToken);
-  var bash = child_process.spawn("bash", ["-c",esh.getBootstrapScript(port)],
+  var bash = child_process.spawn("bash", ["-c",esh.getBootstrapScript(port)+"exec /bin/bash --norc --noprofile"],
   {
     stdio: 'inherit'
   });

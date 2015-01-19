@@ -22,28 +22,8 @@ function s() {
   }
 
   local cmd=("$@")
-  [ $# -eq 0 ] && cmd=(exec /bin/bash --norc --noprofile)
+  [ $# -eq 0 ] && cmd=( exec /bin/bash --norc --noprofile )
 
-#/usr/bin/ssh -t -S $cp_mask "$@" "ESH_PORT=$rem_port;$(declare -f _esh_b);eval \"\$(_esh_b zI)\"; /bin/bash --norc --noprofile" </dev/tty
-  local c='true
-eval "$(openssl enc -d -base64 << EOF
-'"$(declare -f _ES_core|openssl enc -base64)"'
-EOF
-)"
-export -f _ES_core
-# _ES_core will generate stub functions, so important to run this first and the
-# override those stubs with already loaded functions below.
-_ES_core
-
-eval "$(openssl enc -d -base64 << EOF
-'"$(declare -f $EXPECTSSH_LOADED_FUNCS|openssl enc -base64)"'
-EOF
-)"
-
-export EXPECTSSH_PORT='"$EXPECTSSH_PORT"'
-export EXPECTSSH_LOADED_FUNCS='"$EXPECTSSH_LOADED_FUNCS"'
-export -f '"$EXPECTSSH_LOADED_FUNCS"'
-"$@" </dev/tty'
-
-  echo "$c"|sudo -H -u $user -- /bin/bash -s "${cmd[@]}"
+  #echo "$c"|sudo -H -u $user -- /bin/bash -s "${cmd[@]}"
+  echo "$(ssh_init_string $ESH_PORT) -- \"\$@\" </dev/tty"  | sudo -H -u $user /bin/bash -s "${cmd[@]}"
 }

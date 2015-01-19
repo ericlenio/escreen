@@ -9,7 +9,7 @@ function ssh() {
     /usr/bin/ssh -R0:localhost:$ESH_PORT -oControlMaster=yes -S $cp_mask -n -N "$@" 2>&1 | {
       # wait for ControlPath file to exist
       while [ -z "$(ls $cp_prefix* 2>/dev/null)" ]; do
-        sleep 1
+        sleep 0.1
       done
       # find ssh host from ControlPath file that just was created
       local ssh_host=$(ls $cp_prefix* | cut -d: -f 4)
@@ -19,14 +19,33 @@ function ssh() {
       local has_bash=$(/usr/bin/ssh -S $cp_mask $cmdline_ssh_host 'sh -c "[ -f /bin/bash ] && echo 1"')
       # now do actual ssh session
       if [ "$has_bash" = 1 ]; then
+        # 
+        # ASSUMPTION: all args after the ssh host are part of the command to be
+        # run on remote host
+
+        # ssh_args: args up to and including ssh host
+        local ssh_args=()
+        # args_after_host: all args after the ssh host
+        local args_after_host=()
+        local use=0
+        local arg
+        for arg in "$@"; do
+          [ $use = 0 ] && ssh_args[${#ssh_args[@]}]="$arg"
+          [ $use = 1 ] && args_after_host[${#args_after_host[@]}]="$arg"
+          [ "$arg" = $cmdline_ssh_host ] && use=1
+        done
         if [ "$last_arg" = "$cmdline_ssh_host" ]; then
+          args_after_host=( exec /bin/bash --norc --noprofile )
           # set up channel to Command_Server
           local rem_port=$(/usr/bin/ssh -S $cp_mask -O forward -R0:localhost:$ESH_PORT $cmdline_ssh_host)
+          # This works, but is insecure
           #/usr/bin/ssh -t -S $cp_mask "$@" "ESH_PORT=$rem_port;$(declare -f _esh_b);eval \"\$(_esh_b zI)\"; /bin/bash --norc --noprofile" </dev/tty
-          local otat=$(_esh_b otat </dev/null)
-#exec 3<>/dev/tcp/localhost/$ESH_PORT;echo $otat zI >&3;echo bef:;gzip -d -c <&3; exec 3>&-;echo after
-          /usr/bin/ssh -t -S $cp_mask "$@" 'exec 3<>/dev/tcp/localhost/'"$rem_port;echo $otat zB $rem_port >&3;"'c="$(gzip -d -c <&3)"; exec 3>&-; eval "$c"' </dev/tty
+          # 
+          # This approach is better, uses a 1 time auth token so you can see it
+          # in ps -fe, but at that point it is already expired
+          /usr/bin/ssh -t -S $cp_mask "${ssh_args[@]}" $(ssh_init_string $rem_port </dev/null) -- "${args_after_host[@]}" </dev/tty
         else
+          # Simpler, but then we don't have custom functions on other end
           /usr/bin/ssh -S $cp_mask "$@"
         fi
       else
