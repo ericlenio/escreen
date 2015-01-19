@@ -12,6 +12,7 @@ var path=require('path');
 var zlib=require('zlib');
 var net=require('net');
 var crypto=require('crypto');
+var child_process = require('child_process');
 var ESH_TMP="/tmp/esh";
 var ESH_CORE_FCN_PREFIX="_";
 
@@ -172,17 +173,23 @@ esh.registerHandler( "pw", function(evt,key) {
   s.end(buf);
 });
 
+// receive clipboard data from client, and store inside clipboard
 esh.registerHandler( "setCb", function(evt,key) {
   var s=evt.socket;
   var z=zlib.Gunzip();
-  s.pipe(z);
-  var buf="";
-  z.on("data", function(data) {
-    buf+=new String(data);
-	  console.log("buf:"+buf.length);
+  var p = child_process.spawn("clipit", [], {stdio:['pipe',process.stdout,process.stderr]});
+  p.on('exit',function() {
+    console.log("copied "+buf.length+" bytes to clipboard");
   });
-  z.on("end", function() {
-	  console.log("END:buf:"+buf.length);
+  s.pipe(z).pipe(p.stdin);
+  // need to send back gzip'd null string, because _esh_b will be attempting to gunzip
+  var z1=esh.getZlib();
+  z1.pipe(s);
+  z1.end("");
+
+  var buf="";
+  z.on("data", function(chunk) {
+    buf+=new String(chunk);
   });
 });
 
@@ -192,28 +199,26 @@ var server = net.createServer({allowHalfOpen:true}, function (socket) {
   // Define a little object to capture this event
   var evt = {
     socket : socket,
-    onData : function(data) {
+    getEventType : function(data) {
       var err;
       try {
-        if (evt.evt_id==undefined) {
-          var m=new String(data).trim().split(" ");
+        var m=new String(data).trim().split(" ");
 console.log("m:"+m.join(":"));
-          if (m[0]!=esh.authToken) {
-            console.log("ERROR: unmatched auth token");
-            setTimeout( function() { socket.end("bad auth token"); }, 5000 );
-            return;
-          }
-          evt.evt_id = m[1];
-          m.splice(0,2);
-          // Call the handler
-          esh.handlers[evt.evt_id](evt,m);
+        if (m[0]!=esh.authToken) {
+          console.log("ERROR: unmatched auth token");
+          setTimeout( function() { socket.end("bad auth token"); }, 5000 );
+          return;
         }
+        evt.evt_id = m[1];
+        m.splice(0,2);
+        // Call the handler
+        esh.handlers[evt.evt_id](evt,m);
       } catch (err) {
         console.log( "EXCEPTION: data:" + data + "Message: " + err );
       }
     },
   };
-  socket.once("data", evt.onData );
+  socket.once("data",evt.getEventType);
   socket.on("end", function() {
     //console.log( "END of socket" );
   });
@@ -223,7 +228,7 @@ server.listen(0, "localhost", null, function(e) {
   esh.port = server.address().port;
   esh.authToken = esh.generateAuthToken();
   console.log("esh server listening on port=%s, auth token=%s",esh.port,esh.authToken);
-  var bash = require('child_process').spawn("bash", [
+  var bash = child_process.spawn("bash", [
     "-c",
     util.format(
       // _esh_b is a bootstrap function to request some resource from, or push
