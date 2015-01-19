@@ -24,6 +24,5 @@ function s() {
   local cmd=("$@")
   [ $# -eq 0 ] && cmd=( exec /bin/bash --norc --noprofile )
 
-  #echo "$c"|sudo -H -u $user -- /bin/bash -s "${cmd[@]}"
-  echo "$(ssh_init_string $ESH_PORT) -- \"\$@\" </dev/tty"  | sudo -H -u $user /bin/bash -s "${cmd[@]}"
+  echo "$(bash_init_string $ESH_PORT) -- \"\$@\" </dev/tty"  | sudo -H -u $user /bin/bash -s "${cmd[@]}"
 }
