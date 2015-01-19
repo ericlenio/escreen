@@ -2,7 +2,7 @@
 # cp2cb: use perl to remove the last \n on the last line (because vim's
 # writefile will always put an extra one), and minimally set a hyphen character
 # in the stream so as to not pass 0 bytes to clipit (which causes it to block)
-function cp2cb() {
+cp2cb() {
   if [ ! -t 0 ]; then
     gzip -9 -c | _esh_b setCb
     return

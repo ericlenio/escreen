@@ -7,7 +7,7 @@ function _ES_gen_stub() {
   local funcname=${funcfile/*.}
   if [ -z "$(declare -F $funcname)" ]; then
     local f="function $funcname() { "
-    f+='_ES_bootstrap '$funcfile' "$@";'
+    f+='_esh_bootstrap '$funcfile' "$@";'
     f+='}'
     eval $f
     export -f $funcname
