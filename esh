@@ -18,6 +18,38 @@ var ESH_CORE_FCN_PREFIX="_";
 
 var esh = {
   authToken : "",
+  oneTimeAuthTokens : [],
+  expireOneTimeAuthToken : function(pw) {
+    var idx=this.oneTimeAuthTokens.indexOf(pw);
+    if (idx<0) return;
+    esh.oneTimeAuthTokens.splice(idx,1);
+    console.log("dropped:"+pw);
+  },
+  getBootstrapScript : function(port) {
+    return util.format(
+      // _esh_b is a bootstrap function to request some resource from, or push
+      // some data to, the esh server; the esh server responds by sending the
+      // response to stdout; by default the server sends the response gzip'd,
+      // except for passwords
+      //
+      // if 1st char of 1st arg is "z", then we expect a gzip'd response from
+      // server
+      //
+      'ESH_PORT=%s;' +
+      '_esh_b() { ' +
+      'exec 3<>/dev/tcp/localhost/$ESH_PORT;' +
+      'echo %s "$*" >&3;' +
+      // Send stdin of this function to esh server (like with cp2cb). This next
+      // cat may show "Resource temporarily unavailable" under certain
+      // conditions, if so generally just set stdin of caller to </dev/null.
+      '[ ! -t 0 ] && cat >&3;' +
+      '[ ${1:0:1} = z ] && gzip -d -c <&3 || cat <&3;' +
+      'exec 3>&-;' +
+      ' };' +
+      'eval "$(_esh_b zI)";' +
+      'exec bash --norc --noprofile',
+      port,this.authToken);
+  },
   getProfileDir : function() {return util.format("%s/profile.lenio",this.eshHome)},
   handlers : [],
   eshRcFile : util.format("%s/.eshrc",process.env.HOME),
@@ -40,6 +72,7 @@ var esh = {
         list.push(ls[j]);
       }
     }
+    list.sort();
     return list.join("\n");
   },
   eshHome : path.dirname(process.argv[1]),
@@ -122,11 +155,12 @@ esh.registerHandler=function(evt_id,f) {
 };
 
 // Bootstrap stage 1
-esh.registerHandler( "BS1", function(evt) {
+esh.registerHandler( "zI", function(evt) {
   var s=evt.socket;
   var buf="";
   //buf+="echo 'bootstrapping shell now ...'\n";
-  buf+="t="+ESH_TMP+";";
+  buf+="ESH_TMP="+ESH_TMP+";";
+  buf+="t=$ESH_TMP;";
   buf+="[ ! -d $t ] && mkdir $t && chmod 1777 $t;";
   // function _esh_l: load the cached file and eval it
   // arg 1: cache file name
@@ -138,7 +172,7 @@ esh.registerHandler( "BS1", function(evt) {
     // try to use the cached file first ...
     '[ -f $f ] && c="$($o -d -in $f 2>/dev/null)" || ' +
     // cached file does not exist or is expired, so re-cache it
-    '{ c="$(_esh_b up ${f/*.})"; echo "$c" | $o >$f; chmod 666 $f; };' +
+    '{ c="$(_esh_b zup ${f/*.})"; echo "$c" | $o >$f; chmod 666 $f; };' +
     //'echo "c:<<$c>>" >&2;' +
     '[ -z "$2" ] && eval "$c" || echo "$c";' +
     '};'
@@ -158,8 +192,15 @@ esh.registerHandler( "BS1", function(evt) {
   z.end(buf);
 });
 
-esh.registerHandler( "up", function(evt,key) {
-  console.log("up:"+key);
+esh.registerHandler( "zB", function(evt,port) {
+  var s=evt.socket;
+  var z=esh.getZlib();
+  z.pipe(s);
+  z.end(esh.getBootstrapScript(port));
+});
+
+esh.registerHandler( "zup", function(evt,key) {
+  console.log("upload:"+key);
   var s=evt.socket;
   var buf=esh.getSource(key);
   var z=esh.getZlib();
@@ -169,28 +210,53 @@ esh.registerHandler( "up", function(evt,key) {
 
 esh.registerHandler( "pw", function(evt,key) {
   var s=evt.socket;
-  var buf=esh.computePassword(esh.getSource(key));
-  s.end(buf);
+  var pw=esh.computePassword(esh.getSource(key));
+  s.end(pw);
+});
+
+// one time auth token
+esh.registerHandler( "otat", function(evt) {
+  var s=evt.socket;
+  var pw=esh.computePassword(esh.generateAuthToken());
+  esh.oneTimeAuthTokens.push(pw);
+  setTimeout(function() {
+    esh.expireOneTimeAuthToken(pw);
+  },60000);
+  s.end(pw);
 });
 
 // receive clipboard data from client, and store inside clipboard
 esh.registerHandler( "setCb", function(evt,key) {
   var s=evt.socket;
   var z=zlib.Gunzip();
+  var buf="";
   var p = child_process.spawn("clipit", [], {stdio:['pipe',process.stdout,process.stderr]});
   p.on('exit',function() {
-    console.log("copied "+buf.length+" bytes to clipboard");
+    //console.log("copied "+buf.length+" bytes to clipboard");
+    // if small enough buffer, place into X Windows primary selection too for
+    // convenience
+    if (buf.length>255) return;
+    var p2 = child_process.spawn("xsel", ["-i","-p"], {stdio:['pipe',process.stdout,process.stderr]});
+    p2.stdin.end(buf);
   });
   s.pipe(z).pipe(p.stdin);
   // need to send back gzip'd null string, because _esh_b will be attempting to gunzip
-  var z1=esh.getZlib();
-  z1.pipe(s);
-  z1.end("");
+  //var z1=esh.getZlib();
+  //z1.pipe(s);
+  //z1.end();
+  s.end();
 
-  var buf="";
   z.on("data", function(chunk) {
     buf+=new String(chunk);
   });
+});
+
+// send clipboard data to client
+esh.registerHandler( "zGetCb", function(evt,key) {
+  var s=evt.socket;
+  var p=child_process.spawn("clipit", ["-c"], {stdio:['ignore','pipe',process.stderr]});
+  var z=esh.getZlib();
+  p.stdout.pipe(z).pipe(s);
 });
 
 var server = net.createServer({allowHalfOpen:true}, function (socket) {
@@ -204,7 +270,9 @@ var server = net.createServer({allowHalfOpen:true}, function (socket) {
       try {
         var m=new String(data).trim().split(" ");
 console.log("m:"+m.join(":"));
-        if (m[0]!=esh.authToken) {
+        if (esh.oneTimeAuthTokens.indexOf(m[0])>=0) {
+          esh.expireOneTimeAuthToken(m[0]);
+        } else if (m[0]!=esh.authToken) {
           console.log("ERROR: unmatched auth token");
           setTimeout( function() { socket.end("bad auth token"); }, 5000 );
           return;
@@ -225,20 +293,11 @@ console.log("m:"+m.join(":"));
 });
 
 server.listen(0, "localhost", null, function(e) {
-  esh.port = server.address().port;
+  var port = server.address().port;
   esh.authToken = esh.generateAuthToken();
-  console.log("esh server listening on port=%s, auth token=%s",esh.port,esh.authToken);
-  var bash = child_process.spawn("bash", [
-    "-c",
-    util.format(
-      // _esh_b is a bootstrap function to request some resource from, or push
-      // some data to, the esh server; the esh server responds by sending the
-      // response to stdout; by default the server sends the response gzip'd,
-      // except for passwords
-      'ESH_PORT=%s;' +
-      '_esh_b() { exec 3<>/dev/tcp/localhost/$ESH_PORT; echo %s "$*" >&3; [ ! -t 0 ] && cat >&3; [ $1 = pw ] && cat <&3 || gzip -d -c <&3; exec 3>&-; }; eval "$(_esh_b BS1)"; exec bash --norc --noprofile',
-      esh.port,esh.authToken )
-  ], {
+  console.log("esh server listening on port=%s, auth token=%s",port,esh.authToken);
+  var bash = child_process.spawn("bash", ["-c",esh.getBootstrapScript(port)],
+  {
     stdio: 'inherit'
   });
 
