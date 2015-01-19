@@ -172,6 +172,20 @@ esh.registerHandler( "pw", function(evt,key) {
   s.end(buf);
 });
 
+esh.registerHandler( "setCb", function(evt,key) {
+  var s=evt.socket;
+  var z=zlib.Gunzip();
+  s.pipe(z);
+  var buf="";
+  z.on("data", function(data) {
+    buf+=new String(data);
+	  console.log("buf:"+buf.length);
+  });
+  z.on("end", function() {
+	  console.log("END:buf:"+buf.length);
+  });
+});
+
 var server = net.createServer({allowHalfOpen:true}, function (socket) {
   //console.log("Connection from " + socket.remoteAddress + " at " + new Date() );
   socket.setNoDelay(true);
@@ -183,6 +197,7 @@ var server = net.createServer({allowHalfOpen:true}, function (socket) {
       try {
         if (evt.evt_id==undefined) {
           var m=new String(data).trim().split(" ");
+console.log("m:"+m.join(":"));
           if (m[0]!=esh.authToken) {
             console.log("ERROR: unmatched auth token");
             setTimeout( function() { socket.end("bad auth token"); }, 5000 );
@@ -198,7 +213,7 @@ var server = net.createServer({allowHalfOpen:true}, function (socket) {
       }
     },
   };
-  socket.on("data", evt.onData );
+  socket.once("data", evt.onData );
   socket.on("end", function() {
     //console.log( "END of socket" );
   });
@@ -211,11 +226,12 @@ server.listen(0, "localhost", null, function(e) {
   var bash = require('child_process').spawn("bash", [
     "-c",
     util.format(
-      // _esh_b is a bootstrap function to request some resource from the esh
-      // server, sending the response to stdout; by default the server sends
-      // the response gzip'd, except for passwords
+      // _esh_b is a bootstrap function to request some resource from, or push
+      // some data to, the esh server; the esh server responds by sending the
+      // response to stdout; by default the server sends the response gzip'd,
+      // except for passwords
       'ESH_PORT=%s;' +
-      '_esh_b() { exec 3<>/dev/tcp/localhost/$ESH_PORT; echo %s "$*" >&3; [ $1 = pw ] && cat <&3 || gzip -d -c <&3; exec 3>&-; }; eval "$(_esh_b BS1)"; exec bash --norc --noprofile',
+      '_esh_b() { exec 3<>/dev/tcp/localhost/$ESH_PORT; echo %s "$*" >&3; [ ! -t 0 ] && cat >&3; [ $1 = pw ] && cat <&3 || gzip -d -c <&3; exec 3>&-; }; eval "$(_esh_b BS1)"; exec bash --norc --noprofile',
       esh.port,esh.authToken )
   ], {
     stdio: 'inherit'
