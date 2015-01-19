@@ -1,4 +1,5 @@
+# vim:filetype=sh
 _esh_init() {
   export -f _esh_b _esh_l
-  export ESH_PORT
+  export ESH_PORT ESH_TMP
 }

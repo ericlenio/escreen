@@ -24,6 +24,7 @@ function s() {
   local cmd=("$@")
   [ $# -eq 0 ] && cmd=(exec /bin/bash --norc --noprofile)
 
+#/usr/bin/ssh -t -S $cp_mask "$@" "ESH_PORT=$rem_port;$(declare -f _esh_b);eval \"\$(_esh_b zI)\"; /bin/bash --norc --noprofile" </dev/tty
   local c='true
 eval "$(openssl enc -d -base64 << EOF
 '"$(declare -f _ES_core|openssl enc -base64)"'
