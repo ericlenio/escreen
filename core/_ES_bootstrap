@@ -4,6 +4,8 @@
 #
 _ES_bootstrap() {
   local f=$1
-  _esh_l $f && { shift; ${f/*.} "$@"; } || echo "ERROR loading $f"
+  shift
+  _esh_l $f </dev/null
+  ${f/*.} "$@"
 }
 export -f _ES_bootstrap
