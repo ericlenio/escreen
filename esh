@@ -19,11 +19,10 @@ var ESH_CORE_FCN_PREFIX="_";
 var esh = {
   authToken : "",
   oneTimeAuthTokens : [],
-  expireOneTimeAuthToken : function(pw) {
-    var idx=this.oneTimeAuthTokens.indexOf(pw);
+  expireOneTimeAuthToken : function(at) {
+    var idx=this.oneTimeAuthTokens.indexOf(at);
     if (idx<0) return;
     esh.oneTimeAuthTokens.splice(idx,1);
-    console.log("dropped:"+pw);
   },
   getBootstrapScript : function(port) {
     return util.format(
@@ -167,12 +166,11 @@ esh.registerHandler( "zI", function(evt) {
   buf+='_esh_l() { ' +
     'local f p c;' +
     'f=$1;' +
-    'o="openssl enc -a -aes256 -pass pass:$(_esh_b pw ${f/*.})";' +
+    'o="openssl enc -a -aes256 -pass pass:$(_esh_b fpw ${f/*.})";' +
     // try to use the cached file first ...
     '[ -f $f ] && c="$($o -d -in $f 2>/dev/null)" || ' +
     // cached file does not exist or is expired, so re-cache it
-    '{ c="$(_esh_b zup ${f/*.})"; echo "$c" | $o >$f; chmod 666 $f; };' +
-    //'echo "c:<<$c>>" >&2;' +
+    '{ echo up:${f/*.} >&2;c="$(_esh_b zup ${f/*.})";echo "$c" | $o >$f;chmod 666 $f; };' +
     '[ -z "$2" ] && eval "$c" || echo "$c";' +
     '};'
     ;
@@ -199,7 +197,6 @@ esh.registerHandler( "zB", function(evt,port) {
 });
 
 esh.registerHandler( "zup", function(evt,key) {
-  console.log("upload:"+key);
   var s=evt.socket;
   var buf=esh.getSource(key);
   var z=esh.getZlib();
@@ -207,7 +204,7 @@ esh.registerHandler( "zup", function(evt,key) {
   z.end(buf);
 });
 
-esh.registerHandler( "pw", function(evt,key) {
+esh.registerHandler( "fpw", function(evt,key) {
   var s=evt.socket;
   var pw=esh.computePassword(esh.getSource(key));
   s.end(pw);
@@ -216,12 +213,12 @@ esh.registerHandler( "pw", function(evt,key) {
 // one time auth token
 esh.registerHandler( "otat", function(evt) {
   var s=evt.socket;
-  var pw=esh.computePassword(esh.generateAuthToken());
-  esh.oneTimeAuthTokens.push(pw);
+  var at=esh.generateAuthToken();
+  esh.oneTimeAuthTokens.push(at);
   setTimeout(function() {
-    esh.expireOneTimeAuthToken(pw);
+    esh.expireOneTimeAuthToken(at);
   },60000);
-  s.end(pw);
+  s.end(at);
 });
 
 // receive clipboard data from client, and store inside clipboard
@@ -268,7 +265,6 @@ var server = net.createServer({allowHalfOpen:true}, function (socket) {
       var err;
       try {
         var m=new String(data).trim().split(" ");
-console.log("m:"+m.join(":"));
         if (esh.oneTimeAuthTokens.indexOf(m[0])>=0) {
           esh.expireOneTimeAuthToken(m[0]);
         } else if (m[0]!=esh.authToken) {
@@ -286,9 +282,6 @@ console.log("m:"+m.join(":"));
     },
   };
   socket.once("data",evt.getEventType);
-  socket.on("end", function() {
-    //console.log( "END of socket" );
-  });
 });
 
 server.listen(0, "localhost", null, function(e) {
