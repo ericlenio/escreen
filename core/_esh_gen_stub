@@ -2,7 +2,7 @@
 #
 # _ES_gen_stub generates a stub function for each user's custom function.
 #
-function _ES_gen_stub() {
+function _esh_gen_stub() {
   local funcfile=$1
   local funcname=${funcfile/*.}
   if [ -z "$(declare -F $funcname)" ]; then
@@ -14,4 +14,4 @@ function _ES_gen_stub() {
     unalias $funcname 2>/dev/null
   fi
 }
-export -f _ES_gen_stub
+export -f _esh_gen_stub

@@ -1,12 +1,12 @@
 # vim:filetype=sh
 function ssh() {
   if [ -t 1 ]; then
-    local cp_prefix=$HOME/.ssh/expect-ssh:$$:
+    local cp_prefix=$ESH_TMP/$USER.ssh-ctrl-path:$$:
     local cp_mask=$cp_prefix%r:%h:%n:%p
     rm -f $cp_prefix*
     local last_arg=${@:$#}
     [ -z "$last_arg" ] && { echo "no arguments to ssh?"; return; }
-    /usr/bin/ssh -R0:localhost:$ESH_PORT -oControlMaster=yes -S $cp_mask -n -N "$@" 2>&1 | {
+    /usr/bin/ssh -oControlMaster=yes -S $cp_mask -n -N "$@" 2>&1 | {
       # wait for ControlPath file to exist
       while [ -z "$(ls $cp_prefix* 2>/dev/null)" ]; do
         sleep 0.1
