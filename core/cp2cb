@@ -3,12 +3,14 @@
 # writefile will always put an extra one), and minimally set a hyphen character
 # in the stream so as to not pass 0 bytes to clipit (which causes it to block)
 function cp2cb() {
+  if [ ! -t 0 ]; then
+    gzip -9 -c | _esh_b setCb
+    return
+  fi
   local f="$1"
-  if [ -z "$f" ]; then
-    f="-"
-  elif [ ! -e "$f" ]; then
+  if [ ! -e "$f" ]; then
     echo "Error: no such file, or file is not readable: $f"
-    f=/dev/null
+    return 1
   fi
   local c=$(perl -pe 'chomp if eof' -- "$f")
   [ -z "$c" ] && c="-"
