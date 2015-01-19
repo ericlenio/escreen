@@ -180,7 +180,7 @@ esh.registerHandler( "zI", function(evt) {
   buf+='_esh_l ' + esh.getCachedCoreFile() + ';';
   buf+='_esh_l ' + esh.getCachedBashrcFile() + ';';
   buf+=util.format(
-    'for f in $(_esh_l %s 1); do _ES_gen_stub $t/%s.f.$f; done;',
+    'for f in $(_esh_l %s 1); do _esh_gen_stub $t/%s.f.$f; done;',
     esh.getCachedFcnlistFile(),
     process.env.USER
     );
