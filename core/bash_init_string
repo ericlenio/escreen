@@ -1,6 +1,6 @@
 # vim:filetype=sh
 # bash init string when entering new bash session (either by ssh or sudo)
-ssh_init_string() {
+bash_init_string() {
   local port=$1
   # one time auth token
   local otat=$(_esh_b otat </dev/null)
