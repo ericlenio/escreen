@@ -6,7 +6,7 @@ function ssh() {
     rm -f $cp_prefix*
     local last_arg=${@:$#}
     [ -z "$last_arg" ] && { echo "no arguments to ssh?"; return; }
-    /usr/bin/ssh -oControlMaster=yes -S $cp_mask -n -N "$@" 2>&1 | {
+    /usr/bin/ssh -oControlMaster=yes -S $cp_mask -n -N "$@" | {
       # wait for ControlPath file to exist
       while [ -z "$(ls $cp_prefix* 2>/dev/null)" ]; do
         sleep 0.1
@@ -15,6 +15,7 @@ function ssh() {
       local ssh_host=$(ls $cp_prefix* | cut -d: -f 4)
       # find ssh host, as specified on command line, from ControlPath file that just was created
       local cmdline_ssh_host=$(ls $cp_prefix* | cut -d: -f 5)
+      [ -n "$STY" ] && printf "\033k${cmdline_ssh_host}\033\134"
       # test if bash exists
       local has_bash=$(/usr/bin/ssh -S $cp_mask $cmdline_ssh_host 'sh -c "[ -f /bin/bash ] && echo 1"')
       # now do actual ssh session
@@ -37,7 +38,7 @@ function ssh() {
         if [ "$last_arg" = "$cmdline_ssh_host" ]; then
           args_after_host=( exec /bin/bash --norc --noprofile )
           # set up channel to Command_Server
-          local rem_port=$(/usr/bin/ssh -S $cp_mask -O forward -R0:localhost:$ESH_PORT $cmdline_ssh_host)
+          local rem_port=$(/usr/bin/ssh -q -S $cp_mask -O forward -R0:localhost:$ESH_PORT $cmdline_ssh_host)
           # This works, but is insecure
           #/usr/bin/ssh -t -S $cp_mask "$@" "ESH_PORT=$rem_port;$(declare -f _esh_b);eval \"\$(_esh_b zI)\"; /bin/bash --norc --noprofile" </dev/tty
           # 
@@ -45,7 +46,8 @@ function ssh() {
           # in ps -fe, but at that point it is already expired
           /usr/bin/ssh -t -S $cp_mask "${ssh_args[@]}" $(bash_init_string $rem_port </dev/null) -- "${args_after_host[@]}" </dev/tty
         else
-          # Simpler, but then we don't have custom functions on other end
+          # Simpler, but then we don't have custom functions on other end: assuming that
+          # we just want to run a quick command
           /usr/bin/ssh -S $cp_mask "$@"
         fi
       else
@@ -53,7 +55,8 @@ function ssh() {
       fi
       # tear down the ControlMaster
       /usr/bin/ssh -S $cp_mask -O exit $cmdline_ssh_host
-      [ "$EXPECTSSH_IN_SCREEN" = 1 -o -n "$STY" ] && printf "\033k${HOSTNAME}\033\134"
+      #[ "$ESH_IN_SCREEN" = 1 -o -n "$STY" ] && printf "\033k${HOSTNAME}\033\134"
+      [ -n "$STY" ] && printf "\033k${HOSTNAME}\033\134"
     }
     rm -f $cp_prefix*
   else
