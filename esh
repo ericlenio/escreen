@@ -189,6 +189,7 @@ esh.registerHandler( "zI", function(evt) {
   z.end(buf);
 });
 
+// get bash bootstrapping script
 esh.registerHandler( "zB", function(evt,port) {
   var s=evt.socket;
   var z=esh.getZlib();
@@ -196,6 +197,7 @@ esh.registerHandler( "zB", function(evt,port) {
   z.end(esh.getBootstrapScript(port));
 });
 
+// upload a file to client
 esh.registerHandler( "zup", function(evt,key) {
   var s=evt.socket;
   var buf=esh.getSource(key);
@@ -204,6 +206,7 @@ esh.registerHandler( "zup", function(evt,key) {
   z.end(buf);
 });
 
+// get function password
 esh.registerHandler( "fpw", function(evt,key) {
   var s=evt.socket;
   var pw=esh.computePassword(esh.getSource(key));

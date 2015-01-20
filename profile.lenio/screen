@@ -12,18 +12,18 @@ function screen() {
     esac
   done
 
-  local shell=$ESH_TMP/.bash.screen.$USER
+  local shell=$ESH_TMP/$USER.bash.screen
   #printf 'exec /bin/bash --norc --noprofile "$@"\n' > $shell
   # why exec bash via perl here? because bash will munge PS1 otherwise
   # on Macs
   printf '#!/usr/bin/perl\n' > $shell
   printf 'exec qw(/bin/bash --norc --noprofile),@ARGV;\n' >> $shell
   chmod 700 $shell
-  local SCREENRC=$ESH_TMP/.screenrc.$USER
+  local SCREENRC=$ESH_TMP/$USER.screenrc
   # Set up a little macro so that ^a% will dump the current screen to a file,
   # then edit it in vim.
-  local printscreen_macro=$ESH_TMP/.screenrc.$USER.printscreen
-  local hardcopy_file=$ESH_TMP/.screenrc.$USER.hardcopy
+  local printscreen_macro=$ESH_TMP/$USER.screenrc.printscreen
+  local hardcopy_file=$ESH_TMP/$USER.screenrc.hardcopy
   touch $SCREENRC $printscreen_macro $hardcopy_file
   chmod 600 $SCREENRC $printscreen_macro $hardcopy_file
   export SCREENRC
@@ -51,9 +51,9 @@ screen bash -c "vim $hardcopy_file"
 EOF
 
   local esc='^Ee'
-  if [ "$EXPECTSSH_SHLVL" = 0 ]; then
+  if [ -z "$ESH_IN_SCREEN" ]; then
     esc='^Aa'
   fi
-  /usr/bin/screen -e$esc -s $shell "${origArgs[@]}"
+  ESH_IN_SCREEN=1 /usr/bin/screen -e$esc -s $shell "${origArgs[@]}"
 }
 export -f screen
