@@ -4,5 +4,5 @@ bash_init_string() {
   local port=$1
   # one time auth token
   local otat=$(_esh_b otat </dev/null)
-  printf "/bin/bash -c 'ESH_IN_SCREEN=%s;exec 3<>/dev/tcp/localhost/%s;echo %s zB %s >&3;c=\"\$(gzip -d -c <&3)\";exec 3>&-;eval \"\$c\";\"\$@\"'" "$ESH_IN_SCREEN" $port $otat $port
+  printf "/bin/bash -c 'ESH_IN_SCREEN=%s;exec 3<>/dev/tcp/localhost/%s;echo %s zB %s %s >&3;c=\"\$(gzip -d -c <&3)\";exec 3>&-;eval \"\$c\";\"\$@\"'" "$ESH_IN_SCREEN" $port $otat $port $ESH_AT
 }
