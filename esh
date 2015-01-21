@@ -4,7 +4,6 @@
 //   change auth token every X hours
 //   strip whitespace from functions
 //
-//var opt = require('node-getopt');
 //require('shelljs/global');
 var util=require('util');
 var fs=require('fs');
@@ -16,6 +15,13 @@ var child_process = require('child_process');
 var ESH_TMP="/tmp/esh";
 var ESH_CORE_FCN_PREFIX="_";
 
+var opt = require('node-getopt').create([
+  ['h','help','display this help'],
+  ['r','resume=ARG','resume a GNU screen session (supply the screen STY value)']
+])
+.bindHelp()
+.parseSystem();
+
 var esh = {
   authToken : "",
   oneTimeAuthTokens : [],
@@ -24,7 +30,7 @@ var esh = {
     if (idx<0) return;
     esh.oneTimeAuthTokens.splice(idx,1);
   },
-  getBootstrapScript : function(port) {
+  getBootstrapScript : function(port,authToken) {
     return util.format(
       // _esh_b is a bootstrap function to request some resource from, or push
       // some data to, the esh server; the esh server responds by sending the
@@ -35,9 +41,10 @@ var esh = {
       // server
       //
       'ESH_PORT=%s;' +
+      'ESH_AT=%s;' +
       '_esh_b() { ' +
       'exec 3<>/dev/tcp/localhost/$ESH_PORT;' +
-      'echo %s "$*" >&3;' +
+      'echo $ESH_AT "$*" >&3;' +
       // Send stdin of this function to esh server (like with cp2cb). This next
       // cat may show "Resource temporarily unavailable" under certain
       // conditions, if so generally just set stdin of caller to </dev/null.
@@ -46,7 +53,7 @@ var esh = {
       'exec 3>&-;' +
       ' };' +
       'eval "$(_esh_b zI)";',
-      port,this.authToken);
+      port,authToken);
   },
   getProfileDir : function() {return util.format("%s/profile.lenio",this.eshHome)},
   handlers : [],
@@ -138,7 +145,78 @@ var esh = {
       }
     }
     return buf;
-  }
+  },
+  startServer : function(listen_port,launch_cmd) {
+    var server = net.createServer({allowHalfOpen:true}, function (socket) {
+      //console.log("Connection from " + socket.remoteAddress + " at " + new Date() );
+      socket.setNoDelay(true);
+      // Define a little object to capture this event
+      var evt = {
+        socket : socket,
+        getEventType : function() {
+          var err;
+          var chunk=socket.read();
+          if (chunk==null) {
+            console.log("WARNING: null chunk");
+            return;
+          }
+          var hdr=[];
+          for (var i=0;i<chunk.length;i++) {
+            if (chunk[i]==10) {
+              var xtra;
+              if (i<chunk.length-1) {
+                var xtra=chunk.slice(i+1);
+                var res=socket.unshift(xtra);
+              }
+              hdr=new String(chunk.slice(0,i)).split(" ");
+              break;
+            }
+          }
+          if (hdr.length==0) {
+            hdr=new String(chunk).trim().split(" ");
+          }
+          if (esh.oneTimeAuthTokens.indexOf(hdr[0])>=0) {
+            esh.expireOneTimeAuthToken(hdr[0]);
+          } else if (hdr[0]!=esh.authToken) {
+            console.log("ERROR: unmatched auth token");
+            setTimeout( function() { socket.end("bad auth token"); }, 5000 );
+            return;
+          }
+          evt.evt_id = hdr[1];
+          hdr.splice(0,2);
+          hdr.unshift(evt);
+          try {
+            // Call the handler
+            //esh.handlers[evt.evt_id](evt,hdr);
+            esh.handlers[evt.evt_id].apply(null,hdr);
+          } catch (err) {
+            console.log( "EXCEPTION: chunk:" + chunk + "Message: " + err );
+          }
+        },
+      };
+      // Do readable here since on slow connection we may need to push data back
+      // into the buffer, especially with setCb. Once a "data" event is listened
+      // for it puts the stream into flow mode, and then unshift would not work.
+      socket.once("readable",evt.getEventType);
+    });
+
+    server.listen(Number(listen_port),"localhost",null,function(e) {
+      var port = server.address().port;
+      esh.authToken = esh.generateAuthToken();
+      console.log("esh server listening on port=%s, auth token=%s",port,esh.authToken);
+      var bash = child_process.spawn("bash",
+        ["-c",esh.getBootstrapScript(port,esh.authToken)+launch_cmd],
+        {
+          stdio: 'inherit'
+        });
+
+      bash.on('exit', function (e, code) {
+        console.log("shutting down esh");
+        process.exit();
+      });
+
+    });
+  },
 };
 
 if (fs.existsSync(esh.eshRcFile)) {
@@ -190,11 +268,11 @@ esh.registerHandler( "zI", function(evt) {
 });
 
 // get bash bootstrapping script
-esh.registerHandler( "zB", function(evt,port) {
+esh.registerHandler( "zB", function(evt,port,authToken) {
   var s=evt.socket;
   var z=esh.getZlib();
   z.pipe(s);
-  z.end(esh.getBootstrapScript(port));
+  z.end(esh.getBootstrapScript(port,authToken));
 });
 
 // upload a file to client
@@ -265,64 +343,26 @@ esh.registerHandler( "zGetCb", function(evt,key) {
   p.stdout.pipe(z).pipe(s);
 });
 
-var server = net.createServer({allowHalfOpen:true}, function (socket) {
-  //console.log("Connection from " + socket.remoteAddress + " at " + new Date() );
-  socket.setNoDelay(true);
-  // Define a little object to capture this event
-  var evt = {
-    socket : socket,
-    getEventType : function() {
-      var err;
-      var chunk=socket.read();
-      var hdr=[];
-      for (var i=0;i<chunk.length;i++) {
-        if (chunk[i]==10) {
-          var xtra;
-          if (i<chunk.length-1) {
-            var xtra=chunk.slice(i+1);
-            var res=socket.unshift(xtra);
-          }
-          hdr=new String(chunk.slice(0,i)).split(" ");
-          break;
-        }
-      }
-      if (hdr.length==0) {
-        hdr=new String(chunk).trim().split(" ");
-      }
-      if (esh.oneTimeAuthTokens.indexOf(hdr[0])>=0) {
-        esh.expireOneTimeAuthToken(hdr[0]);
-      } else if (hdr[0]!=esh.authToken) {
-        console.log("ERROR: unmatched auth token");
-        setTimeout( function() { socket.end("bad auth token"); }, 5000 );
-        return;
-      }
-      evt.evt_id = hdr[1];
-      hdr.splice(0,2);
-      try {
-        // Call the handler
-        esh.handlers[evt.evt_id](evt,hdr);
-      } catch (err) {
-        console.log( "EXCEPTION: chunk:" + chunk + "Message: " + err );
-      }
-    },
-  };
-  // Do readable here since on slow connection we may need to push data back
-  // into the buffer, especially with setCb
-  socket.once("readable",evt.getEventType);
-});
-
-server.listen(0, "localhost", null, function(e) {
-  var port = server.address().port;
-  esh.authToken = esh.generateAuthToken();
-  console.log("esh server listening on port=%s, auth token=%s",port,esh.authToken);
-  var bash = child_process.spawn("bash", ["-c",esh.getBootstrapScript(port)+"exec /bin/bash --norc --noprofile"],
-  {
-    stdio: 'inherit'
-  });
-
-  bash.on('exit', function (e, code) {
-    console.log("shutting down esh");
-    process.exit();
-  });
-
-});
+if (opt.options.resume) {
+  //var p=child_process.spawn("/usr/bin/screen", ["-ls"], {stdio:['ignore','pipe',process.stderr]});
+  //var sty=[];
+  //var stdout="";
+  //p.stdout.on("data",function(chunk) {
+    //stdout+=chunk.toString();
+  //});
+  //p.on("close",function() {
+    //console.log(stdout);
+    //var res;
+    //var re=/^\s+(\d+)/gm;
+    //while ((res=re.exec(stdout))!==null) {
+      //sty.push(res[1]);
+    //}
+    //console.log(">"+JSON.stringify(sty));
+  //});
+  var portfile=util.format("%s/%s.screen.%s",
+    ESH_TMP,process.env.USER,opt.options.resume);
+  var port=fs.readFileSync(portfile);
+  esh.startServer(port,util.format("screen -d -r %s",opt.options.resume));
+} else {
+  esh.startServer(0,"exec /bin/bash --norc --noprofile");
+}

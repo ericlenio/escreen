@@ -1,5 +1,5 @@
 # vim:filetype=sh
-function screen() {
+screen() {
   # see if -r or -R was passed, if so just invoke screen with the current arg list "as is"
   local origArgs=("$@")
   local OPTS=$(getopt -q -o rR -- "$@")
@@ -11,12 +11,15 @@ function screen() {
       *) shift ;;
     esac
   done
-
-  local shell=$ESH_TMP/$USER.bash.screen
+  local shell=$ESH_TMP/$USER.screen.shell
   #printf 'exec /bin/bash --norc --noprofile "$@"\n' > $shell
   # why exec bash via perl here? because bash will munge PS1 otherwise
   # on Macs
   printf '#!/usr/bin/perl\n' > $shell
+  echo '($stypid)=$ENV{STY}=~m{^(\d+)}g;' >> $shell
+  echo 'printf "stypid=%s\n",$stypid;' >> $shell
+  echo '$portfile=sprintf("%s/%s.screen.%s",$ENV{ESH_TMP},$ENV{USER},$stypid);' >> $shell
+  printf 'if (! -f $portfile) {open FH,">$portfile";print FH $ENV{ESH_PORT};close FH;}\n' >> $shell
   printf 'exec qw(/bin/bash --norc --noprofile),@ARGV;\n' >> $shell
   chmod 700 $shell
   local SCREENRC=$ESH_TMP/$USER.screenrc
