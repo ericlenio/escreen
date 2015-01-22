@@ -55,7 +55,6 @@ function ssh() {
       fi
       # tear down the ControlMaster
       /usr/bin/ssh -S $cp_mask -O exit $cmdline_ssh_host
-      #[ "$ESH_IN_SCREEN" = 1 -o -n "$STY" ] && printf "\033k${HOSTNAME}\033\134"
       [ -n "$STY" ] && printf "\033k${HOSTNAME}\033\134"
     }
     rm -f $cp_prefix*

@@ -2,26 +2,104 @@
 screen() {
   # see if -r or -R was passed, if so just invoke screen with the current arg list "as is"
   local origArgs=("$@")
-  local OPTS=$(getopt -q -o rR -- "$@")
+  local portfile=$ESH_TMP/screen.%s.port
+  local atfile=$ESH_TMP/screen.%s.authToken
+  local pinfile=$ESH_TMP/screen.%s.pin
+  # NOTE: cannot set OPTS in 1 line, it strips the return value from the subshell
+  local OPTS
+  # This checks that -r or -R have a supplied value, and allows -ls and -d to
+  # pass through
+  OPTS=$(getopt -o lsdr:R: -- "$@") || return
   eval set -- "$OPTS"
   while true; do
     case "$1" in
-      -r|-R) /usr/bin/screen "${origArgs[@]}"; return ;;
+      -r|-R)
+        local stypid="$2"
+        if [[ ! ( "$stypid" =~ ^[0-9]+$ ) ]]; then
+          echo "Please supply a value for -r/-R"
+          return
+        fi
+        portfile=$(printf $portfile $stypid)
+        atfile=$(printf $atfile $stypid)
+        pinfile=$(printf $atfile $stypid)
+        [ -f $pinfile ] && export ESH_SCREEN_PIN=$(< $pinfile)
+        # update new values for ESH_PORT, ESH_AT before resuming screen session
+        [ -f $portfile ] && echo $ESH_PORT > $portfile
+        #echo "Updated $portfile with ESH_PORT=$ESH_PORT"
+        [ -f $atfile ] && echo $ESH_AT | openssl enc -aes256 -a -pass env:ESH_SCREEN_PIN > $atfile
+        #echo "Updated $atfile with ESH_AT=$ESH_AT"
+        #read -p "Press enter to continue"
+        /usr/bin/screen "${origArgs[@]}"
+        return
+        ;;
       --) shift; break ;;
       *) shift ;;
     esac
   done
   local shell=$ESH_TMP/$USER.screen.shell
+  touch $shell
+  chmod 700 $shell
   #printf 'exec /bin/bash --norc --noprofile "$@"\n' > $shell
   # why exec bash via perl here? because bash will munge PS1 otherwise
-  # on Macs
-  printf '#!/usr/bin/perl\n' > $shell
-  echo '($stypid)=$ENV{STY}=~m{^(\d+)}g;' >> $shell
-  echo 'printf "stypid=%s\n",$stypid;' >> $shell
-  echo '$portfile=sprintf("%s/%s.screen.%s",$ENV{ESH_TMP},$ENV{USER},$stypid);' >> $shell
-  printf 'if (! -f $portfile) {open FH,">$portfile";print FH $ENV{ESH_PORT};close FH;}\n' >> $shell
-  printf 'exec qw(/bin/bash --norc --noprofile),@ARGV;\n' >> $shell
-  chmod 700 $shell
+  # on Macs...but problem: bash functions do not export properly,
+  # they get prefixed with BASH_FUNC, due to shellshock patch.
+#  echo '#!/usr/bin/perl
+#($ENV{ESH_STY})=$ENV{STY}=~m{^(\d+)}g;
+#$portfile=sprintf("'$portfile'",$ENV{ESH_STY});
+#if (! -f $portfile) {
+#  open FH,">$portfile";
+#  # must be world readable
+#  chmod 0644, $portfile;
+#  print FH qx"echo $ENV{ESH_PORT} | _esh_scr_enc";
+#  close FH;
+#}
+#$atfile=sprintf("'$atfile'",$ENV{ESH_STY});
+#if (! -f $atfile) {
+#  open FH,">$atfile";
+#  # must be world readable
+#  chmod 0644, $atfile;
+#  print FH qx"echo $ENV{ESH_AT} | _esh_scr_enc";
+#  close FH;
+#}
+#$pinfile=sprintf("'$pinfile'",$ENV{ESH_STY});
+#if (! -f $pinfile) {
+#  open FH,">$pinfile";
+#  # this file should only be readable by the user who originally invoked screen
+#  chmod 0600, $pinfile;
+#  print FH $ENV{ESH_SCREEN_PIN};
+#  close FH;
+#}
+#exec qw(/bin/bash --norc --noprofile),@ARGV;
+#' > $shell
+  echo '#!/bin/sh
+exec /bin/bash --norc --noprofile -s -- "$PS1" "$@" << '"'"EOF"'"'
+export PS1="$1"
+shift
+export ESH_STY=${STY%%.*}
+portfile=$(printf "'$portfile'" $ESH_STY)
+if [ ! -f $portfile ]; then
+  touch $portfile
+  # must be world readable
+  chmod 0644 $portfile
+  echo $ESH_PORT >$portfile
+fi
+atfile=$(printf "'$atfile'" $ESH_STY)
+if [ ! -f $atfile ]; then
+  touch $atfile
+  # must be world readable, but contents encrypted
+  chmod 0644 $atfile
+  echo $ESH_AT | openssl enc -aes256 -a -pass env:ESH_SCREEN_PIN >$atfile
+fi
+pinfile=$(printf "'$pinfile'" $ESH_STY)
+if [ ! -f $pinfile ]; then
+  touch $pinfile
+  # this file should only be readable by the user who originally invoked screen
+  chmod 0600 $pinfile
+  echo $ESH_SCREEN_PIN >$pinfile
+fi
+exec /bin/bash --norc --noprofile "$@" </dev/tty
+EOF
+' > $shell
   local SCREENRC=$ESH_TMP/$USER.screenrc
   # Set up a little macro so that ^a% will dump the current screen to a file,
   # then edit it in vim.
@@ -54,9 +132,10 @@ screen bash -c "vim $hardcopy_file"
 EOF
 
   local esc='^Ee'
-  if [ -z "$ESH_IN_SCREEN" ]; then
+  if [ -z "$ESH_STY" ]; then
     esc='^Aa'
   fi
-  ESH_IN_SCREEN=1 /usr/bin/screen -e$esc -s $shell "${origArgs[@]}"
+  export ESH_SCREEN_PIN=$(openssl rand -hex 8)
+  /usr/bin/screen -e$esc -s $shell "${origArgs[@]}"
 }
 export -f screen
