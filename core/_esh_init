@@ -1,5 +1,5 @@
 # vim:filetype=sh
 _esh_init() {
   export -f _esh_b _esh_l
-  export ESH_PORT ESH_AT ESH_TMP ESH_IN_SCREEN
+  export ESH_PORT ESH_AT ESH_TMP ESH_STY ESH_SCREEN_PIN
 }

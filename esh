@@ -43,6 +43,10 @@ var esh = {
       'ESH_PORT=%s;' +
       'ESH_AT=%s;' +
       '_esh_b() { ' +
+      '[ -n "$ESH_STY" ] && { ' +
+      'ESH_PORT=$(<$ESH_TMP/screen.$ESH_STY.port);' +
+      'ESH_AT=$(openssl enc -aes256 -a -d -pass env:ESH_SCREEN_PIN <$ESH_TMP/screen.$ESH_STY.authToken);' +
+      ' };' +
       'exec 3<>/dev/tcp/localhost/$ESH_PORT;' +
       'echo $ESH_AT "$*" >&3;' +
       // Send stdin of this function to esh server (like with cp2cb). This next
@@ -146,7 +150,7 @@ var esh = {
     }
     return buf;
   },
-  startServer : function(listen_port,launch_cmd) {
+  startServer : function(listenPort,authToken,launch_cmd) {
     var server = net.createServer({allowHalfOpen:true}, function (socket) {
       //console.log("Connection from " + socket.remoteAddress + " at " + new Date() );
       socket.setNoDelay(true);
@@ -200,9 +204,9 @@ var esh = {
       socket.once("readable",evt.getEventType);
     });
 
-    server.listen(Number(listen_port),"localhost",null,function(e) {
+    server.listen(Number(listenPort),"localhost",null,function(e) {
       var port = server.address().port;
-      esh.authToken = esh.generateAuthToken();
+      esh.authToken = authToken;
       console.log("esh server listening on port=%s, auth token=%s",port,esh.authToken);
       var bash = child_process.spawn("bash",
         ["-c",esh.getBootstrapScript(port,esh.authToken)+launch_cmd],
@@ -359,10 +363,13 @@ if (opt.options.resume) {
     //}
     //console.log(">"+JSON.stringify(sty));
   //});
-  var portfile=util.format("%s/%s.screen.%s",
-    ESH_TMP,process.env.USER,opt.options.resume);
-  var port=fs.readFileSync(portfile);
-  esh.startServer(port,util.format("screen -d -r %s",opt.options.resume));
+  //var portfile=util.format("%s/%s.screen.%s.port",
+    //ESH_TMP,process.env.USER,opt.options.resume);
+  //var port=fs.readFileSync(portfile);
+  //var atfile=util.format("%s/%s.screen.%s.authToken",
+    //ESH_TMP,process.env.USER,opt.options.resume);
+  //var authToken=fs.readFileSync(atfile);
+  esh.startServer(0,esh.generateAuthToken(),util.format("exec /bin/bash -c 'screen -d -r %s",opt.options.resume)+"'");
 } else {
-  esh.startServer(0,"exec /bin/bash --norc --noprofile");
+  esh.startServer(0,esh.generateAuthToken(),"exec /bin/bash --norc --noprofile");
 }

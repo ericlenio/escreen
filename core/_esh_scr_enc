@@ -1,0 +1,5 @@
+# vim:filetype=sh
+_esh_scr_enc() {
+  openssl enc -aes256 -base64 -pass env:ESH_SCREEN_PIN "$@"
+}
+export -f _esh_scr_enc
