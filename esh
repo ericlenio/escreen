@@ -40,6 +40,7 @@ var esh = {
       // if 1st char of 1st arg is "z", then we expect a gzip'd response from
       // server
       //
+      'ESH_TMP=%s;' +
       'ESH_PORT=%s;' +
       'ESH_AT=%s;' +
       '_esh_b() { ' +
@@ -57,7 +58,7 @@ var esh = {
       'exec 3>&-;' +
       ' };' +
       'eval "$(_esh_b zI)";',
-      port,authToken);
+      ESH_TMP,port,authToken);
   },
   getProfileDir : function() {return util.format("%s/profile.lenio",this.eshHome)},
   handlers : [],
@@ -239,7 +240,7 @@ esh.registerHandler( "zI", function(evt) {
   var s=evt.socket;
   var buf="";
   //buf+="echo 'bootstrapping shell now ...'\n";
-  buf+="ESH_TMP="+ESH_TMP+";";
+  //buf+="ESH_TMP="+ESH_TMP+";";
   buf+="t=$ESH_TMP;";
   buf+="[ ! -d $t ] && mkdir $t && chmod 1777 $t;";
   // function _esh_l: load the cached file and eval it
@@ -369,7 +370,19 @@ if (opt.options.resume) {
   //var atfile=util.format("%s/%s.screen.%s.authToken",
     //ESH_TMP,process.env.USER,opt.options.resume);
   //var authToken=fs.readFileSync(atfile);
-  esh.startServer(0,esh.generateAuthToken(),util.format("exec /bin/bash -c 'screen -d -r %s",opt.options.resume)+"'");
+  var atfile=util.format("%s/screen.%s.authToken",ESH_TMP,opt.options.resume);
+  var pinfile=util.format("%s/screen.%s.pin",ESH_TMP,opt.options.resume);
+  var p=child_process.spawn("/usr/bin/openssl", ["enc","-d","-aes256","-a","-in",atfile,"-pass","file:"+pinfile],
+    {stdio:['ignore','pipe',process.stderr]});
+  var authToken="";
+  p.stdout.on("data",function(chunk) {
+    authToken+=chunk.toString();
+  });
+  p.stdout.on("close",function() {
+    authToken=authToken.trim();
+    esh.startServer(0,authToken,
+      util.format("exec /bin/bash -c 'screen -d -r %s",opt.options.resume)+"'");
+  });
 } else {
   esh.startServer(0,esh.generateAuthToken(),"exec /bin/bash --norc --noprofile");
 }
