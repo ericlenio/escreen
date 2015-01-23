@@ -1,5 +1,0 @@
-# vim:filetype=sh
-_esh_scr_dec() {
-  _esh_scr_enc -d
-}
-export -f _esh_scr_dec
