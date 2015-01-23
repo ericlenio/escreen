@@ -1,7 +1,0 @@
-# vim:filetype=sh
-_esh_scr_env() {
-  local c="openssl enc -aes256 -a -d -pass env:ESH_SCREEN_PIN"
-  ESH_PORT=$($c <$ESH_TMP/screen.$ESH_STY.port)
-  ESH_AT=$($c <$ESH_TMP/screen.$ESH_STY.authToken)
-}
-export -f _esh_scr_env

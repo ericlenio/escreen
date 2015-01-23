@@ -12,12 +12,12 @@ var zlib=require('zlib');
 var net=require('net');
 var crypto=require('crypto');
 var child_process = require('child_process');
-var ESH_TMP="/tmp/esh";
+var ESH_TMP=process.env.ESH_TMP;
 var ESH_CORE_FCN_PREFIX="_";
 
 var opt = require('node-getopt').create([
   ['h','help','display this help'],
-  ['r','resume=ARG','resume a GNU screen session (supply the screen STY value)']
+  //['r','resume=ARG','resume a GNU screen session (supply the screen STY value)']
 ])
 .bindHelp()
 .parseSystem();
@@ -30,7 +30,29 @@ var esh = {
     if (idx<0) return;
     esh.oneTimeAuthTokens.splice(idx,1);
   },
-  getBootstrapScript : function(port,authToken) {
+  getBootstrapScript : function() {
+    return
+      // _esh_b is a bootstrap function to request some resource from, or push
+      // some data to, the esh server; the esh server responds by sending the
+      // response to stdout; by default the server sends the response gzip'd,
+      // except for passwords
+      //
+      // if 1st char of 1st arg is "z", then we expect a gzip'd response from
+      // server
+      //
+      '_esh_b() { ' +
+      'exec 3<>/dev/tcp/localhost/$ESH_PORT;' +
+      'echo $ESH_AT "$*" >&3;' +
+      // Send stdin of this function to esh server (like with cp2cb). This next
+      // cat may show "Resource temporarily unavailable" under certain
+      // conditions, if so generally just set stdin of caller to </dev/null.
+      '[ ! -t 0 ] && cat >&3;' +
+      '[ ${1:0:1} = z ] && gzip -d -c <&3 || cat <&3;' +
+      'exec 3>&-;' +
+      ' };' +
+      'eval "$(_esh_b zI)";';
+  },
+  getBootstrapScript0 : function(port,authToken) {
     return util.format(
       // _esh_b is a bootstrap function to request some resource from, or push
       // some data to, the esh server; the esh server responds by sending the
@@ -151,7 +173,7 @@ var esh = {
     }
     return buf;
   },
-  startServer : function(listenPort,authToken,launch_cmd) {
+  startServer : function() {
     var server = net.createServer({allowHalfOpen:true}, function (socket) {
       //console.log("Connection from " + socket.remoteAddress + " at " + new Date() );
       socket.setNoDelay(true);
@@ -205,21 +227,16 @@ var esh = {
       socket.once("readable",evt.getEventType);
     });
 
-    server.listen(Number(listenPort),"localhost",null,function(e) {
+    server.listen(0,"localhost",null,function(e) {
       var port = server.address().port;
-      esh.authToken = authToken;
-      console.log("esh server listening on port=%s, auth token=%s",port,esh.authToken);
-      var bash = child_process.spawn("bash",
-        ["-c",esh.getBootstrapScript(port,esh.authToken)+launch_cmd],
-        {
-          stdio: 'inherit'
-        });
-
-      bash.on('exit', function (e, code) {
-        console.log("shutting down esh");
-        process.exit();
-      });
-
+      process.env.ESH_PORT=port;
+      esh.authToken = process.env.ESH_AT;
+      console.log("esh server listening on port=%s, auth token=%s, STY=%s",port,esh.authToken,process.env.STY);
+      // push the value of the port into screen's environment
+      var p=child_process.spawn("screen",
+        ["-S",process.env.STY,"-X","setenv","ESH_PORT",port],
+        {stdio:['ignore',process.stdout,process.stderr]}
+        );
     });
   },
 };
@@ -348,41 +365,4 @@ esh.registerHandler( "zGetCb", function(evt,key) {
   p.stdout.pipe(z).pipe(s);
 });
 
-if (opt.options.resume) {
-  //var p=child_process.spawn("/usr/bin/screen", ["-ls"], {stdio:['ignore','pipe',process.stderr]});
-  //var sty=[];
-  //var stdout="";
-  //p.stdout.on("data",function(chunk) {
-    //stdout+=chunk.toString();
-  //});
-  //p.on("close",function() {
-    //console.log(stdout);
-    //var res;
-    //var re=/^\s+(\d+)/gm;
-    //while ((res=re.exec(stdout))!==null) {
-      //sty.push(res[1]);
-    //}
-    //console.log(">"+JSON.stringify(sty));
-  //});
-  //var portfile=util.format("%s/%s.screen.%s.port",
-    //ESH_TMP,process.env.USER,opt.options.resume);
-  //var port=fs.readFileSync(portfile);
-  //var atfile=util.format("%s/%s.screen.%s.authToken",
-    //ESH_TMP,process.env.USER,opt.options.resume);
-  //var authToken=fs.readFileSync(atfile);
-  var atfile=util.format("%s/screen.%s.authToken",ESH_TMP,opt.options.resume);
-  var pinfile=util.format("%s/screen.%s.pin",ESH_TMP,opt.options.resume);
-  var p=child_process.spawn("/usr/bin/openssl", ["enc","-d","-aes256","-a","-in",atfile,"-pass","file:"+pinfile],
-    {stdio:['ignore','pipe',process.stderr]});
-  var authToken="";
-  p.stdout.on("data",function(chunk) {
-    authToken+=chunk.toString();
-  });
-  p.stdout.on("close",function() {
-    authToken=authToken.trim();
-    esh.startServer(0,authToken,
-      util.format("exec /bin/bash -c 'screen -d -r %s",opt.options.resume)+"'");
-  });
-} else {
-  esh.startServer(0,esh.generateAuthToken(),"exec /bin/bash --norc --noprofile");
-}
+esh.startServer();
