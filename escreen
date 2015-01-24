@@ -1,0 +1,50 @@
+#! /bin/bash
+
+_esh_b() {
+  exec 3<>/dev/tcp/localhost/$ESH_PORT
+  echo $ESH_AT "$*" >&3
+  # Send stdin of this function to esh server (like with cp2cb). This next
+  # cat may show "Resource temporarily unavailable" under certain
+  # conditions, if so generally just set stdin of caller to </dev/null.
+  [ ! -t 0 ] && cat >&3
+  [ ${1:0:1} = z ] && gzip -d -c <&3 || cat <&3
+  exec 3<&- 3>&-
+}
+export -f _esh_b
+
+_esh_l() {
+  local f p c
+  f=$1
+  o="openssl enc -a -aes256 -pass pass:$(_esh_b fpw ${f/*.})"
+  # try to use the cached file first ...
+  [ -f $f ] && c="$($o -d -in $f 2>/dev/null)" || {
+    # cached file does not exist or is expired, so re-cache it
+    echo up:${f/*.} >&2
+    c="$(_esh_b zup ${f/*.})"
+    echo "$c" | $o >$f
+    chmod 666 $f
+  }
+  [ -z "$2" ] && eval "$c" || echo "$c"
+}
+export -f _esh_l
+
+export ESH_AT=$(openssl rand 3 -hex)
+export ESH_TMP=/tmp/esh
+[ ! -d $ESH_TMP ] && mkdir $ESH_TMP && chmod 1777 $ESH_TMP
+
+ESH_HOME=$(dirname $0)
+ESH_CORE=$ESH_HOME/core
+ESH_PROFILE=$ESH_HOME/profile.lenio
+export ESH_PORT=$($(dirname $0)/esh --get_free_port)
+export ESH_FIFO=$ESH_TMP/$USER.esh.fifo
+rm -f $ESH_FIFO
+mkfifo -m 0600 $ESH_FIFO
+export ESH_LOGFILE=$ESH_TMP/$USER.esh.log
+$(dirname $0)/esh -p $ESH_PORT >$ESH_LOGFILE 2>&1 </dev/null &
+export ESH_NODE_PID=$!
+while ! nc -z localhost $ESH_PORT; do
+  sleep 0.1
+done
+eval "$(_esh_b zI </dev/null)" </dev/null
+ESH_SCREEN_EXEC=1
+screen -- bash -c 'setsid sh -c "while kill -0 ${STY%%.*}; do sleep 5; done; kill '$ESH_NODE_PID'" </dev/null >/dev/null 2>&1 & tailf '$ESH_LOGFILE
