@@ -4,6 +4,8 @@ bash_init_string() {
   local port=$1
   # one time auth token
   local otat=$(_esh_b otat </dev/null)
+  #printf "/bin/bash -c 'export ESH_SCREEN_PIN=%s;ESH_STY=%s;exec 3<>/dev/tcp/localhost/%s;echo %s zB %s %s >&3;c=\"\$(gzip -d -c <&3)\";exec 3>&-;eval \"\$c\";\"\$@\"'" \
+  #"$ESH_SCREEN_PIN" "$ESH_STY" $port $otat $port $ESH_AT
   printf "/bin/bash -c 'export ESH_SCREEN_PIN=%s;ESH_STY=%s;exec 3<>/dev/tcp/localhost/%s;echo %s zB %s %s >&3;c=\"\$(gzip -d -c <&3)\";exec 3>&-;eval \"\$c\";\"\$@\"'" \
   "$ESH_SCREEN_PIN" "$ESH_STY" $port $otat $port $ESH_AT
 }

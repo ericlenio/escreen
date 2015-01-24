@@ -36,9 +36,10 @@ ESH_HOME=$(dirname $0)
 ESH_CORE=$ESH_HOME/core
 ESH_PROFILE=$ESH_HOME/profile.lenio
 export ESH_PORT=$($(dirname $0)/esh --get_free_port)
-export ESH_FIFO=$ESH_TMP/$USER.esh.fifo
-rm -f $ESH_FIFO
-mkfifo -m 0600 $ESH_FIFO
+[ -z "$ESH_PORT" ] && {
+  echo "ERROR: could not get free port."
+  exit 1
+}
 export ESH_LOGFILE=$ESH_TMP/$USER.esh.log
 $(dirname $0)/esh -p $ESH_PORT >$ESH_LOGFILE 2>&1 </dev/null &
 export ESH_NODE_PID=$!
