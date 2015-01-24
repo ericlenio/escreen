@@ -44,7 +44,10 @@ function ssh() {
           # 
           # This approach is better, uses a 1 time auth token so you can see it
           # in ps -fe, but at that point it is already expired
-          /usr/bin/ssh -t -S $cp_mask "${ssh_args[@]}" $(bash_init_string $rem_port </dev/null) -- "${args_after_host[@]}" </dev/tty
+  #bash_init_string $ESH_PORT | gzip -9 -c | sudo -H -u $user /bin/bash -c 'eval "$(gzip -d -c)"'
+          #/usr/bin/ssh -t -S $cp_mask "${ssh_args[@]}" $(bash_init_string $rem_port </dev/null) -- "${args_after_host[@]}" </dev/tty
+          local c="$(bash_init_string $rem_port|gzip -9 -c|openssl enc -a)"
+          /usr/bin/ssh -t -S $cp_mask "${ssh_args[@]}" -- /bin/bash -c 'true;eval "$(echo '"'""$c""'"' | openssl enc -d -a | gzip -d -c)"' "${args_after_host[@]}" </dev/tty
         else
           # Simpler, but then we don't have custom functions on other end: assuming that
           # we just want to run a quick command

@@ -2,7 +2,6 @@
 // vim:filetype=javascript
 // To do:
 //   change auth token every X hours
-//   strip whitespace from functions
 //
 //require('shelljs/global');
 var util=require('util');
@@ -181,7 +180,9 @@ var esh = {
         }
       }
     }
-    return buf;
+    // regsub -all {(^|\n)\s*#(?!#)[^\n]*\n} $script {\1}
+    var buf2=String(buf).replace(/(^|\n)\s*#(?!#)[^\n]*\n/mg,"$1");
+    return buf2;
   },
   startServer : function(port) {
     var server = net.createServer({allowHalfOpen:true}, function (socket) {
