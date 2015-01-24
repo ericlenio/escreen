@@ -24,5 +24,13 @@ function s() {
   local cmd=("$@")
   [ $# -eq 0 ] && cmd=( exec /bin/bash --norc --noprofile )
 
-  echo "$(bash_init_string $ESH_PORT) -- \"\$@\" </dev/tty"  | sudo -H -u $user /bin/bash -s "${cmd[@]}"
+  {
+    declare -p PS1 cmd
+    for v in $(compgen -v ESH_); do
+      declare -p $v
+    done
+    declare -f _esh_b _esh_l
+    echo 'eval "$(_esh_b zI)"'
+    echo '"${cmd[@]}" </dev/tty'
+  } | gzip -9 -c | sudo -H -u $user /bin/bash -c 'eval "$(gzip -d -c)"'
 }
