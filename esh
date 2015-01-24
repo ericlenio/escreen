@@ -17,6 +17,8 @@ var ESH_CORE_FCN_PREFIX="_";
 
 var opt = require('node-getopt').create([
   ['h','help','display this help'],
+  ['p','port=ARG','port number to listen'],
+  ['','get_free_port','get a free port'],
   //['r','resume=ARG','resume a GNU screen session (supply the screen STY value)']
 ])
 .bindHelp()
@@ -173,7 +175,7 @@ var esh = {
     }
     return buf;
   },
-  startServer : function() {
+  startServer : function(port) {
     var server = net.createServer({allowHalfOpen:true}, function (socket) {
       //console.log("Connection from " + socket.remoteAddress + " at " + new Date() );
       socket.setNoDelay(true);
@@ -227,16 +229,21 @@ var esh = {
       socket.once("readable",evt.getEventType);
     });
 
-    server.listen(0,"localhost",null,function(e) {
-      var port = server.address().port;
-      process.env.ESH_PORT=port;
+    server.listen(Number(port),"localhost",null,function(e) {
+      var port2 = server.address().port;
+      if (opt.options.get_free_port) {
+        console.log(port2);
+        process.exit();
+      }
+      console.log("START esh server listening on: " + port2);
       esh.authToken = process.env.ESH_AT;
-      console.log("esh server listening on port=%s, auth token=%s, STY=%s",port,esh.authToken,process.env.STY);
+      //child_process.fork("");
+      //process.exit();
       // push the value of the port into screen's environment
-      var p=child_process.spawn("screen",
-        ["-S",process.env.STY,"-X","setenv","ESH_PORT",port],
-        {stdio:['ignore',process.stdout,process.stderr]}
-        );
+      //var p=child_process.spawn("screen",
+        //["-S",process.env.STY,"-X","setenv","ESH_PORT",port],
+        //{stdio:['ignore',process.stdout,process.stderr]}
+        //);
     });
   },
 };
@@ -251,6 +258,24 @@ if (fs.existsSync(esh.eshRcFile)) {
 esh.registerHandler=function(evt_id,f) {
   esh.handlers[evt_id]=f;
 };
+
+esh.registerHandler( "test", function(evt) {
+  // https://gist.github.com/pguillory/729616 (suggests overloading process.stdout.write method)
+  var s=evt.socket;
+  s.end("got it:"+process.env.ESH_FIFO+"\n");
+  if (flag==0) {
+    console.log("write:"+process.stdout.write);
+    //var ptstream=require('stream').PassThrough;
+    var stream=fs.createWriteStream(process.env.ESH_FIFO);
+    process.stdout.on("data",function(chunk) {
+      stream.write("on:"+chunk);
+    });
+    //process.stdout.pipe(new ptstream).pipe(stream);
+    console.log("see it?");
+    flag=1;
+  }
+  console.log("test");
+});
 
 // Bootstrap stage 1
 esh.registerHandler( "zI", function(evt) {
@@ -365,4 +390,5 @@ esh.registerHandler( "zGetCb", function(evt,key) {
   p.stdout.pipe(z).pipe(s);
 });
 
-esh.startServer();
+var port=opt.options.port || 0;
+esh.startServer(port);
