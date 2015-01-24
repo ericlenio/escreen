@@ -47,4 +47,4 @@ while ! nc -z localhost $ESH_PORT; do
 done
 eval "$(_esh_b zI </dev/null)" </dev/null
 ESH_SCREEN_EXEC=1
-screen -- bash -c 'setsid sh -c "while kill -0 ${STY%%.*}; do sleep 5; done; kill '$ESH_NODE_PID'" </dev/null >/dev/null 2>&1 & tailf '$ESH_LOGFILE
+screen -- bash -c '/usr/bin/screen -S $STY -X monitor off;setsid sh -c "while kill -0 ${STY%%.*}; do sleep 5; done; kill '$ESH_NODE_PID'" </dev/null >/dev/null 2>&1 & tailf '$ESH_LOGFILE

@@ -11,7 +11,15 @@ var path=require('path');
 var zlib=require('zlib');
 var net=require('net');
 var crypto=require('crypto');
-var child_process = require('child_process');
+var child_process=require('child_process');
+var clim=require('clim');
+clim("",console,true);
+require('date-format-lite');
+clim.getTime=function() {
+  var d=new Date();
+  return d.format("MM/DD hh:mm:ss.SS");
+};
+
 var ESH_TMP=process.env.ESH_TMP;
 var ESH_CORE_FCN_PREFIX="_";
 
@@ -213,6 +221,7 @@ var esh = {
           }
           evt.evt_id = hdr[1];
           hdr.splice(0,2);
+          console.log(evt.evt_id+":"+hdr);
           hdr.unshift(evt);
           try {
             // Call the handler
@@ -232,7 +241,7 @@ var esh = {
     server.listen(Number(port),"localhost",null,function(e) {
       var port2 = server.address().port;
       if (opt.options.get_free_port) {
-        console.log(port2);
+        process.stdout.write(""+port2);
         process.exit();
       }
       console.log("START esh server listening on: " + port2);
