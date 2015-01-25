@@ -1,23 +1,32 @@
 # vim:filetype=sh
 function ssh() {
   if [ -t 1 ]; then
-    local cp_prefix=$ESH_TMP/$USER.ssh-ctrl-path:$$:
+    local cp_prefix=$ESH_TMP/$USER.sshcp:
     local cp_mask=$cp_prefix%r:%h:%n:%p
     rm -f $cp_prefix*
     local last_arg=${@:$#}
     [ -z "$last_arg" ] && { echo "no arguments to ssh?"; return; }
-    /usr/bin/ssh -oControlMaster=yes -S $cp_mask -n -N "$@" | {
+echo set up CM
+    /usr/bin/ssh -oControlMaster=auto -oControlPersist=5s -S $cp_mask -n -N -A "$@"
+echo CM is up
+    #{
       # wait for ControlPath file to exist
-      while [ -z "$(ls $cp_prefix* 2>/dev/null)" ]; do
-        sleep 0.1
-      done
+      #while [ -z "$(ls $cp_prefix* 2>/dev/null)" ]; do
+        #sleep 0.1
+      #done
       # find ssh host from ControlPath file that just was created
-      local ssh_host=$(ls $cp_prefix* | cut -d: -f 4)
-      # find ssh host, as specified on command line, from ControlPath file that just was created
-      local cmdline_ssh_host=$(ls $cp_prefix* | cut -d: -f 5)
+      local ssh_host=$(ls $cp_prefix* | cut -d: -f 3)
+      # find ssh host, as specified on command line, from ControlPath file that
+      # just was created: note it is NOT necessarily the same as $ssh_host
+      local cmdline_ssh_host=$(ls $cp_prefix* | cut -d: -f 4)
+      # get name of user on remote system we are ssh-ing to
+      local ssh_user=$(ls $cp_prefix* | cut -d: -f 2)
+echo ssh_user=$ssh_user
       [ -n "$STY" ] && printf "\033k${cmdline_ssh_host}\033\134"
       # test if bash exists
-      local has_bash=$(/usr/bin/ssh -S $cp_mask $cmdline_ssh_host 'sh -c "[ -f /bin/bash ] && echo 1"')
+echo about to test for bash
+      local has_bash=$(/usr/bin/ssh -S $cp_mask $ssh_user@$cmdline_ssh_host 'sh -c "[ -f /bin/bash ] && echo 1"')
+echo has_bash=$has_bash
       # now do actual ssh session
       if [ "$has_bash" = 1 ]; then
         # 
@@ -35,31 +44,40 @@ function ssh() {
           [ $use = 1 ] && args_after_host[${#args_after_host[@]}]="$arg"
           [ "$arg" = $cmdline_ssh_host ] && use=1
         done
-        if [ "$last_arg" = "$cmdline_ssh_host" ]; then
+echo last_arg=$last_arg
+echo cmdline_ssh_host=$cmdline_ssh_host
+        # strip username and @ sign from last arg (if present), see if it
+        # matches the command line ssh host
+        if [ "${last_arg##*@}" = "$cmdline_ssh_host" ]; then
           args_after_host=( exec /bin/bash --norc --noprofile )
-          # set up channel to Command_Server
-          local rem_port=$(/usr/bin/ssh -q -S $cp_mask -O forward -R0:localhost:$ESH_PORT $cmdline_ssh_host)
-          # This works, but is insecure
-          #/usr/bin/ssh -t -S $cp_mask "$@" "ESH_PORT=$rem_port;$(declare -f _esh_b);eval \"\$(_esh_b zI)\"; /bin/bash --norc --noprofile" </dev/tty
-          # 
-          # This approach is better, uses a 1 time auth token so you can see it
-          # in ps -fe, but at that point it is already expired
-  #bash_init_string $ESH_PORT | gzip -9 -c | sudo -H -u $user /bin/bash -c 'eval "$(gzip -d -c)"'
-          #/usr/bin/ssh -t -S $cp_mask "${ssh_args[@]}" $(bash_init_string $rem_port </dev/null) -- "${args_after_host[@]}" </dev/tty
-          local c="$(bash_init_string $rem_port|gzip -9 -c|openssl enc -a)"
-          /usr/bin/ssh -t -S $cp_mask "${ssh_args[@]}" -- /bin/bash -c 'true;eval "$(echo '"'""$c""'"' | openssl enc -d -a | gzip -d -c)"' "${args_after_host[@]}" </dev/tty
+          # set up channel to esh server
+echo about to set rem_port:$ESH_PORT
+echo /usr/bin/ssh -q -S $cp_mask -O forward -R0:localhost:$ESH_PORT $ssh_user@$cmdline_ssh_host
+          local rem_port=$(/usr/bin/ssh -a -x -T -n -N -S $cp_mask -O forward -R0:localhost:$ESH_PORT $ssh_user@$cmdline_ssh_host)
+echo rem_port=$rem_port
+          if [ -z "$rem_port" ]; then
+            echo "Error: could not get remote port"
+          else
+            # This works, but is insecure
+            #/usr/bin/ssh -t -S $cp_mask "$@" "ESH_PORT=$rem_port;$(declare -f _esh_b);eval \"\$(_esh_b zI)\"; /bin/bash --norc --noprofile" </dev/tty
+            # 
+            # This approach is better, uses a 1 time auth token so you can see it
+            # in ps -fe, but at that point it is already expired
+    #bash_init_string $ESH_PORT | gzip -9 -c | sudo -H -u $user /bin/bash -c 'eval "$(gzip -d -c)"'
+            #/usr/bin/ssh -t -S $cp_mask "${ssh_args[@]}" $(bash_init_string $rem_port </dev/null) -- "${args_after_host[@]}" </dev/tty
+            local c="$(bash_init_string $rem_port|gzip -9 -c|openssl enc -a -A)"
+            /usr/bin/ssh -t -S $cp_mask "${ssh_args[@]}" -- /bin/bash -c 'true;eval "$(echo '$c'|openssl enc -d -a -A|gzip -d -c)"' "${args_after_host[@]}" </dev/tty
+          fi
         else
           # Simpler, but then we don't have custom functions on other end: assuming that
           # we just want to run a quick command
-          /usr/bin/ssh -S $cp_mask "$@"
+          /usr/bin/ssh -S $cp_mask "$@" </dev/tty
         fi
       else
         /usr/bin/ssh -S $cp_mask "$@" </dev/tty
       fi
-      # tear down the ControlMaster
-      /usr/bin/ssh -S $cp_mask -O exit $cmdline_ssh_host
       [ -n "$STY" ] && printf "\033k${HOSTNAME}\033\134"
-    }
+    #}
     rm -f $cp_prefix*
   else
     # we are in a pipeline
