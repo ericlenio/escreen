@@ -71,44 +71,7 @@ function remoteadmin() {
       if [ -n "$extra_params" ]; then
         echo "Passing extra params to ssh: $extra_params"
       fi
-      exec=(ssh -t -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oProxyCommand="/usr/bin/ssh -q -A -T remoteadmin@remoteadmin.lincware.com remoteadmin_port=$ssh_port" $extra_params lincdoc@remoteadmin.lincware.com)
-      bashrc=$HOME/.remoteadmin/bashrc
-      if [ ! -f $bashrc ]; then
-        bashrc=/dev/null
-      fi
-      last_arg_idx=$((${#exec[@]}-1))
-      if [[ ${exec[0]} = ssh && "${exec[$last_arg_idx]}" = lincdoc@* ]]; then
-        #exec[${#exec[@]}]='-v'
-        exec[${#exec[@]}]='bash'
-        exec[${#exec[@]}]='-l'
-        exec[${#exec[@]}]='-c'
-        exec[${#exec[@]}]='false
-eval "$(base64 --decode << EOF
-'"$((cat $bashrc; declare -f psql_ld)|base64)"'
-EOF
-)"
-export -f psql_ld
-if [ '$assume_ssh' = 0 ]; then
-  #export PS1='"'"$PS1"'"'
-  echo
-  echo "*************************************************************************"
-  echo "* You are logged in to: $(hostname)"
-  echo "* Useful commands: (3.1+ only)"
-  echo "* get_ldsupport_pw: show the ldsupport password"
-  echo "* get_lwsa_password: show the lwsa password"
-  echo "* psql_ld: psql to the default lincdoc database"
-  echo "*************************************************************************"
-  exec /bin/bash --norc --noprofile
-else
-  true
-  '"$@"'
-fi
-'
-      fi
-  #echo n=${#exec[@]}
-      #exec "${exec[@]}"
-      # not exec-ing so that bash ssh function takes precedence
-      "${exec[@]}"
+      ssh -t -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oProxyCommand="/usr/bin/ssh -q -A -T remoteadmin@remoteadmin.lincware.com remoteadmin_port=$ssh_port" $extra_params lincdoc@remoteadmin.lincware.com
       ;;
     2)
       exec sftp -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oProxyCommand="/usr/bin/ssh -q -A -T remoteadmin@remoteadmin.lincware.com remoteadmin_port=$ssh_port" lincdoc@remoteadmin.lincware.com
