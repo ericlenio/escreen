@@ -13,5 +13,5 @@ bash_init_string() {
   declare -f _esh_b _esh_l
   echo 'eval "$(_esh_b zI)"'
   #echo 'echo n=$#; for i in "$@"; do echo "i=$i."; done;'
-  echo '"$@" </dev/tty'
+  echo '"$@"'
 }
