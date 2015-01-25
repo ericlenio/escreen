@@ -1,5 +1,8 @@
 #! /bin/bash
 
+# bootstrapping function: 1st arg is an event ID that the server will inspect
+# and run appropriate event handler for; event IDs starting with "z" send back
+# a gzip'd response from the server.
 _esh_b() {
   exec 3<>/dev/tcp/localhost/$ESH_PORT
   echo $ESH_AT "$*" >&3
@@ -12,8 +15,10 @@ _esh_b() {
 }
 export -f _esh_b
 
+# load a bash function into the session: first try using cached version,
+# re-uploading if it is out of date (or non-existent)
 _esh_l() {
-  local f p c
+  local f o c
   f=$1
   o="openssl enc -a -aes256 -pass pass:$(_esh_b fpw ${f/*.})"
   # try to use the cached file first ...
@@ -48,4 +53,4 @@ while ! nc -z localhost $ESH_PORT; do
 done
 eval "$(_esh_b zI </dev/null)" </dev/null
 ESH_SCREEN_EXEC=1
-screen -- bash -c '/usr/bin/screen -S $STY -X monitor off;setsid sh -c "while kill -0 ${STY%%.*}; do sleep 5; done; kill '$ESH_NODE_PID'" </dev/null >/dev/null 2>&1 & tailf '$ESH_LOGFILE
+screen -- bash -c '/usr/bin/screen -S $STY -X monitor off;nohup sh -c "while kill -0 ${STY%%.*}; do sleep 5; done; kill '$ESH_NODE_PID'" </dev/null >/dev/null 2>&1 & tail -f '$ESH_LOGFILE
