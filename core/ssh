@@ -6,10 +6,7 @@ function ssh() {
     rm -f $cp_prefix*
     local last_arg=${@:$#}
     [ -z "$last_arg" ] && { echo "no arguments to ssh?"; return; }
-echo set up CM
-    echo /usr/bin/ssh -oControlMaster=auto -oControlPersist=5s -S $cp_mask -n -N -A -T "$@"
     /usr/bin/ssh -oControlMaster=auto -oControlPersist=5s -S $cp_mask -n -N -A -T "$@"
-echo CM is up
 
     #{
       # wait for ControlPath file to exist
@@ -18,7 +15,10 @@ echo CM is up
       #done
       # find ssh port from ControlPath file that just was created
       local ssh_port=$(ls $cp_prefix* | cut -d: -f 5)
-echo ssh_port=$ssh_port
+      [ -z "$ssh_port" ] && {
+        echo "ERROR: could not read ssh port, stop."
+        return
+      }
       # find ssh host from ControlPath file that just was created
       local ssh_host=$(ls $cp_prefix* | cut -d: -f 3)
       # find ssh host, as specified on command line, from ControlPath file that
@@ -26,12 +26,9 @@ echo ssh_port=$ssh_port
       local cmdline_ssh_host=$(ls $cp_prefix* | cut -d: -f 4)
       # get name of user on remote system we are ssh-ing to
       local ssh_user=$(ls $cp_prefix* | cut -d: -f 2)
-echo ssh_user=$ssh_user
       [ -n "$STY" ] && printf "\033k${cmdline_ssh_host}\033\134"
       # test if bash exists
-echo about to test for bash
       local has_bash=$(/usr/bin/ssh -p $ssh_port -S $cp_mask $ssh_user@$cmdline_ssh_host 'sh -c "[ -f /bin/bash ] && echo 1"')
-echo has_bash=$has_bash
       # now do actual ssh session
       if [ "$has_bash" = 1 ]; then
         # 
@@ -49,17 +46,12 @@ echo has_bash=$has_bash
           [ $use = 1 ] && args_after_host[${#args_after_host[@]}]="$arg"
           [ "$arg" = $cmdline_ssh_host ] && use=1
         done
-echo last_arg=$last_arg
-echo cmdline_ssh_host=$cmdline_ssh_host
         # strip username and @ sign from last arg (if present), see if it
         # matches the command line ssh host
         if [ "${last_arg##*@}" = "$cmdline_ssh_host" ]; then
           args_after_host=( exec /bin/bash --norc --noprofile )
           # set up channel to esh server
-echo about to set rem_port:$ESH_PORT
-echo /usr/bin/ssh -q -S $cp_mask -O forward -R0:localhost:$ESH_PORT $ssh_user@$cmdline_ssh_host
           local rem_port=$(/usr/bin/ssh -p $ssh_port -a -x -T -n -N -S $cp_mask -O forward -R0:localhost:$ESH_PORT $ssh_user@$cmdline_ssh_host)
-echo rem_port=$rem_port
           if [ -z "$rem_port" ]; then
             echo "Error: could not get remote port"
           else
