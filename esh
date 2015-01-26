@@ -39,58 +39,6 @@ var esh = {
     if (idx<0) return;
     esh.oneTimeAuthTokens.splice(idx,1);
   },
-  getBootstrapScript : function() {
-    return
-      // _esh_b is a bootstrap function to request some resource from, or push
-      // some data to, the esh server; the esh server responds by sending the
-      // response to stdout; by default the server sends the response gzip'd,
-      // except for passwords
-      //
-      // if 1st char of 1st arg is "z", then we expect a gzip'd response from
-      // server
-      //
-      '_esh_b() { ' +
-      'exec 3<>/dev/tcp/localhost/$ESH_PORT;' +
-      'echo $ESH_AT "$*" >&3;' +
-      // Send stdin of this function to esh server (like with cp2cb). This next
-      // cat may show "Resource temporarily unavailable" under certain
-      // conditions, if so generally just set stdin of caller to </dev/null.
-      '[ ! -t 0 ] && cat >&3;' +
-      '[ ${1:0:1} = z ] && gzip -d -c <&3 || cat <&3;' +
-      'exec 3>&-;' +
-      ' };' +
-      'eval "$(_esh_b zI)";';
-  },
-  getBootstrapScript0 : function(port,authToken) {
-    return util.format(
-      // _esh_b is a bootstrap function to request some resource from, or push
-      // some data to, the esh server; the esh server responds by sending the
-      // response to stdout; by default the server sends the response gzip'd,
-      // except for passwords
-      //
-      // if 1st char of 1st arg is "z", then we expect a gzip'd response from
-      // server
-      //
-      'ESH_TMP=%s;' +
-      'ESH_PORT=%s;' +
-      'ESH_AT=%s;' +
-      '_esh_b() { ' +
-      '[ -n "$ESH_STY" ] && { ' +
-      'ESH_PORT=$(<$ESH_TMP/screen.$ESH_STY.port);' +
-      'ESH_AT=$(openssl enc -aes256 -a -d -pass env:ESH_SCREEN_PIN <$ESH_TMP/screen.$ESH_STY.authToken);' +
-      ' };' +
-      'exec 3<>/dev/tcp/localhost/$ESH_PORT;' +
-      'echo $ESH_AT "$*" >&3;' +
-      // Send stdin of this function to esh server (like with cp2cb). This next
-      // cat may show "Resource temporarily unavailable" under certain
-      // conditions, if so generally just set stdin of caller to </dev/null.
-      '[ ! -t 0 ] && cat >&3;' +
-      '[ ${1:0:1} = z ] && gzip -d -c <&3 || cat <&3;' +
-      'exec 3>&-;' +
-      ' };' +
-      'eval "$(_esh_b zI)";',
-      ESH_TMP,port,authToken);
-  },
   getProfileDir : function() {return util.format("%s/profile.lenio",this.eshHome)},
   handlers : [],
   eshRcFile : util.format("%s/.eshrc",process.env.HOME),
@@ -180,7 +128,6 @@ var esh = {
         }
       }
     }
-    // regsub -all {(^|\n)\s*#(?!#)[^\n]*\n} $script {\1}
     var buf2=String(buf).replace(/(^|\n)\s*#(?!#)[^\n]*\n/mg,"$1");
     return buf2;
   },
@@ -287,51 +234,6 @@ esh.registerHandler( "test", function(evt) {
   console.log("test");
 });
 
-// Bootstrap stage 1
-esh.registerHandler( "zI", function(evt) {
-  var s=evt.socket;
-  var buf="";
-  //buf+="echo 'bootstrapping shell now ...'\n";
-  //buf+="ESH_TMP="+ESH_TMP+";";
-  buf+="t=$ESH_TMP;";
-  buf+="[ ! -d $t ] && mkdir $t && chmod 1777 $t;";
-  // function _esh_l: load the cached file and eval it
-  // arg 1: cache file name
-  // optional arg 2: if non-blank, cat the file instead of eval-ing
-  buf+='_esh_l() { ' +
-    'local f p c;' +
-    'f=$1;' +
-    'o="openssl enc -a -aes256 -pass pass:$(_esh_b fpw ${f/*.})";' +
-    // try to use the cached file first ...
-    '[ -f $f ] && c="$($o -d -in $f 2>/dev/null)" || ' +
-    // cached file does not exist or is expired, so re-cache it
-    '{ echo up:${f/*.} >&2;c="$(_esh_b zup ${f/*.})";echo "$c" | $o >$f;chmod 666 $f; };' +
-    '[ -z "$2" ] && eval "$c" || echo "$c";' +
-    '};'
-    ;
-
-  buf+='_esh_l ' + esh.getCachedCoreFile() + ';';
-  buf+='_esh_l ' + esh.getCachedBashrcFile() + ';';
-  buf+=util.format(
-    'for f in $(_esh_l %s 1); do _esh_gen_stub $t/%s.f.$f; done;',
-    esh.getCachedFcnlistFile(),
-    process.env.USER
-    );
-  buf+='_esh_init;'
-
-  var z=esh.getZlib();
-  z.pipe(s);
-  z.end(buf);
-});
-
-// get bash bootstrapping script
-esh.registerHandler( "zB", function(evt,port,authToken) {
-  var s=evt.socket;
-  var z=esh.getZlib();
-  z.pipe(s);
-  z.end(esh.getBootstrapScript(port,authToken));
-});
-
 // upload a file to client
 esh.registerHandler( "zup", function(evt,key) {
   var s=evt.socket;
@@ -344,11 +246,22 @@ esh.registerHandler( "zup", function(evt,key) {
 // get function password
 esh.registerHandler( "fpw", function(evt,key) {
   var s=evt.socket;
-  var pw=esh.computePassword(esh.getSource(key));
+  var pw="";
+  if (key=="cbf") {
+    // optimization: return 3 passwords for core, bashrc, and fcnlist
+    pw=util.format("p0=%s p1=%s p2=%s",
+      esh.computePassword(esh.getSource("core")),
+      esh.computePassword(esh.getSource("bashrc")),
+      esh.computePassword(esh.getSource("fcnlist"))
+      );
+  } else {
+    pw=esh.computePassword(esh.getSource(key));
+  }
+  console.log("fpw:"+key+":"+pw);
   s.end(pw);
 });
 
-// one time auth token
+// one time auth token - UNUSED
 esh.registerHandler( "otat", function(evt) {
   var s=evt.socket;
   var at=esh.generateAuthToken();
@@ -368,7 +281,7 @@ esh.registerHandler( "setCb", function(evt) {
   var cleanExit=false;
   p.on('exit',function() {
     cleanExit=true;
-    //console.log("copied "+buf.length+" bytes to clipboard");
+    console.log("copied "+buf.length+" bytes to clipboard");
     // if small enough buffer, place into X Windows primary selection too for
     // convenience
     if (buf.length>255) return;
