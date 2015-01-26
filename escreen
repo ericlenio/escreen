@@ -16,26 +16,43 @@ _esh_b() {
 export -f _esh_b
 
 # load a bash function into the session: first try using cached version,
-# re-uploading if it is out of date (or non-existent)
+# re-uploading if it is out of date (or non-existent). Args:
+# 1: full pathname to cached file
+# 2: optional: password (just be sure to pass a known valid password)
+# 3: optional: if non-zero length, just echo the cached file; default is
+# to eval it
 _esh_l() {
-  local f o c
-  f=$1
-  o="openssl enc -a -aes256 -pass pass:$(_esh_b fpw ${f/*.})"
+  local f=$1 c p o
+  p=$([ "$2" ] && echo $2 || echo $(_esh_b fpw ${f/*.}))
+  o="openssl enc -a -aes256 -pass pass:$p"
   # try to use the cached file first ...
-  [ -f $f ] && c="$($o -d -in $f 2>/dev/null)" || {
+  [ -f $f ] && c="$($o -d -in $f)" || {
     # cached file does not exist or is expired, so re-cache it
     echo up:${f/*.} >&2
     c="$(_esh_b zup ${f/*.})"
     echo "$c" | $o >$f
     chmod 666 $f
   }
-  [ -z "$2" ] && eval "$c" || echo "$c"
+  [ -z "$3" ] && eval "$c" || echo "$c"
 }
 export -f _esh_l
 
 export ESH_AT=$(openssl rand 3 -hex)
 export ESH_TMP=/tmp/esh
-[ ! -d $ESH_TMP ] && mkdir $ESH_TMP && chmod 1777 $ESH_TMP
+
+# shell init script here
+eval '_esh_I() {
+  # p0, p1, p2 are set by fpw call
+  local 't=$ESH_TMP u=$USER' $(_esh_b fpw cbf)
+  [ ! -d $t ] && mkdir $t && chmod 1777 $t
+  _esh_l $t/$u.core $p0
+  _esh_l $t/$u.bashrc $p1
+  for f in $(_esh_l $t/$u.fcnlist $p2 1); do
+    _esh_gen_stub $t/$u.f.$f
+  done
+  export ESH_PORT ESH_AT ESH_TMP ESH_STY
+  export -f _esh_I _esh_b _esh_l
+}'
 
 ESH_HOME=$(dirname $(readlink $0))
 ESH_CORE=$ESH_HOME/core
@@ -51,6 +68,7 @@ export ESH_NODE_PID=$!
 while ! nc -z localhost $ESH_PORT; do
   sleep 0.1
 done
-eval "$(_esh_b zI </dev/null)" </dev/null
+#eval "$(_esh_b zI </dev/null)" </dev/null
+_esh_I
 ESH_SCREEN_EXEC=1
 screen -- bash -c '/usr/bin/screen -S $STY -X monitor off;nohup sh -c "while kill -0 ${STY%%.*}; do sleep 5; done; kill '$ESH_NODE_PID'" </dev/null >/dev/null 2>&1 & tail -f '$ESH_LOGFILE
