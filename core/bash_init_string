@@ -6,7 +6,7 @@ bash_init_string() {
   #local otat=$(_esh_b otat </dev/null)
   #printf "/bin/bash -c 'export ESH_SCREEN_PIN=%s;ESH_STY=%s;exec 3<>/dev/tcp/localhost/%s;echo %s zB %s %s >&3;c=\"\$(gzip -d -c <&3)\";exec 3>&-;eval \"\$c\";\"\$@\"'" \
   #"$ESH_SCREEN_PIN" "$ESH_STY" $port $otat $port $ESH_AT
-  declare -p $PS1 $(compgen -v ESH_)
+  declare -p PS1 $(compgen -v ESH_)
   declare -f _esh_b _esh_l _esh_I
   #echo 'export -f _esh_b _esh_l _esh_I'
   #echo 'eval "$(_esh_b zI)"'
