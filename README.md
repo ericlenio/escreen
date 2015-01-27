@@ -1,28 +1,33 @@
-expect-ssh
-==========
+escreen
+=======
 
-expect-ssh is an [expect](http://expect.sourceforge.net/) script that wraps bash
-to accomplish consistent shell settings when ssh-ing to remote servers. If
-you have ever spent lots of time setting up your shell with the perfect
-settings for .bashrc, .bash_profile, .vimrc, etc., and then found yourself
-mass-copying these files to other machines you ssh to, then having to deal with
-changing any of your preferences and now having to manually propagate those
-changes out to those ssh sites, then this script presents a solution to avoid
-those types of headaches.
+*WARNING: this file is not up to date.*
+
+escreen is a GNU screen wrapper, plus a set of bash shell functions that make
+for consistent environment settings when ssh-ing to remote servers, and
+possibly sudo-ing to other users on those servers. If you have ever spent lots
+of time setting up your shell with the perfect settings for .bashrc,
+.bash_profile, .vimrc, .screenrc, etc., and then found yourself mass-copying
+these files to other machines you ssh to, then having to deal with changing any
+of your preferences and now having to manually propagate those changes out to
+those ssh sites, then this script presents a solution to avoid those types of
+headaches.
 
 There is also a handy copy/paste interface for vim (copies to your system
 clipboard), a bash function to copy files or stdin to your system clipboard,
 the ability to easily upload files to a remote ssh session (yes sftp can be
-used, but with expect-ssh you can do it right in the middle of your ssh
+used, but with escreen you can do it right in the middle of your ssh
 session), and similarly download files from a ssh session.
 
 # Requirements
 
 * Support for running on Linux and Mac OS X (though mostly built/tested on just Linux)
 * Assumes you use bash as your main shell
+* escreen will launch a nodejs server when it is launched, to serve up all your preferences/settings
+* So you will have to have nodejs installed, plus the following node modules: clim, node-getopt, date-format-lite
 * Depends on some basic standard Unix programs like gzip, grep, cut
 * Also must have openssl installed
-* Useful to have vim and screen, as they have been enhanced by expect-ssh
+* Useful to have vim
 
 # How it works
 
@@ -30,81 +35,74 @@ session), and similarly download files from a ssh session.
 or using an existing profile. My personal profile is the only profile so far,
 called `profile.lenio`.
 
-**Step 2: set up your rcfile.** The rcfile is `$HOME/.expect-ssh/config`. This
-is sourced by expect-ssh at init time. It may contain any valid expect
-commands, but in particular you should make a unique password for yourself like
-so:
+**Step 2: set up your rcfile.** The rcfile is `$HOME/.eshrc`. This is sourced
+by escreen at init time by the nodejs server. It may contain any valid
+Javascript commands, but in particular you should make a unique password for
+yourself like so:
 
-    set MYBASHPREFS_PASSWORD 2sCuk5iVuRXrGmmUjLfwFj8fZSsoldML
+    var MY_PASSWORD = "2sCuk5iVuRXrGmmUjLfwFj8fZSsoldML";
 
 You need not be too concerned about this password, nor is it particularly a
 problem if you lose it.  Worst case is you make a new password and all cached
 files will have to be re-cached (which will happen automatically).  Still, keep
-the file secured: `chmod 600 $HOME/.expect-ssh/config`.
+the file secured: `chmod 600 $HOME/.eshrc`.
 
-**Step 3: start expect-ssh.** Run the following to start a new session, which
+**Step 3: start escreen.** Run the following to start a new session, which
 will load all your preferences, set the PS1 prompt, and create stub functions.
 You can interact with the shell as per normal.
 
-    expect-ssh
+    escreen
 
 **Step 4: use vim, ssh, screen, etc.**
 
 If you ssh to another system, at the first shell prompt in the ssh session,
-expect-ssh will proceed to upload expect-ssh core functions to the remote
-system, plus the profile's basic settings from `.bashrc`. Why not upload the
-entire profile and all of your preferences at once? To save time. Because
-otherwise you have to wait for everything to upload. expect-ssh will only
-upload (and cache) the minimally necessary files it needs at the moment.
-
-## Keyboard shortcuts
-
-There are a few keyboard sequences you can use from a bash prompt.
-* `~u`: to upload a file (presumably you are already ssh'd somewhere). expect-ssh prompts you to pick a local file, and will always upload the file to /tmp on the remote system.
-* `~i`: to force-reload the current profile settings. Generally not necessary though.
-* `~k`: kills expect-ssh. This was added for this use case: expect-ssh is started, then GNU screen is started, later you detach your screen session and want to resume it from another PC under a fresh expect-ssh session.
-* `~d`: toggle debug mode. When toggled on, it is the output of expect's `exp_internal` command.
+escreen will proceed to upload escreen core functions to the remote system,
+plus the profile's basic settings from `bashrc`. Why not upload the entire
+profile and all of your preferences at once? To save time. Because otherwise
+you have to wait for everything to upload. escreen will only upload (and cache)
+the minimally necessary files it needs at the moment.
 
 ## Caching
 
-Any time expect-ssh uploads a file to a remote server, it will cache it under
-`/tmp/.expect-ssh-x.x`. Each cached file is AES256 encrypted with a password
-derived from a combination of your personal password (`MYBASHPREFS_PASSWORD`)
-and the MD5 of the file. The next time you ssh to the same system, expect-ssh
-attempts to use the cached version first, automatically supplying the password
-to decrypt it on the remote end. expect-ssh will automatically re-upload and
-re-cache the file if any of the following happen:
+Any time escreen uploads a file to a remote server, it will cache it under
+`/tmp/esh`. Each cached file is AES256 encrypted with a password derived from a
+combination of your personal password (`MY_PASSWORD`) and a SHA1 hash of the
+file. The next time you ssh to the same system, escreen attempts to use the
+cached version first, automatically supplying the password to decrypt it on the
+remote end. escreen will automatically re-upload and re-cache the file if any
+of the following happen:
 
 * the cached file is deleted
-* the password supplied by expect-ssh fails to decrypt the file for any reason
+* the password supplied by escreen fails to decrypt the file for any reason
 
 The latter is typically indicative that the original profile file was changed:
-since the password depends on the MD5 of the file, changing the original file
+since the password depends on the hash of the file, changing the original file
 immediately changes the required password on the remote end. This solves the
 problem of keeping your preferences in sync on multiple systems.
 
 Initially in your ssh session, all of the profile's bash functions are created
-as stubs: calling one of them will cause expect-ssh to first attempt to decrypt
+as stubs: calling one of them will cause escreen to first attempt to decrypt
 and use a cached version of the function. If the decryption fails for any
-reason, expect-ssh just re-uploads (or uploads for the first time) a fresh copy
+reason, escreen just re-uploads (or uploads for the first time) a fresh copy
 and re-caches it too.
 
 # Profiles
 
-A profile is a subdirectory off of the git checkout of expect-ssh containing a
+A profile is a subdirectory off of the git checkout of escreen containing a
 set of bash command files and expect files to fine-tune your bash shell. The
 subdirectory naming convention is `profile.ID`, where `ID` is some identifier
 to indicate who the profile was created for, or what it tries to achieve. Files
 in the profile:
 
-* `*.exp`: expect commands that get sourced when expect-ssh starts up, these are usually for registering new markers and handlers (see below)
+* *THESE ARE OUT OF DATE*
+* `*.exp`: expect commands that get sourced when escreen starts up, these are usually for registering new markers and handlers (see below)
 * you should have at least one .exp file that defines your PS1 marker as variable `EXPECTSSH_PS1_TAIL` (more on that variable below)
 * any filename matching `^\w+` is assumed to be bash commands that usually, but not necessarily, define a bash function of the same name.
 * `.bashrc`: this does what you would think for a normal .bashrc file
 
 ## Markers and handlers
 
-Each marker is a small pattern that the main expect loop in expect-ssh will
+Each marker is a small pattern that the main expect loop in escreen will
 detect and then trigger the marker's handler.
 
 Markers invoke handlers by using the `_ES_send_marker` bash function like so:
@@ -120,29 +118,6 @@ Handlers can utilize the following global variables:
 
 A handler can expect a single arg to be passed to it. The format of this data
 is up to you to define: it is the 2nd arg shown above with `_ES_send_marker`.
-
-## Detecting a prompt
-
-expect-ssh heavily depends on being able to detect a shell prompt. This is
-handled by configuring the variable `EXPECTSSH_PS1_TAIL`. This defines a unique
-pattern at the **end** of your bash PS1 prompt. It should be unique "enough" so
-that whenever expect-ssh detects this pattern, it can be assured that it really
-has detected a real shell prompt (and not just someone typing in these
-characters). The **profile.lenio** profile uses the following value:
-
-    set EXPECTSSH_PS1_TAIL {:\033[7m\$\033[0m }
-
-Let's break that down: the end of the PS1 prompt will consist of a colon, then
-the ANSI escape sequence to do reverse video, then an escaped dollar sign ([man
-bash](http://linux.die.net/man/1/bash), see PROMPTING section for details),
-then the ANSI escape sequence to reset the colors/attributes back to defaults,
-then a space.
-
-## Overriding profile files
-
-Profile files may be overridden simply by putting files under
-`$HOME/.expect-ssh/PROFILE_ID`, where `PROFILE_ID` is the name of the profile
-currently being used.
 
 ## Vim copy/paste
 
@@ -166,27 +141,5 @@ application.
 
 The following core bash functions are system level and are therefore usable under any profile.
 
-* `download`: run this to download a file from remote ssh session to the system that invoked expect-ssh
-* `copy_to_clipboard`: takes 1 argument: the name of a file to be copied to the system clipboard of your Linux PC (or Mac). Or if no file is supplied, it reads from stdin.
-
-## Other notes
-
-Bash command files can use the following helper functions:
-
-* `_ES_marker MARKER_ID`: returns the unique pattern that whenever expect-ssh detects it it launches the registered handler for the given `MARKER_ID` value.
-
-Bash command files can use the following helper environment variables:
-
-* `EXPECTSSH_LOADED_FUNCS`: a space separated list of functions that have been loaded into the current shell
-* `EXPECTSSH_SHLVL`: similar to bash's SHLVL
-
-Expect files can use the following helper functions:
-
-* `_ES_register_marker MARKER_ID name_of_handler_proc`: registers an expect proc to be run when the given MARKER_ID is detected; the proc will receive a single string argument, which is supplied via `_ES_send_marker`
-
-## Caveats
-
-* Due to the way the upload code works, if a you call a bash function that is still the stub version you must not redirect stderr, else expect-ssh never will detect the proper markers to properly execute function
-* Again if a function is still just a stub, be careful calling it in a pipeline. Each command in a pipeline is executed in its own subshell, so the function is exported in the subshell so parent never "sees" it and the stub remains in the parent.
-* A stub can work in a pipeline only if it is the first process in the pipeline.
-* Handlers should not have a return value, else the procedure that invokes the handler will flag it as an error.
+* *THESE ARE OUT OF DATE*
+* `cp2cb`: takes 1 argument: the name of a file to be copied to the system clipboard of your Linux PC (or Mac). Or if no file is supplied, it reads from stdin.
