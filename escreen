@@ -3,15 +3,25 @@
 # bootstrapping function: 1st arg is an event ID that the server will inspect
 # and run appropriate event handler for; event IDs starting with "z" send back
 # a gzip'd response from the server.
+#_esh_b() {
+  #exec 3<>/dev/tcp/localhost/$ESH_PORT
+  #echo $ESH_AT "$*" >&3
+  ## Send stdin of this function to esh server (like with cp2cb). This next
+  ## cat may show "Resource temporarily unavailable" under certain
+  ## conditions, if so generally just set stdin of caller to </dev/null.
+  #[ ! -t 0 ] && cat >&3
+  #[ ${1:0:1} = z ] && gzip -d -c <&3 || cat <&3
+  #exec 3<&- 3>&-
+#}
+# older shells may not be able to do the /dev/tcp/host/port trick, this works
+# around that ... netcat will be needed though
 _esh_b() {
-  exec 3<>/dev/tcp/localhost/$ESH_PORT
-  echo $ESH_AT "$*" >&3
-  # Send stdin of this function to esh server (like with cp2cb). This next
-  # cat may show "Resource temporarily unavailable" under certain
-  # conditions, if so generally just set stdin of caller to </dev/null.
-  [ ! -t 0 ] && cat >&3
-  [ ${1:0:1} = z ] && gzip -d -c <&3 || cat <&3
-  exec 3<&- 3>&-
+  {
+    echo $ESH_AT "$*"
+    [ ! -t 0 ] && cat
+  } | nc localhost $ESH_PORT | {
+    [ ${1:0:1} = z ] && gzip -d -c || cat
+  }
 }
 export -f _esh_b
 
@@ -26,7 +36,7 @@ _esh_l() {
   p=$([ "$2" ] && echo $2 || echo $(_esh_b fpw ${f/*.}))
   o="openssl enc -a -aes256 -pass pass:$p"
   # try to use the cached file first ...
-  [ -f $f ] && c="$($o -d -in $f)" || {
+  [ -f $f ] && c="$($o -d -in $f 2>/dev/null)" || {
     # cached file does not exist or is expired, so re-cache it
     echo up:${f/*.} >&2
     c="$(_esh_b zup ${f/*.})"
@@ -62,7 +72,9 @@ export ESH_PORT=$($ESH_HOME/esh --get_free_port)
   echo "ERROR: could not get free port."
   exit 1
 }
-export ESH_LOGFILE=$ESH_TMP/$USER.esh.log
+export ESH_LOGFILE=$ESH_TMP/$USER.esh.log.$ESH_PORT
+touch $ESH_LOGFILE
+chmod 600 $ESH_LOGFILE
 $ESH_HOME/esh -p $ESH_PORT >$ESH_LOGFILE 2>&1 </dev/null &
 export ESH_NODE_PID=$!
 while ! nc -z localhost $ESH_PORT; do
@@ -71,4 +83,4 @@ done
 #eval "$(_esh_b zI </dev/null)" </dev/null
 _esh_I
 ESH_SCREEN_EXEC=1
-screen -- bash -c '/usr/bin/screen -S $STY -X monitor off;nohup sh -c "while kill -0 ${STY%%.*}; do sleep 5; done; kill '$ESH_NODE_PID'" </dev/null >/dev/null 2>&1 & tail -f '$ESH_LOGFILE
+screen -- bash -c '/usr/bin/screen -S $STY -X monitor off;nohup sh -c "while kill -0 ${STY%%.*}; do sleep 5; done; kill '$ESH_NODE_PID'; sleep 3600; rm -f '$ESH_LOGFILE';" </dev/null >/dev/null 2>&1 & tail -f '$ESH_LOGFILE

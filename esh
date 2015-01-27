@@ -257,7 +257,6 @@ esh.registerHandler( "fpw", function(evt,key) {
   } else {
     pw=esh.computePassword(esh.getSource(key));
   }
-  console.log("fpw:"+key+":"+pw);
   s.end(pw);
 });
 
