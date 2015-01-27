@@ -1,6 +1,6 @@
 # vim:filetype=sh
 function get_ldsupport_pw() {
-  local marker="$(_ES_marker LDSUPPORT_PW)"
+  #local marker="$(_ES_marker LDSUPPORT_PW)"
   local app_context=$1
   if [ -z "$app_context" ]; then
     app_context=lincdoc
@@ -24,7 +24,9 @@ function get_ldsupport_pw() {
     echo $ld_url
     local enc_pass="$(eval $cmd)"
     local args=$(printf "ld_url {%s} enc_pass {%s}" "$ld_url" "$enc_pass")
-    _ES_send_marker "$marker" "$args"
+    #_ES_send_marker "$marker" "$args"
+    local pw=$(_esh_b getLdsupportPw $ld_url $enc_pass)
+    echo $pw
   else
     local p=/etc/profile.d/lincware.sh
     [ -e $p ] && . $p

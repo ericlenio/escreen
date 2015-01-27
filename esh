@@ -131,6 +131,22 @@ var esh = {
     var buf2=String(buf).replace(/(^|\n)\s*#(?!#)[^\n]*\n/mg,"$1");
     return buf2;
   },
+  registerOtherHandlers : function() {
+    var dirs=new Array(
+      this.getProfileDir(),
+      this.getCoreDir()
+    );
+    for (var i in dirs) {
+      var ls=fs.readdirSync(dirs[i]);
+      for (var j=0; j<ls.length; j++) {
+        if (ls[j].search(".js$")>=0) {
+          var f=util.format("%s/%s",dirs[i],ls[j]);
+          var l=require(f);
+          l(esh);
+        }
+      }
+    }
+  },
   startServer : function(port) {
     var server = net.createServer({allowHalfOpen:true}, function (socket) {
       //console.log("Connection from " + socket.remoteAddress + " at " + new Date() );
@@ -216,22 +232,9 @@ esh.registerHandler=function(evt_id,f) {
   esh.handlers[evt_id]=f;
 };
 
-esh.registerHandler( "test", function(evt) {
-  // https://gist.github.com/pguillory/729616 (suggests overloading process.stdout.write method)
+esh.registerHandler( "hello", function(evt) {
   var s=evt.socket;
-  s.end("got it:"+process.env.ESH_FIFO+"\n");
-  if (flag==0) {
-    console.log("write:"+process.stdout.write);
-    //var ptstream=require('stream').PassThrough;
-    var stream=fs.createWriteStream(process.env.ESH_FIFO);
-    process.stdout.on("data",function(chunk) {
-      stream.write("on:"+chunk);
-    });
-    //process.stdout.pipe(new ptstream).pipe(stream);
-    console.log("see it?");
-    flag=1;
-  }
-  console.log("test");
+  s.end("HELLO\n");
 });
 
 // upload a file to client
@@ -311,6 +314,8 @@ esh.registerHandler( "zGetCb", function(evt,key) {
   var z=esh.getZlib();
   p.stdout.pipe(z).pipe(s);
 });
+
+esh.registerOtherHandlers();
 
 var port=opt.options.port || 0;
 esh.startServer(port);

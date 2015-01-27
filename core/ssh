@@ -50,22 +50,22 @@ function ssh() {
         # matches the command line ssh host
         if [ "${last_arg##*@}" = "$cmdline_ssh_host" ]; then
           args_after_host=( exec /bin/bash --norc --noprofile )
-          # set up channel to esh server
-          local rem_port=$(/usr/bin/ssh -p $ssh_port -a -x -T -n -N -S $cp_mask -O forward -R0:localhost:$ESH_PORT $ssh_user@$cmdline_ssh_host)
+          # set up channel to esh server: but there is a bug when when doing
+          # -R0:localhost:$ESH_PORT: https://groups.google.com/forum/#!topic/opensshunixdev/tFdpDBcfjLI
+          # Situation was no VPN, ssh zarafa1, then ssh to somewhere else.
+          # Workaround: use nc to find an open port instead
+          #local rem_port=$(/usr/bin/ssh -q -p $ssh_port -a -x -T -n -N -S $cp_mask -O forward -R0:localhost:$ESH_PORT $ssh_user@$cmdline_ssh_host)
+          local rem_port=$(/usr/bin/ssh -p $ssh_port -S $cp_mask $ssh_user@$cmdline_ssh_host 'sh -c "for p in \$(seq 59876 59976); do nc -z localhost \$p >/dev/null || { echo \$p; break; }; done"')
           if [ -z "$rem_port" ]; then
-            rem_port=59876
+            rem_port=59875
             # Could use this to find an empty port:
             # http://cpansearch.perl.org/src/TOKUHIROM/Test-TCP-2.07/lib/Net/EmptyPort.pm
             echo "Error: could not get remote port, possibly due to remote server running old sshd; will try for workaround port $rem_port"
-            ssh_args=( -R$rem_port:localhost:$ESH_PORT "${ssh_args[@]}" )
           fi
+          ssh_args=( -R$rem_port:localhost:$ESH_PORT "${ssh_args[@]}" )
           # This works, but is insecure
           #/usr/bin/ssh -t -S $cp_mask "$@" "ESH_PORT=$rem_port;$(declare -f _esh_b);eval \"\$(_esh_b zI)\"; /bin/bash --norc --noprofile" </dev/tty
           # 
-          # This approach is better, uses a 1 time auth token so you can see it
-          # in ps -fe, but at that point it is already expired
-  #bash_init_string $ESH_PORT | gzip -9 -c | sudo -H -u $user /bin/bash -c 'eval "$(gzip -d -c)"'
-          #/usr/bin/ssh -t -S $cp_mask "${ssh_args[@]}" $(bash_init_string $rem_port </dev/null) -- "${args_after_host[@]}" </dev/tty
           local c="$(bash_init_string $rem_port|gzip -9 -c|openssl enc -a -A)"
           /usr/bin/ssh -t -S $cp_mask "${ssh_args[@]}" -- /bin/bash -c 'true;eval "$(echo '$c'|openssl enc -d -a -A|gzip -d -c)"' "${args_after_host[@]}" </dev/tty
         else
