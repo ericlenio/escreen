@@ -13,7 +13,7 @@ of your preferences and now having to manually propagate those changes out to
 those ssh sites, then this script presents a solution to avoid those types of
 headaches.
 
-There is also a handy copy/paste interface for vim (copies to your system
+There is also a handy copy/paste interface for terminal-based vim (copies to your system
 clipboard), a bash function to copy files or stdin to your system clipboard,
 the ability to easily upload files to a remote ssh session (yes sftp can be
 used, but with escreen you can do it right in the middle of your ssh
@@ -24,7 +24,7 @@ session), and similarly download files from a ssh session.
 * Support for running on Linux and Mac OS X (though mostly built/tested on just Linux)
 * Assumes you use bash as your main shell
 * escreen will launch a nodejs server when it is launched, to serve up all your preferences/settings
-* So you will have to have nodejs installed, plus the following node modules: clim, node-getopt, date-format-lite
+* So you will have to have nodejs installed (recommend 0.10.35 or later), plus the following node modules: clim, node-getopt, date-format-lite
 * Depends on some basic standard Unix programs like gzip, grep, cut
 * Also must have openssl installed
 * Useful to have vim
