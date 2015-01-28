@@ -127,6 +127,8 @@ Handlers should look something like this:
 
     module.exports=function(controller) {
       controller.registerHandler("helloWorld",
+        // controller is an EscreenController object, and socket
+        // is a nodejs net.Socket object.
         function(controller,socket,arg1,arg2) {
           // regular uncompressed response
           socket.end("HELLO WORLD: arg1="+arg1+"\n");
