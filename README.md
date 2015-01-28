@@ -109,17 +109,19 @@ in the profile:
 
 ## Handlers
 
-Handlers are Javascript modules to do custom event handling so that the nodejs server
-can customize your session. Here is how it works. In any bash shell there will always
-exist a function called `_esh_b`, and it is used to request something from the nodejs
-server and the server returns the handler's response (to stdout). Its usage is:
+Handlers are Javascript modules to do custom event handling so that the nodejs
+server (which is of course running on your local machine, and thus has access
+to local resources) can customize your session. Here is how it works. In any
+bash shell there will always exist a function called `_esh_b`, and it is used
+to request something from the nodejs server and the server returns the
+handler's response (to stdout). Its usage is:
 
     _esh_b HANDLER_ID arg1 arg2 ...
 
 where HANDLER_ID is some ID that matches `^\w+$`, and optional arguments come
-after that.  By convention, if HANDLER_ID begins with the letter `z`, then the handler
-should gzip it's response (example below).  Any optional arguments should
-match `^\w+$`, i.e. a single argument cannot contain whitespace.
+after that.  By convention, if HANDLER_ID begins with the letter `z`, then the
+handler should gzip it's response (example below).  Any optional arguments
+should match `^\w+$`, i.e. a single argument cannot contain whitespace.
 
 Handlers should look something like this:
 
@@ -170,3 +172,14 @@ application.
 The following core bash functions are system level and are therefore usable under any profile.
 
 * `cp2cb`: takes 1 argument: the name of a file to be copied to the system clipboard of your Linux PC (or Mac). Or if no file is supplied, it reads from stdin.
+
+# Security
+
+When the nodejs server starts, it creates a random 6 character authentication
+token that must be passed for any communication to work. In any bash shell the
+token is stored in environment variable `ESH_AT`. So of course any superuser
+would be able to see this value, and theoretically be able to use it for
+unintended purposes. The token never changes for the lifetime of the escreen
+invocation.
+
+All cached files are AES256 encrypted.
