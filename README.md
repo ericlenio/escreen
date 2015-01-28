@@ -1,8 +1,6 @@
 escreen
 =======
 
-*WARNING: this file is not up to date.*
-
 escreen is a GNU screen wrapper, plus a set of bash shell functions that make
 for consistent environment settings when ssh-ing to remote servers, and
 possibly sudo-ing to other users on those servers. If you have ever spent lots
@@ -13,11 +11,16 @@ of your preferences and now having to manually propagate those changes out to
 those ssh sites, then this script presents a solution to avoid those types of
 headaches.
 
-There is also a copy/paste interface for terminal-based vim (copies to your system
-clipboard), a bash function to copy files or stdin to your system clipboard,
-the ability to easily upload files to a remote ssh session (yes sftp can be
-used, but with escreen you can do it right in the middle of your ssh
+There is also a copy/paste interface for terminal-based vim (copies to your
+system clipboard), a bash function to copy files or stdin to your system
+clipboard, the ability to easily upload files to a remote ssh session (yes sftp
+can be used, but with escreen you can do it right in the middle of your ssh
 session), and similarly download files from a ssh session.
+
+The main idea is that escreen launches a back end server (written in nodejs)
+which serves up files/data/resources to your shell sessions (either local, or
+ssh'd to some other system). A random port is chosen for the server so that
+multiple escreen invocations are completely isolated.
 
 # Requirements
 
