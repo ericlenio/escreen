@@ -40,7 +40,7 @@ by escreen at init time by the nodejs server. It may contain any valid
 Javascript commands, but in particular you should make a unique password for
 yourself like so:
 
-    var MY_PASSWORD = "2sCuk5iVuRXrGmmUjLfwFj8fZSsoldML";
+    global.MY_PASSWORD = "2sCuk5iVuRXrGmmUjLfwFj8fZSsoldML";
 
 You need not be too concerned about this password, nor is it particularly a
 problem if you lose it.  Worst case is you make a new password and all cached
