@@ -127,14 +127,15 @@ Handlers should look something like this:
 
     module.exports=function(controller) {
       controller.registerHandler("helloWorld",
-        // controller is an EscreenController object, and socket
-        // is a nodejs net.Socket object.
+        // controller is an EscreenController object, and socket is a nodejs
+        // net.Socket object. You can add more arguments after arg2, if your
+        // handler requires it.
         function(controller,socket,arg1,arg2) {
           // regular uncompressed response
           socket.end("HELLO WORLD: arg1="+arg1+"\n");
           //
-          // OR if handler ID begins with a "z" we
-          // should gzip the response, like this:
+          // OR if handler ID begins with a "z" we should gzip the response,
+          // like this:
           //
           // var z=controller.getZlib();
           // z.pipe(socket);
