@@ -4,7 +4,9 @@ var crypto=require('crypto');
 var zlib=require('zlib');
 var child_process=require('child_process');
 
-function EscreenController() {}
+function EscreenController(profileDir) {
+  this.profileDir=profileDir;
+}
 module.exports=EscreenController;
 
 EscreenController.prototype.init=function() {
@@ -129,7 +131,7 @@ EscreenController.prototype.getFcnlist=function() {
 };
 
 EscreenController.prototype.getProfileDir=function() {
-  return util.format("%s/profile.lenio",process.env.ESH_HOME)
+  return this.profileDir;
 };
 
 EscreenController.prototype.getCachedBashrcFile=function() {
