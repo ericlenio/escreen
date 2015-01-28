@@ -19,7 +19,7 @@ _esh_b() {
   {
     echo $ESH_AT "$*"
     [ ! -t 0 ] && cat
-  } | nc localhost $ESH_PORT | {
+  } | nc -q -1 localhost $ESH_PORT | {
     [ ${1:0:1} = z ] && gzip -d -c || cat
   }
 }
@@ -64,23 +64,24 @@ eval '_esh_I() {
   export -f _esh_I _esh_b _esh_l
 }'
 
-ESH_HOME=$(dirname $(readlink $0))
+export ESH_HOME=$(dirname $(readlink -f $0))
 ESH_CORE=$ESH_HOME/core
 ESH_PROFILE=$ESH_HOME/profile.lenio
-export ESH_PORT=$($ESH_HOME/esh --get_free_port)
+export ESH_PORT=$(node $ESH_HOME/GetFreePort.js)
 [ -z "$ESH_PORT" ] && {
   echo "ERROR: could not get free port."
   exit 1
 }
+
 export ESH_LOGFILE=$ESH_TMP/$USER.esh.log.$ESH_PORT
 touch $ESH_LOGFILE
 chmod 600 $ESH_LOGFILE
-$ESH_HOME/esh -p $ESH_PORT >$ESH_LOGFILE 2>&1 </dev/null &
+node $ESH_HOME/EscreenRunServer.js $ESH_PORT >$ESH_LOGFILE 2>&1 </dev/null &
 export ESH_NODE_PID=$!
 while ! nc -z localhost $ESH_PORT; do
   sleep 0.1
+  echo -n z
 done
-#eval "$(_esh_b zI </dev/null)" </dev/null
 _esh_I
 ESH_SCREEN_EXEC=1
 screen -- bash -c '/usr/bin/screen -S $STY -X monitor off;nohup sh -c "while kill -0 ${STY%%.*}; do sleep 5; done; kill '$ESH_NODE_PID'; sleep 3600; rm -f '$ESH_LOGFILE';" </dev/null >/dev/null 2>&1 & tail -f '$ESH_LOGFILE
