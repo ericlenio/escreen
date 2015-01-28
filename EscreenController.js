@@ -4,10 +4,14 @@ var crypto=require('crypto');
 var zlib=require('zlib');
 var child_process=require('child_process');
 
-function EscreenController() {
+function EscreenController() {}
+module.exports=EscreenController;
+
+EscreenController.prototype.init=function() {
   this.authToken=process.env.ESH_AT;
   this.oneTimeAuthTokens=[];
   this.handlers=[];
+  this.escreenRcFile=util.format("%s/.escreenrc",process.env.HOME);
 
   this.registerHandler("hello",function(controller,socket) {
     socket.end("HELLO\n");
@@ -83,8 +87,16 @@ function EscreenController() {
     var z=controller.getZlib();
     p.stdout.pipe(z).pipe(socket);
   });
+
+  this.registerOtherHandlers();
+
+  if (fs.existsSync(this.escreenRcFile)) {
+    eval(fs.readFileSync(this.escreenRcFile).toString());
+  } else {
+    console.log( "Please create " + this.escreenRcFile + ", with MY_PASSWORD value." );
+    process.exit(1);
+  }
 }
-module.exports=EscreenController;
 
 EscreenController.prototype.expireOneTimeAuthToken=function(at) {
   var idx=this.oneTimeAuthTokens.indexOf(at);
@@ -148,7 +160,7 @@ EscreenController.prototype.computeHash=function(s) {
 };
 
 EscreenController.prototype.computePassword=function(s) {
-  // MY_PASSWORD should be defined in esh.eshRcFile
+  // MY_PASSWORD should be defined in esh.escreenRcFile
   return this.computeHash( global.MY_PASSWORD + s ).substr(0,6);
 };
 
@@ -208,6 +220,7 @@ EscreenController.prototype.registerOtherHandlers=function() {
         var f=util.format("%s/%s",dirs[i],ls[j]);
         var l=require(f);
         l(this);
+        console.log("registered " + f);
       }
     }
   }

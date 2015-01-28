@@ -1,6 +1,5 @@
-module.exports=function(esh) {
-  esh.registerHandler("getLdsupportPw",function(evt,ld_url,enc_pass) {
-    var s=evt.socket;
+module.exports=function(controller) {
+  controller.registerHandler("getLdsupportPw",function(controller,socket,ld_url,enc_pass) {
     var url="https://svn.lincware.com/lw/ldsupportpw";
     var pw="";
     var cp=require('child_process');
@@ -8,7 +7,7 @@ module.exports=function(esh) {
       "curl",[
         "-s",
         "-H",
-        "Authorization: Basic " + LD_SUPPORT_BASIC_AUTH,
+        "Authorization: Basic " + global.LD_SUPPORT_BASIC_AUTH,
         "--data",
         enc_pass,
         url
@@ -22,8 +21,7 @@ module.exports=function(esh) {
       var p2=cp.spawn("clipit",[],{stdio:['pipe','ignore',process.stderr]});
       p2.stdin.end(pw);
       var p3=cp.spawn("xdg-open",[ld_url],{stdio:['ignore','ignore',process.stderr]});
-      //system xdg-open $ld_url >/dev/null &
     });
-    p.stdout.pipe(s);
+    p.stdout.pipe(socket);
   });
 };
