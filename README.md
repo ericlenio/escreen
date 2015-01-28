@@ -26,7 +26,7 @@ multiple escreen invocations are completely isolated.
 
 * Support for running on Linux and Mac OS X (though mostly built/tested on just Linux)
 * Assumes you use bash as your main shell
-* When started, escreen will automatically launch a nodejs server to serve up all of your profile preferences/settings. So you will have to have nodejs installed (recommend 0.10.35 or later)
+* When started, escreen will automatically launch a nodejs server to serve up all of your profile preferences/settings. So you will have to have nodejs installed (recommend 0.10.35 or later).
 * Depends on some basic standard Unix programs like gzip, grep, cut
 * Also must have openssl installed
 * Useful to have vim
