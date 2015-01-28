@@ -13,7 +13,7 @@ of your preferences and now having to manually propagate those changes out to
 those ssh sites, then this script presents a solution to avoid those types of
 headaches.
 
-There is also a handy copy/paste interface for terminal-based vim (copies to your system
+There is also a copy/paste interface for terminal-based vim (copies to your system
 clipboard), a bash function to copy files or stdin to your system clipboard,
 the ability to easily upload files to a remote ssh session (yes sftp can be
 used, but with escreen you can do it right in the middle of your ssh
@@ -23,19 +23,19 @@ session), and similarly download files from a ssh session.
 
 * Support for running on Linux and Mac OS X (though mostly built/tested on just Linux)
 * Assumes you use bash as your main shell
-* escreen will launch a nodejs server when it is launched, to serve up all your preferences/settings
-* So you will have to have nodejs installed (recommend 0.10.35 or later), plus the following node modules: clim, node-getopt, date-format-lite
+* When started, escreen will automatically launch a nodejs server to serve up all of your profile preferences/settings. So you will have to have nodejs installed (recommend 0.10.35 or later), plus the following node modules: clim, date-format-lite
 * Depends on some basic standard Unix programs like gzip, grep, cut
 * Also must have openssl installed
 * Useful to have vim
+* For copy/paste usage you should install clipit and xsel (not necessary for OSX)
 
 # How it works
 
 **Step 1: identify your profile.** Start by creating a **profile** (see below),
 or using an existing profile. My personal profile is the only profile so far,
-called `profile.lenio`.
+called `profile.lwprof`.
 
-**Step 2: set up your rcfile.** The rcfile is `$HOME/.eshrc`. This is sourced
+**Step 2: set up your rcfile.** The rcfile is `$HOME/.escreenrc`. This is sourced
 by escreen at init time by the nodejs server. It may contain any valid
 Javascript commands, but in particular you should make a unique password for
 yourself like so:
@@ -45,22 +45,31 @@ yourself like so:
 You need not be too concerned about this password, nor is it particularly a
 problem if you lose it.  Worst case is you make a new password and all cached
 files will have to be re-cached (which will happen automatically).  Still, keep
-the file secured: `chmod 600 $HOME/.eshrc`.
+the file secured: `chmod 600 $HOME/.escreenrc`.
 
-**Step 3: start escreen.** Run the following to start a new session, which
-will load all your preferences, set the PS1 prompt, and create stub functions.
-You can interact with the shell as per normal.
+**Step 3: start escreen.** Run the following to start a new session, which will
+load all your preferences and create stub functions. It launches GNU screen
+with a single window showing a log file for escreen. Press `cntl-a c` to open a
+new window.  You can interact with the shell as per normal.
 
+    # run with default profile
     escreen
+    # run with specific profile
+    escreen profile.lwprof
 
-**Step 4: use vim, ssh, screen, etc.**
+**Step 4: use vim, ssh, etc.**
 
-If you ssh to another system, at the first shell prompt in the ssh session,
-escreen will proceed to upload escreen core functions to the remote system,
-plus the profile's basic settings from `bashrc`. Why not upload the entire
-profile and all of your preferences at once? To save time. Because otherwise
-you have to wait for everything to upload. escreen will only upload (and cache)
-the minimally necessary files it needs at the moment.
+If you ssh to another system, escreen will proceed to upload escreen core
+functions to the remote system, plus the profile's basic settings from
+`bashrc`. Why not upload the entire profile and all of your preferences at
+once? To save time. Because otherwise you have to wait for everything to
+upload. escreen will only upload (and cache) the minimally necessary files it
+needs at the moment.
+
+**Step 5: exit**
+
+When the last window of your GNU screen session closes, the nodejs server
+is automatically killed.
 
 ## Caching
 
@@ -69,8 +78,8 @@ Any time escreen uploads a file to a remote server, it will cache it under
 combination of your personal password (`MY_PASSWORD`) and a SHA1 hash of the
 file. The next time you ssh to the same system, escreen attempts to use the
 cached version first, automatically supplying the password to decrypt it on the
-remote end. escreen will automatically re-upload and re-cache the file if any
-of the following happen:
+remote end. escreen will automatically re-upload and re-cache the file if either
+of the following are true:
 
 * the cached file is deleted
 * the password supplied by escreen fails to decrypt the file for any reason
@@ -89,41 +98,60 @@ and re-caches it too.
 # Profiles
 
 A profile is a subdirectory off of the git checkout of escreen containing a
-set of bash command files and expect files to fine-tune your bash shell. The
+set of bash command files and js files to fine-tune your bash shell. The
 subdirectory naming convention is `profile.ID`, where `ID` is some identifier
 to indicate who the profile was created for, or what it tries to achieve. Files
 in the profile:
 
-* *THESE ARE OUT OF DATE*
-* `*.exp`: expect commands that get sourced when escreen starts up, these are usually for registering new markers and handlers (see below)
-* you should have at least one .exp file that defines your PS1 marker as variable `EXPECTSSH_PS1_TAIL` (more on that variable below)
-* any filename matching `^\w+` is assumed to be bash commands that usually, but not necessarily, define a bash function of the same name.
-* `.bashrc`: this does what you would think for a normal .bashrc file
+* `*.js`: nodejs Javascript modules commands that get sourced when escreen starts up, these are for registering new handlers (see below)
+* any filename matching `^\w+$` is assumed to be bash commands that define a bash function of the same name.
+* `bashrc`: this does what you would think for a normal .bashrc file; just note it really should be named `bashrc` and not `.bashrc`
 
-## Markers and handlers
+## Handlers
 
-Each marker is a small pattern that the main expect loop in escreen will
-detect and then trigger the marker's handler.
+Handlers are Javascript modules to do custom event handling so that the nodejs server
+can customize your session. Here is how it works. In any bash shell there will always
+exist a function called `_esh_b`, and it is used to request something from the nodejs
+server and the server returns the handler's response (to stdout). Its usage is:
 
-Markers invoke handlers by using the `_ES_send_marker` bash function like so:
+    _esh_b HANDLER_ID arg1 arg2 ...
 
-    local marker=$(_ES_marker SOME_LOGICAL_NAME)
-    _ES_send_marker "$marker" "any paramaters here ..."
+where HANDLER_ID is some ID that matches `^\w+$`, and optional arguments come
+after that.  By convention, if HANDLER_ID begins with the letter `z`, then the handler
+should gzip it's response (example below).  Any optional arguments should
+match `^\w+$`, i.e. a single argument cannot contain whitespace.
 
-Handlers can utilize the following global variables:
+Handlers should look something like this:
 
-* `OS`: output from `uname -s`, e.g. `Linux` or `Darwin`
-* `EXPECTSSH_PROMPT`: holds the regex to detect a bash prompt
-* `EXPECTSSH_PROFILE`: directory of the current profile
+    module.exports=function(controller) {
+      controller.registerHandler("helloWorld",
+        function(controller,socket,arg1,arg2) {
+          // regular uncompressed response
+          socket.end("HELLO WORLD: arg1="+arg1+"\n");
+          //
+          // OR if handler ID begins with a "z" we
+          // should gzip the response, like this:
+          //
+          // var z=controller.getZlib();
+          // z.pipe(socket);
+          // z.end("HELLO WORLD: arg1="+arg1+"\n");
+        }
+      );
+    };
 
-A handler can expect a single arg to be passed to it. The format of this data
-is up to you to define: it is the 2nd arg shown above with `_ES_send_marker`.
+So in your session you would call this like so:
+
+    # outputs "HELLO WORLD: arg1=myarg"
+    _esh_b helloWorld myarg
+
+Note that the `ssh` bash function in the default profile will automatically 
+do port forwarding so even ssh sessions can utilize this mechanism.
 
 ## Vim copy/paste
 
-The default profile **profile.lenio** includes a keyboard based copy/paste
-facility for vim. This is really handy when inside GNU screen and you want to
-quickly copy/paste between 2 screen windows. To use:
+The default profile **profile.lwprof** includes a keyboard based copy/paste
+facility for vim. This is handy when you want to quickly copy/paste between 2
+GNU screen windows. To use:
 
 * go into vim's [visual mode](http://vimdoc.sourceforge.net/htmldoc/visual.html) by pressing `v`
 * do vim cursor motion sequences to select the desired text
@@ -141,5 +169,4 @@ application.
 
 The following core bash functions are system level and are therefore usable under any profile.
 
-* *THESE ARE OUT OF DATE*
 * `cp2cb`: takes 1 argument: the name of a file to be copied to the system clipboard of your Linux PC (or Mac). Or if no file is supplied, it reads from stdin.

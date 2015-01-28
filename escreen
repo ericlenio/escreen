@@ -66,7 +66,7 @@ eval '_esh_I() {
 
 export ESH_HOME=$(dirname $(readlink -f $0))
 ESH_CORE=$ESH_HOME/core
-ESH_PROFILE=$ESH_HOME/profile.lenio
+[ "$1" ] && ESH_PROFILE="$1" || ESH_PROFILE=$ESH_HOME/profile.lwprof
 export ESH_PORT=$(node $ESH_HOME/GetFreePort.js)
 [ -z "$ESH_PORT" ] && {
   echo "ERROR: could not get free port."
@@ -76,7 +76,7 @@ export ESH_PORT=$(node $ESH_HOME/GetFreePort.js)
 export ESH_LOGFILE=$ESH_TMP/$USER.esh.log.$ESH_PORT
 touch $ESH_LOGFILE
 chmod 600 $ESH_LOGFILE
-node $ESH_HOME/EscreenRunServer.js $ESH_PORT >$ESH_LOGFILE 2>&1 </dev/null &
+node $ESH_HOME/EscreenRunServer.js $ESH_PROFILE $ESH_PORT >$ESH_LOGFILE 2>&1 </dev/null &
 export ESH_NODE_PID=$!
 while ! nc -z localhost $ESH_PORT; do
   sleep 0.1
