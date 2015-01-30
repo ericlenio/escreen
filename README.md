@@ -152,6 +152,8 @@ So in your session you would call this like so:
     # outputs "HELLO WORLD: arg1=myarg"
     _esh_b helloWorld myarg
 
+See `core/download.js` for an example of a handler.
+
 Note that the `ssh` bash function in the default profile will automatically 
 do port forwarding so even ssh sessions can utilize this mechanism.
 
@@ -178,6 +180,7 @@ application.
 The following core bash functions are system level and are therefore usable under any profile.
 
 * `cp2cb`: takes 1 argument: the name of a file to be copied to the system clipboard of your Linux PC (or Mac). Or if no file is supplied, it reads from stdin.
+* `download`: takes 1 argument: the name of a file to be downloaded (from an ssh session) to /tmp.
 
 # Security
 
@@ -188,4 +191,7 @@ would be able to see this value, and theoretically be able to use it for
 unintended purposes. The token never changes for the lifetime of the escreen
 invocation.
 
-All cached files are AES256 encrypted.
+All cached files are AES256 encrypted. System calls are made to openssl to
+decrypt/encrypt, and in those cases the password is passed as an argument so if
+timed just write a `ps` command could see the plaintext password. For my needs
+I don't really care about that kind of risk.
