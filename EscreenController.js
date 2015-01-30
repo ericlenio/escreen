@@ -44,6 +44,7 @@ EscreenController.prototype.init=function() {
     socket.end(pw);
   });
 
+  // upload function to client
   this.registerHandler("zup",function(controller,socket,key) {
     var buf=controller.getSource(key);
     var z=controller.getZlib();
@@ -270,6 +271,6 @@ EscreenController.prototype.handleRequest=function(socket) {
     //esh.handlers[evt.evtId](evt,hdr);
     this.handlers[evtId].apply(null,hdr);
   } catch (err) {
-    console.log( "EXCEPTION: chunk:" + chunk + "Message: " + err );
+    console.log("EXCEPTION:"+err);
   }
 };

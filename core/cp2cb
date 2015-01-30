@@ -1,7 +1,6 @@
 # vim:filetype=sh
 # cp2cb: use perl to remove the last \n on the last line (because vim's
-# writefile will always put an extra one), and minimally set a hyphen character
-# in the stream so as to not pass 0 bytes to clipit (which causes it to block)
+# writefile will always put an extra one).
 cp2cb() {
   local f="$1"
   if [ -t 0 ]; then

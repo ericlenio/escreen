@@ -18,12 +18,25 @@
 _esh_b() {
   {
     echo $ESH_AT "$*"
-    [ ! -t 0 ] && cat
-  } | nc -q -1 localhost $ESH_PORT | {
+    # must unbuffer output for large file downloads ... "sed -u" not
+    # compatible with OSX though
+    #[ ! -t 0 ] && sed -u ''
+    [ ! -t 0 ] && perl -pe 'BEGIN{$|=1}'
+  } | \
+  $ESH_NC localhost $ESH_PORT | {
     [ ${1:0:1} = z ] && gzip -d -c || cat
   }
 }
 export -f _esh_b
+
+#_esh_b_TEST() {
+  #perl -pe 'BEGIN{shift;@a=@ARGV;undef @ARGV;printf "%s %s\n",$ENV{ESH_AT},join(" ",@a)}' -- - "$@" | \
+  #sed -u "1i$ESH_AT $*" | \
+  #nc -q -1 localhost $ESH_PORT | {
+    #[ ${1:0:1} = z ] && gzip -d -c || cat
+  #}
+#}
+#export -f _esh_b_TEST
 
 # load a bash function into the session: first try using cached version,
 # re-uploading if it is out of date (or non-existent). Args:
@@ -52,6 +65,11 @@ export ESH_TMP=/tmp/esh
 
 # shell init script here
 eval '_esh_I() {
+  ESH_NC="nc -q -1"
+  # test if -q is supported with nc, due to 
+  # https://bugs.launchpad.net/ubuntu/+source/netcat-openbsd/+bug/544935
+  # we need it on newer ubuntu systems
+  [ "$(nc -q -1 -z localhost 1 2>&1)" ] && ESH_NC="nc"
   # p0, p1, p2 are set by fpw call
   local 't=$ESH_TMP u=$USER' $(_esh_b fpw cbf)
   [ ! -d $t ] && mkdir $t && chmod 1777 $t
@@ -60,7 +78,7 @@ eval '_esh_I() {
   for f in $(_esh_l $t/$u.fcnlist $p2 1); do
     _esh_gen_stub $t/$u.f.$f
   done
-  export ESH_PORT ESH_AT ESH_TMP ESH_STY
+  export ESH_PORT ESH_AT ESH_TMP ESH_STY ESH_NC
   export -f _esh_I _esh_b _esh_l
 }'
 

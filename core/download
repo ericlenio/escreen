@@ -1,29 +1,14 @@
 # vim:filetype=sh
 function download() {
-  local m1="$(_ES_marker DOWNLOAD_DEFAULT_FILE)"
-  local m2="$(_ES_marker DOWNLOAD_DATA)"
-  local file="$1"
-  if [ ! -e "$file" ]; then
-    echo "Error: no such file, or file is not readable: $file"
-    return
+  local f="$1" ext gzip=1
+  if [ ! -e "$f" ]; then
+    echo "Error: no such file, or file is not readable: $f"
+    return 1
   fi
-  local locfile=$(basename "$file")
-  local args=$(printf "default_file_name {%s}" "$locfile")
-  _ES_send_marker "$m1" "$args"
-  local outfile
-  # Only continue if a valid download filename was picked in get_download_filename
-  read outfile
-  if [ -z "$outfile" ]; then
-    return
-  fi
-  {
-    printf "outfile {$outfile} content {"
-    gzip -9 -c "$file" | openssl enc -base64
-    printf "}"
-  } | _ES_send_marker "$m2"
-  # This read acts as a block so if on a slower connection it gives the handler
-  # enough time to write out a status line. The handler will send the status
-  # line in this read, and we just let it go to stderr so user sees it.
-  read >&2 </dev/tty
+  ext=${f##*.}
+  # do not gzip file if it is already in compressed format
+  [[ "$ext" && ( $ext = gz || $ext = zip || $ext = bz2 || $ext = 7z ) ]] && gzip=0
+  { [ $gzip = 1 ] && gzip -9 -c "$f" || cat "$f"; } | \
+    _esh_b download $(wc -c <$f) $gzip $(echo -n ${f##*/} | openssl enc -A -base64)
 }
 export -f download
