@@ -5,10 +5,10 @@ function download() {
     echo "Error: no such file, or file is not readable: $f"
     return 1
   fi
-  ext=${f##*.}
+  ext="${f##*.}"
   # do not gzip file if it is already in compressed format
   [[ "$ext" && ( $ext = gz || $ext = zip || $ext = bz2 || $ext = 7z ) ]] && gzip=0
   { [ $gzip = 1 ] && gzip -9 -c "$f" || cat "$f"; } | \
-    _esh_b download $(wc -c <$f) $gzip $(echo -n ${f##*/} | openssl enc -A -base64)
+    _esh_b download $(wc -c <"$f") $gzip $(echo -n ${f##*/} | openssl enc -A -base64)
 }
 export -f download
