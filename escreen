@@ -98,7 +98,6 @@ node $ESH_HOME/EscreenRunServer.js $ESH_PROFILE $ESH_PORT >$ESH_LOGFILE 2>&1 </d
 export ESH_NODE_PID=$!
 while ! nc -z localhost $ESH_PORT; do
   sleep 0.1
-  echo -n z
 done
 _esh_I
 ESH_SCREEN_EXEC=1

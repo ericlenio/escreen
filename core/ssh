@@ -63,15 +63,13 @@ function ssh() {
             echo "Error: could not get remote port, possibly due to remote server running old sshd; will try for workaround port $rem_port"
           fi
           ssh_args=( -R$rem_port:localhost:$ESH_PORT "${ssh_args[@]}" )
-          # This works, but is insecure
-          #/usr/bin/ssh -t -S $cp_mask "$@" "ESH_PORT=$rem_port;$(declare -f _esh_b);eval \"\$(_esh_b zI)\"; /bin/bash --norc --noprofile" </dev/tty
           # 
           local c="$(bash_init_string $rem_port|gzip -9 -c|openssl enc -a -A)"
-          /usr/bin/ssh -t -S $cp_mask "${ssh_args[@]}" -- /bin/bash -c 'true;eval "$(echo '$c'|openssl enc -d -a -A|gzip -d -c)"' "${args_after_host[@]}" </dev/tty
+          /usr/bin/ssh -t -S $cp_mask "${ssh_args[@]}" -- /bin/bash -c 'true;eval "$(echo '$c'|openssl enc -d -a -A|gzip -d -c)"' "${args_after_host[@]}"
         else
           # Simpler, but then we don't have custom functions on other end: assuming that
           # we just want to run a quick command
-          /usr/bin/ssh -S $cp_mask "$@" </dev/tty
+          /usr/bin/ssh -S $cp_mask "$@"
         fi
       else
         # has_bash=0

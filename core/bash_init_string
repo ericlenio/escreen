@@ -10,8 +10,9 @@ bash_init_string() {
   declare -f _esh_b _esh_l _esh_I
   #echo 'export -f _esh_b _esh_l _esh_I'
   #echo 'eval "$(_esh_b zI)"'
-  echo '_esh_I'
+  echo '_esh_I </dev/null'
   #echo 'echo n=$#; for i in "$@"; do echo "i=$i."; done;'
   # need to do </dev/tty here so "tomcatlog -e" works
-  echo '"$@" </dev/tty'
+  #echo '"$@" </dev/tty'
+  echo -n '"$@"'
 }
