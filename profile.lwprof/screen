@@ -21,14 +21,12 @@ screen() {
   local shell=$ESH_TMP/$USER.screen.shell
   touch $shell
   chmod 700 $shell
-  echo '#!/bin/sh
-exec /bin/bash --norc --noprofile -s -- "$PS1" "$@" << '"'"EOF"'"'
-export PS1="$1"
-shift
-export ESH_STY=${STY%%.*}
-#eval "$(_esh_b zI </dev/null)" </dev/null
-exec /bin/bash --norc --noprofile "$@" </dev/tty
-EOF
+  # Create custom shell based on sh: call sh first so that original PS1 is
+  # maintained
+  echo -n '#!/bin/sh
+ESH_STY=${STY%%.*}
+export ESH_STY
+exec bash --norc --noprofile
 ' > $shell
   local SCREENRC=$ESH_TMP/$USER.screenrc
   # Set up a little macro so that ^a% will dump the current screen to a file,
@@ -69,4 +67,3 @@ EOF
   [ "$ESH_SCREEN_EXEC" = 1 ] && exec=exec
   $exec /usr/bin/screen -e$esc -s $shell "${origArgs[@]}"
 }
-export -f screen
