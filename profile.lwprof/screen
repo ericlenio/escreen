@@ -22,11 +22,11 @@ screen() {
   touch $shell
   chmod 700 $shell
   # Create custom shell based on sh: call sh first so that original PS1 is
-  # maintained
-  echo -n '#!/bin/sh
-ESH_STY=${STY%%.*}
-export ESH_STY
-exec bash --norc --noprofile
+  # maintained. Update: on OSX, sh is just a thin wrapper to bash, and it
+  # resets PS1. So, use perl instead.
+  echo -n '#!/usr/bin/perl
+($ENV{ESH_STY})=$ENV{STY}=~m{^(\d+)}g;
+exec (qw(bash --norc --noprofile),@ARGV);
 ' > $shell
   local SCREENRC=$ESH_TMP/$USER.screenrc
   # Set up a little macro so that ^a% will dump the current screen to a file,
