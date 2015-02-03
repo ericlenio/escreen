@@ -6,7 +6,7 @@ function ssh() {
     rm -f $cp_prefix*
     local last_arg=${@:$#}
     [ -z "$last_arg" ] && { echo "no arguments to ssh?"; return; }
-    /usr/bin/ssh -oControlMaster=auto -oControlPersist=5s -S $cp_mask -n -N -A -T "$@"
+    /usr/bin/ssh -oControlMaster=auto -oControlPersist=1s -S $cp_mask -n -N -A -T "$@"
 
     #{
       # wait for ControlPath file to exist
