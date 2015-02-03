@@ -194,4 +194,7 @@ invocation.
 All cached files are AES256 encrypted. System calls are made to openssl to
 decrypt/encrypt, and in those cases the password is passed as an argument so if
 timed just write a `ps` command could see the plaintext password. For my needs
-I don't really care about that kind of risk.
+I don't really care about that kind of risk, and the only risk is someone can
+read the source code of the various shell scripts: they really don't contain
+anything sensitive/proprietary, and after all, they are all available on
+github!
