@@ -26,7 +26,11 @@ function ssh() {
       local cmdline_ssh_host=$(ls $cp_prefix* | cut -d: -f 4)
       # get name of user on remote system we are ssh-ing to
       local ssh_user=$(ls $cp_prefix* | cut -d: -f 2)
-      [ -n "$STY" ] && printf "\033k${cmdline_ssh_host}\033\134"
+      [ -n "$STY" ] && {
+        local h=$cmdline_ssh_host
+        [ -n "$SSH_STY_LBL" ] && h=$SSH_STY_LBL
+        printf "\033k$h\033\134"
+      }
       # test if bash exists
       local has_bash=$(/usr/bin/ssh -p $ssh_port -S $cp_mask $ssh_user@$cmdline_ssh_host 'sh -c "[ -f /bin/bash ] && echo 1"')
       # now do actual ssh session
