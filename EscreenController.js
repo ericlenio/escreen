@@ -68,7 +68,6 @@ EscreenController.prototype.init=function() {
       p2.stdin.end(buf);
     });
     socket.pipe(z).pipe(p.stdin);
-    socket.end();
     setTimeout(function() {
       if (cleanExit) return;
       console.log("TIMEOUT writing to clipboard");
@@ -79,7 +78,12 @@ EscreenController.prototype.init=function() {
       p.kill();
     },10000);
 
+    var ended=false;
     z.on("data", function(chunk) {
+      if ( ! ended ) {
+        socket.end();
+        ended=true;
+      }
       buf+=new String(chunk);
     });
   });
