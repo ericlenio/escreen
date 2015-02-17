@@ -1,2 +1,4 @@
 export PS1='${debian_chroot:+($debian_chroot)}\u@\H:\[\033[1;32m\]\w:\[\033[7m\]\$\[\033[0m\] '
-export HISTCONTROL=ignoreboth:erasedups FCEDIT=vim EDITOR=vim
+# Setting VISUAL with weird command to work around bash functions not being
+# exported to sh, which is used by crontab. Fallout from shellshock.
+export HISTCONTROL=ignoreboth:erasedups FCEDIT=vim EDITOR=vim VISUAL='bash -c "vim \$0 \$@"'

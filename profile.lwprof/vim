@@ -1,5 +1,6 @@
 # vim:filetype=sh
 vim() {
+  local VIMINIT VIM_CB
   export VIM_CB=$ESH_TMP/$USER.vim.clipboard
   touch $VIM_CB
   chmod 600 $VIM_CB || {
