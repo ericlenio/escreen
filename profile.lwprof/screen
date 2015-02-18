@@ -4,20 +4,22 @@ screen() {
   local origArgs=("$@")
   # NOTE: cannot set OPTS in 1 line, it strips the return value from the subshell
   local OPTS
-  # This checks that -r or -R have a supplied value, and allows -ls and -d to
-  # pass through
-  OPTS=$(getopt -o lsdr:R: -- "$@") || return
-  eval set -- "$OPTS"
-  while true; do
-    case "$1" in
-      -r|-R)
-        /usr/bin/screen "${origArgs[@]}"
-        return
-        ;;
-      --) shift; break ;;
-      *) shift ;;
-    esac
-  done
+  if [ "$1" != -- ]; then
+    # This checks that -r or -R have a supplied value, and allows -ls and -d to
+    # pass through
+    OPTS=$(getopt -o lsdr:R: -- "$@") || return
+    set -- "$OPTS"
+    while true; do
+      case "$1" in
+	-r|-R)
+	  /usr/bin/screen "${origArgs[@]}"
+	  return
+	  ;;
+	--) shift; break ;;
+	*) shift ;;
+      esac
+    done
+  fi
   local shell=$ESH_TMP/$USER.screen.shell
   touch $shell
   chmod 700 $shell
