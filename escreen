@@ -62,6 +62,7 @@ export -f _esh_l
 
 export ESH_AT=$(openssl rand 3 -hex)
 export ESH_TMP=/tmp/esh
+[ ! -d $ESH_TMP ] && mkdir $ESH_TMP && chmod 1777 $ESH_TMP
 
 # shell init script here
 eval '_esh_I() {
