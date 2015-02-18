@@ -8,7 +8,7 @@ screen() {
     # This checks that -r or -R have a supplied value, and allows -ls and -d to
     # pass through
     OPTS=$(getopt -o lsdr:R: -- "$@") || return
-    set -- "$OPTS"
+    eval set -- "$OPTS"
     while true; do
       case "$1" in
 	-r|-R)
