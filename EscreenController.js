@@ -55,37 +55,37 @@ EscreenController.prototype.init=function() {
   // receive clipboard data from client, and store inside clipboard
   this.registerHandler("setCb",function(controller,socket) {
     var z=zlib.Gunzip();
-    var buf="";
+    var xselBuf="";
+    var maxXselBuf=255;
+    var clipboardBytes=0;
     var p=child_process.spawn("clipit", [], {stdio:['pipe',process.stdout,process.stderr]});
-    var cleanExit=false;
-    p.on('exit',function() {
-      cleanExit=true;
-      console.log("copied "+buf.length+" bytes to clipboard");
-      // if small enough buffer, place into X Windows primary selection too for
-      // convenience
-      if (buf.length>255) return;
-      var p2 = child_process.spawn("xsel", ["-i","-p"], {stdio:['pipe',process.stdout,process.stderr]});
-      p2.stdin.end(buf);
+    var clipitExit=false;
+    //var pt=new (require('stream').PassThrough);
+    p.on('exit',function(rc,signal) {
+      clipitExit=true;
+      console.log("copied %s bytes to clipboard, rc=%s, signal=%s",clipboardBytes,rc,signal);
+      if (clipboardBytes<=maxXselBuf) {
+        // if small enough buffer, place into X Windows primary selection too for
+        // convenience
+        var p2 = child_process.spawn("xsel", ["-i","-p"], {stdio:['pipe',process.stdout,process.stderr]});
+        p2.stdin.end(xselBuf);
+      }
+    });
+    socket.setTimeout(1500,function() {
+      console.log("*** socket timeout, %s bytes read, force closing now",clipboardBytes);
+      socket.end();
+      if (!clipitExit) {
+        p.kill();
+      }
+    });
+    socket.on("end", function() {
+      socket.end();
+    });
+    z.on("data", function(chunk) {
+      clipboardBytes+=chunk.length;
+      if (xselBuf.length<=maxXselBuf) xselBuf+=new String(chunk);
     });
     socket.pipe(z).pipe(p.stdin);
-    setTimeout(function() {
-      if (cleanExit) return;
-      console.log("TIMEOUT writing to clipboard");
-      //s.unpipe(z);
-      //z.end();
-      //z.unpipe(p.stdin);
-      //p.stdin.end();
-      p.kill();
-    },10000);
-
-    var ended=false;
-    z.on("data", function(chunk) {
-      if ( ! ended ) {
-        socket.end();
-        ended=true;
-      }
-      buf+=new String(chunk);
-    });
   });
 
   // send clipboard data to client
@@ -251,6 +251,7 @@ EscreenController.prototype.handleRequest=function(socket) {
       if (i<chunk.length-1) {
         var xtra=chunk.slice(i+1);
         var res=socket.unshift(xtra);
+        console.log("unshift %s bytes",xtra.length);
       }
       hdr=new String(chunk.slice(0,i)).split(" ");
       break;
