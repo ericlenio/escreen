@@ -1,0 +1,36 @@
+update_cacerts() {
+  # Update java cacerts file with SSL cert from given host:port
+  local cacerts=/etc/ssl/certs/java/cacerts
+  local storepass=changeit
+  local sslhost=${1%%:*}
+  local alias=$sslhost
+  local sslport=${1##*:}
+  local ans
+  
+  if [ $EUID != 0 ]; then
+    echo "Must be root."
+    return
+  fi
+
+  if [ $# != 1 ]; then
+    update_cacerts usage
+    return
+  fi
+
+  if [ "$1" = usage ]; then
+    echo "Usage: update_cacerts server.example.com:port"
+    return
+  fi
+
+  echo "Warning: this will overwrite $cacerts without making a backup."
+  read -p "OK to continue (y/n)? " ans
+  [ "$ans" != y ] && return
+
+  [ -z "$sslhost" ] && update_cacerts usage
+  [ "$sslhost" = "$sslport" ] && update_cacerts usage
+
+  keytool -keystore $cacerts -storepass $storepass -delete -alias $alias
+  echo | openssl s_client -showcerts -connect $sslhost:$sslport | keytool -keystore $cacerts -storepass $storepass -noprompt -alias $alias -importcert
+  keytool -keystore $cacerts -storepass $storepass -list -alias $alias
+  echo "Restart tomcat for changes to take effect in tomcat."
+}
