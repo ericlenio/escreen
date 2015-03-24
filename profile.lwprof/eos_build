@@ -1,0 +1,75 @@
+# based on Oleg configuration at:
+# https://jenkins.lincware.com/view/All/job/LDC-Staging/configure
+#
+# DATABASE:
+# To reconfigure your local copy of LDC to use PostgreSQL instead of H2 memory
+# database, you can do this in the grails-app/conf/DataSource.groovy - just
+# edit dataSource under the development environment. You'll need to change the
+# JDBC URL as well as driver, dialect, username and password. For proper
+# values, just see the staging environment below, which uses PostgreSQL and
+# remember not to commit the modified file. 
+eos_build() {
+  local warfile=grails/target/ldc-0.1.war
+  local context=/ldc
+  local tomcat_user=lwsa
+  local tomcat_pass=lincdoc1
+  local tomcat_base_url=http://localhost:8080/manager/text
+  local auth_string=$(echo -n $tomcat_user:$tomcat_pass | base64 -w 0)
+  local grails_env=development
+
+  if [ ! -d .git ]; then
+    echo "Not inside base directory of a ldc checkout."
+    return 1
+  fi
+
+  local git_url=$(git config --get remote.origin.url)
+  if [ ${git_url##*/} != ldc.git ]; then
+    echo "Not a checkout of ldc."
+    return 1
+  fi
+
+  rm -f $warfile
+
+  # 1-time stuff
+  #sudo npm install grunt -g
+  #sudo npm install grunt-cli -g
+  #sudo npm install bower -g
+  #git clone -b develop ssh://git@svn.lincware.com/var/lib/git/ldc.git
+
+  # Running npm install in the same folder as a package.json file will install
+  # the correct version of each dependency listed therein.
+  (
+    cd angular
+    npm install
+    bower install
+    grunt
+  )
+
+  cp -R angular/dist/* grails/web-app/
+  cp angular/dist/index.html grails/grails-app/views/index.gsp
+
+  (
+    cd angular_portal
+    npm install
+    bower install
+    grunt
+  )
+
+  mkdir -p grails/web-app/portal 
+  cp -R angular_portal/dist/* grails/web-app/portal
+
+  (
+    cd grails
+    grails test-app
+    grails -Dgrails.env=$grails_env war
+  )
+
+
+  if [ -f $warfile ]; then
+    curl -s -k -H "Authorization: Basic $auth_string" $tomcat_base_url/undeploy?path=$context
+    curl -s -k -H "Authorization: Basic $auth_string" -T $warfile $tomcat_base_url/deploy?path=$context
+    curl -s -k -H "Authorization: Basic $auth_string" $tomcat_base_url/list
+  else
+    echo "No war file generated."
+  fi
+}
