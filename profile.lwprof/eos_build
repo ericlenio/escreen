@@ -34,6 +34,9 @@ eos_build() {
   #sudo npm install grunt -g
   #sudo npm install grunt-cli -g
   #sudo npm install bower -g
+  #curl -s get.gvmtool.net | bash
+  #. ~/.gvm/bin/gvm-init.sh
+  #gvm install grails 2.4.4
   #git clone -b develop ssh://git@svn.lincware.com/var/lib/git/ldc.git
 
   # Running npm install in the same folder as a package.json file will install
