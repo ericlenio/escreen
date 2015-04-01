@@ -1,6 +1,17 @@
 # based on Oleg configuration at:
 # https://jenkins.lincware.com/view/All/job/LDC-Staging/configure
 #
+# 1-time stuff:
+#   curl -sL https://deb.nodesource.com/setup | sudo bash -
+#   sudo apt-get install nodejs
+#   sudo npm install grunt -g
+#   sudo npm install grunt-cli -g
+#   sudo npm install bower -g
+#   curl -s get.gvmtool.net | bash
+#   . ~/.gvm/bin/gvm-init.sh
+#   gvm install grails 2.4.4
+#   git clone -b develop ssh://git@svn.lincware.com/var/lib/git/ldc.git
+#
 # DATABASE:
 # To reconfigure your local copy of LDC to use PostgreSQL instead of H2 memory
 # database, you can do this in the grails-app/conf/DataSource.groovy - just
@@ -9,12 +20,12 @@
 # values, just see the staging environment below, which uses PostgreSQL and
 # remember not to commit the modified file. 
 eos_build() {
+  local propsfile=ldc.properties
   local warfile=grails/target/ldc-0.1.war
   local context=/ldc
   local tomcat_user=lwsa
   local tomcat_pass=lincdoc1
   local tomcat_base_url=http://localhost:8080/manager/text
-  local auth_string=$(echo -n $tomcat_user:$tomcat_pass | base64 -w 0)
   local grails_env=development
 
   if [ ! -d .git ]; then
@@ -28,18 +39,21 @@ eos_build() {
     return 1
   fi
 
-  rm -f $warfile
+  if [ ! -f $propsfile ]; then
+    echo "warfile=$warfile" > $propsfile
+    echo "context=$context" >> $propsfile
+    echo "tomcat_user=$tomcat_user" >> $propsfile
+    echo "tomcat_pass=$tomcat_pass" >> $propsfile
+    echo "tomcat_base_url=$tomcat_base_url" >> $propsfile
+    echo "grails_env=$grails_env" >> $propsfile
+    echo "Created ldc.properties file with stub properties, please edit it and re-run eos_build."
+    return
+  fi
 
-  # 1-time stuff
-  #curl -sL https://deb.nodesource.com/setup | sudo bash -
-  #sudo apt-get install nodejs
-  #sudo npm install grunt -g
-  #sudo npm install grunt-cli -g
-  #sudo npm install bower -g
-  #curl -s get.gvmtool.net | bash
-  #. ~/.gvm/bin/gvm-init.sh
-  #gvm install grails 2.4.4
-  #git clone -b develop ssh://git@svn.lincware.com/var/lib/git/ldc.git
+  source $propsfile
+  local auth_string=$(echo -n $tomcat_user:$tomcat_pass | base64 -w 0)
+
+  rm -f $warfile
 
   # Running npm install in the same folder as a package.json file will install
   # the correct version of each dependency listed therein.
