@@ -1,91 +1,104 @@
 # vim:filetype=sh
 function ssh() {
-  if [ -t 1 ]; then
-    local cp_prefix=$ESH_TMP/$USER.sshcp:
-    local cp_mask=$cp_prefix%r:%h:%n:%p
-    rm -f $cp_prefix*
-    local last_arg=${@:$#}
-    [ -z "$last_arg" ] && { echo "no arguments to ssh?"; return; }
-    /usr/bin/ssh -oControlMaster=auto -oControlPersist=1s -S $cp_mask -n -N -A -T "$@"
-
-    #{
-      # wait for ControlPath file to exist
-      #while [ -z "$(ls $cp_prefix* 2>/dev/null)" ]; do
-        #sleep 0.1
-      #done
-      # find ssh port from ControlPath file that just was created
-      local ssh_port=$(ls $cp_prefix* | cut -d: -f 5)
-      [ -z "$ssh_port" ] && {
-        echo "ERROR: could not read ssh port, stop."
-        return
-      }
-      # find ssh host from ControlPath file that just was created
-      local ssh_host=$(ls $cp_prefix* | cut -d: -f 3)
-      # find ssh host, as specified on command line, from ControlPath file that
-      # just was created: note it is NOT necessarily the same as $ssh_host
-      local cmdline_ssh_host=$(ls $cp_prefix* | cut -d: -f 4)
-      # get name of user on remote system we are ssh-ing to
-      local ssh_user=$(ls $cp_prefix* | cut -d: -f 2)
-      [ -n "$STY" ] && {
-        local h=$cmdline_ssh_host
-        [ -n "$SSH_STY_LBL" ] && h=$SSH_STY_LBL
-        printf "\033k$h\033\134"
-      }
-      # test if bash exists
-      local has_bash=$(/usr/bin/ssh -p $ssh_port -S $cp_mask $ssh_user@$cmdline_ssh_host 'sh -c "[ -f /bin/bash ] && echo 1"')
-      # now do actual ssh session
-      if [ "$has_bash" = 1 ]; then
-        # 
-        # ASSUMPTION: all args after the ssh host are part of the command to be
-        # run on remote host
-
-        # ssh_args: args up to and including ssh host
-        local ssh_args=()
-        # args_after_host: all args after the ssh host
-        local args_after_host=()
-        local use=0
-        local arg
-        for arg in "$@"; do
-          [ $use = 0 ] && ssh_args[${#ssh_args[@]}]="$arg"
-          [ $use = 1 ] && args_after_host[${#args_after_host[@]}]="$arg"
-          [ "$arg" = $cmdline_ssh_host ] && use=1
-        done
-        # strip username and @ sign from last arg (if present), see if it
-        # matches the command line ssh host
-        if [ "${last_arg##*@}" = "$cmdline_ssh_host" ]; then
-          args_after_host=( exec /bin/bash --norc --noprofile )
-          # set up channel to esh server: but there is a bug when when doing
-          # -R0:localhost:$ESH_PORT: https://groups.google.com/forum/#!topic/opensshunixdev/tFdpDBcfjLI
-          # Situation was no VPN, ssh zarafa1, then ssh to somewhere else.
-          # Workaround: use nc to find an open port instead
-          #local rem_port=$(/usr/bin/ssh -q -p $ssh_port -a -x -T -n -N -S $cp_mask -O forward -R0:localhost:$ESH_PORT $ssh_user@$cmdline_ssh_host)
-          local rem_port=$(/usr/bin/ssh -p $ssh_port -S $cp_mask $ssh_user@$cmdline_ssh_host 'sh -c "for p in \$(seq 59876 59976); do nc -z localhost \$p >/dev/null || { echo \$p; break; }; done"')
-          if [ -z "$rem_port" ]; then
-            rem_port=59875
-            # Could use this to find an empty port:
-            # http://cpansearch.perl.org/src/TOKUHIROM/Test-TCP-2.07/lib/Net/EmptyPort.pm
-            echo "Error: could not get remote port, possibly due to remote server running old sshd; will try for workaround port $rem_port"
-          fi
-          ssh_args=( -R$rem_port:localhost:$ESH_PORT "${ssh_args[@]}" )
-          # 
-          local c="$(bash_init_string $rem_port|gzip -9 -c|openssl enc -a -A)"
-          /usr/bin/ssh -t -S $cp_mask "${ssh_args[@]}" -- /bin/bash -c 'true;eval "$(echo '$c'|openssl enc -d -a -A|gzip -d -c)"' "${args_after_host[@]}"
-        else
-          # Simpler, but then we don't have custom functions on other end: assuming that
-          # we just want to run a quick command
-          /usr/bin/ssh -S $cp_mask "$@"
-        fi
-      else
-        # has_bash=0
-        echo /usr/bin/ssh -S $cp_mask "$@"
-        /usr/bin/ssh -S $cp_mask "$@"
-      fi
-      [ -n "$STY" ] && printf "\033k${HOSTNAME}\033\134"
-    #}
-    rm -f $cp_prefix*
-  else
-    # we are in a pipeline
+  if [ ! -t 0 -o ! -t 1 ]; then
+    # in a pipeline
     /usr/bin/ssh "$@"
+    return $?
   fi
+  local cp_prefix=$ESH_TMP/$USER.sshcp:
+  local cp_mask=$cp_prefix%r:%h:%n:%p
+  rm -f $cp_prefix*
+  local last_arg=${@:$#}
+  [ -z "$last_arg" ] && { echo "no arguments to ssh?"; return; }
+  # Need to determine now if we are just running a plain shell in the remote
+  # host, or some other command. For the former case, we set up a
+  # ControlMaster; for the latter, no ControlMaster is necessary and we just
+  # run the command as is.
+  #
+  # So now we strip out all the ssh options. What's left would be the
+  # user@ssh_host part (or just ssh_host), and possibly a command + args to be
+  # run on the remote host.
+  #
+  # List of legal ssh options: pulled from ssh.c from openssh-client debian
+  # package. As these options can change my preference was to go about it a
+  # different way: it could potentially be done with ssh's Match statement:
+  # acquire original ssh host from something like:
+  #   Match exec "bash -c 'echo orighost=%n'"
+  # but that statement cannot work on a command line, only inside
+  # ~/.ssh/config, so not really a viable option.
+  local ssh_legal_opts="1246ab:c:e:fgi:kl:m:no:p:qstvxACD:E:F:I:KL:MNO:PQ:R:S:TVw:W:XYy"
+  local OPTS
+  local origArgs=("$@")
+  OPTS=$(getopt -o $ssh_legal_opts -- "$@")
+  # set temporary positional parameters
+  eval set -- "$OPTS"
+  # strip out all ssh command line options
+  while true; do
+    case "$1" in
+      --) shift
+        break
+        ;;
+      *) shift
+        ;;
+    esac
+  done
+  # should now have user@ssh_host, or just plain ssh_host
+  #local ssh_user_host="$1"
+  shift
+  # if anything left in the command line, then we just do straight through call
+  # to ssh, no ControlMaster
+  if [ $# -gt 0 ]; then
+    /usr/bin/ssh "${origArgs[@]}"
+    return $?
+  fi
+  # restore original positional parameters
+  set -- "${origArgs[@]}"
+  # set up ControlMaster
+  # unless ssh-ing to localhost, this will produce the message "stdin: is not a tty",
+  # which makes sense given the "-n" argument.
+  /usr/bin/ssh -oControlMaster=auto -oControlPersist=1s -S $cp_mask -n -N -A -T "$@"
+  local rc=$?
+  [ $rc != 0 -a $rc != 1 ] && return $rc
+  # find ssh port from ControlPath file that just was created
+  local ssh_port=$(ls $cp_prefix* | cut -d: -f 5)
+  [ -z "$ssh_port" ] && {
+    echo "ERROR: could not read ssh port, stop."
+  }
+  # find ssh host from ControlPath file that just was created
+  local ssh_host=$(ls $cp_prefix* | cut -d: -f 3)
+  # find ssh host, as specified on command line, from ControlPath file that
+  # just was created: note it is NOT necessarily the same as $ssh_host
+  local cmdline_ssh_host=$(ls $cp_prefix* | cut -d: -f 4)
+  # get name of user on remote system we are ssh-ing to
+  local ssh_user=$(ls $cp_prefix* | cut -d: -f 2)
+  [ -n "$STY" ] && {
+    local h=$cmdline_ssh_host
+    [ -n "$SSH_STY_LBL" ] && h=$SSH_STY_LBL
+    printf "\033k$h\033\134"
+  }
+  # test if bash exists
+  local has_bash=$(/usr/bin/ssh -p $ssh_port -S $cp_mask $ssh_user@$cmdline_ssh_host 'sh -c "[ -f /bin/bash ] && echo 1"')
+  # now do actual ssh session
+  if [ "$has_bash" = 1 ]; then
+    # set up channel to esh server: but there is a bug when when doing
+    # -R0:localhost:$ESH_PORT: https://groups.google.com/forum/#!topic/opensshunixdev/tFdpDBcfjLI
+    # Situation was no VPN, ssh zarafa1, then ssh to somewhere else.
+    # Workaround: use nc to find an open port instead
+    #local rem_port=$(/usr/bin/ssh -q -p $ssh_port -a -x -T -n -N -S $cp_mask -O forward -R0:localhost:$ESH_PORT $ssh_user@$cmdline_ssh_host)
+    local rem_port=$(/usr/bin/ssh -p $ssh_port -S $cp_mask $ssh_user@$cmdline_ssh_host 'sh -c "for p in \$(seq 59876 59976); do nc -z localhost \$p >/dev/null || { echo \$p; break; }; done"')
+    if [ -z "$rem_port" ]; then
+      rem_port=59875
+      # Could use this to find an empty port:
+      # http://cpansearch.perl.org/src/TOKUHIROM/Test-TCP-2.07/lib/Net/EmptyPort.pm
+      echo "Error: could not get remote port, possibly due to remote server running old sshd; will try for workaround port $rem_port"
+    fi
+    local c="$(bash_init_string $rem_port|gzip -9 -c|openssl enc -a -A)"
+    /usr/bin/ssh -t -S $cp_mask -R$rem_port:localhost:$ESH_PORT "$@" -- /bin/bash -c 'true;eval "$(echo '$c'|openssl enc -d -a -A|gzip -d -c)"' exec /bin/bash --norc --noprofile
+  else
+    # has_bash=0
+    /usr/bin/ssh -S $cp_mask "$@"
+  fi
+  [ -n "$STY" ] && printf "\033k${HOSTNAME}\033\134"
+  rm -f $cp_prefix*
 }
 export -f ssh
