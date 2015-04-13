@@ -29,6 +29,8 @@ function ssh() {
   local ssh_legal_opts="1246ab:c:e:fgi:kl:m:no:p:qstvxACD:E:F:I:KL:MNO:PQ:R:S:TVw:W:XYy"
   local OPTS
   local origArgs=("$@")
+  local -a ssh_opts
+  local force_tty=0
   OPTS=$(getopt -o $ssh_legal_opts -- "$@")
   # set temporary positional parameters
   eval set -- "$OPTS"
@@ -38,25 +40,39 @@ function ssh() {
       --) shift
         break
         ;;
-      *) shift
+      -t) force_tty=1
+        # ;& means continue matching
+        ;&
+      *) ssh_opts+=("$1")
+        shift
         ;;
     esac
   done
   # should now have user@ssh_host, or just plain ssh_host
-  #local ssh_user_host="$1"
+  local ssh_user_host="$1"
   shift
-  # if anything left in the command line, then we just do straight through call
-  # to ssh, no ControlMaster
+  local -a remote_cmd=( exec /bin/bash --norc --noprofile )
+  # if anything left in the command line (and ssh option -t is not set), then
+  # we just do straight through call to ssh, no ControlMaster. If -t is set
+  # then we assume we want to still do a ControlMaster and initialize the
+  # remote environment.
   if [ $# -gt 0 ]; then
-    /usr/bin/ssh "${origArgs[@]}"
-    return $?
+    if [ $force_tty = 0 ]; then
+      /usr/bin/ssh "${origArgs[@]}"
+      return $?
+    fi
+    remote_cmd=( "$@" )
   fi
   # restore original positional parameters
   set -- "${origArgs[@]}"
   # set up ControlMaster
   # unless ssh-ing to localhost, this will produce the message "stdin: is not a tty",
   # which makes sense given the "-n" argument.
-  /usr/bin/ssh -oControlMaster=auto -oControlPersist=1s -S $cp_mask -n -N -A -T "$@"
+  #
+  # Good test:
+  # ssh localhost -t -A -oPermitLocalCommand=yes -oLocalCommand="bash -c 'date && pwd'" uname
+  #
+  /usr/bin/ssh -oControlMaster=auto -oControlPersist=1s -S $cp_mask "${ssh_opts[@]}" -n -N -A -T $ssh_user_host
   local rc=$?
   [ $rc != 0 -a $rc != 1 ] && return $rc
   # find ssh port from ControlPath file that just was created
@@ -85,7 +101,7 @@ function ssh() {
     # Situation was no VPN, ssh zarafa1, then ssh to somewhere else.
     # Workaround: use nc to find an open port instead
     #local rem_port=$(/usr/bin/ssh -q -p $ssh_port -a -x -T -n -N -S $cp_mask -O forward -R0:localhost:$ESH_PORT $ssh_user@$cmdline_ssh_host)
-    local rem_port=$(/usr/bin/ssh -p $ssh_port -S $cp_mask $ssh_user@$cmdline_ssh_host 'sh -c "for p in \$(seq 59876 59976); do nc -z localhost \$p >/dev/null || { echo \$p; break; }; done"')
+    local rem_port=$(/usr/bin/ssh -p $ssh_port -S $cp_mask $ssh_user_host 'sh -c "for p in \$(seq 59876 59976); do nc -z localhost \$p >/dev/null || { echo \$p; break; }; done"')
     if [ -z "$rem_port" ]; then
       rem_port=59875
       # Could use this to find an empty port:
@@ -93,7 +109,7 @@ function ssh() {
       echo "Error: could not get remote port, possibly due to remote server running old sshd; will try for workaround port $rem_port"
     fi
     local c="$(bash_init_string $rem_port|gzip -9 -c|openssl enc -a -A)"
-    /usr/bin/ssh -t -S $cp_mask -R$rem_port:localhost:$ESH_PORT "$@" -- /bin/bash -c 'true;eval "$(echo '$c'|openssl enc -d -a -A|gzip -d -c)"' exec /bin/bash --norc --noprofile
+    /usr/bin/ssh -t -S $cp_mask -R$rem_port:localhost:$ESH_PORT "${ssh_opts[@]}" $ssh_user_host -- /bin/bash -c 'true;eval "$(echo '$c'|openssl enc -d -a -A|gzip -d -c)"' "${remote_cmd[@]}"
   else
     # has_bash=0
     /usr/bin/ssh -S $cp_mask "$@"
