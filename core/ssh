@@ -1,5 +1,5 @@
 # vim:filetype=sh
-function ssh() {
+ssh() {
   if [ ! -t 0 -o ! -t 1 ]; then
     # in a pipeline
     /usr/bin/ssh "$@"
