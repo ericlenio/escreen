@@ -7,6 +7,7 @@
 #     ExitOnForwardFailure no
 #     IdentityFile /etc/lincware/lwsa/lincdocvs10.americanfence.com.id_rsa
 ssh_host_key_gen() {
+  local hostname keyfile pubfile authorized_keys ans
   echo -n "What hostname do you want to generate a key for? "
   read hostname
   if [ -z "$hostname" ]; then
