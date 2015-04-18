@@ -4,19 +4,14 @@ screen() {
   local origArgs=("$@")
   # NOTE: cannot set OPTS in 1 line, it strips the return value from the subshell
   local OPTS
+  # Note: escreen sends "--", that is why we skip it here
   if [ "$1" != -- ]; then
-    # This checks that -r or -R have a supplied value, and allows -ls and -d to
-    # pass through
-    OPTS=$(getopt -o lsdr:R: -- "$@") || return
-    eval set -- "$OPTS"
-    while true; do
-      case "$1" in
-	-r|-R)
-	  /usr/bin/screen "${origArgs[@]}"
-	  return
-	  ;;
-	--) shift; break ;;
-	*) shift ;;
+    for opt in "$@"; do
+      case $opt in
+        -d|-D|-r|-R|-RR|-ls|-list|-Q|-v|-x|-X)
+          /usr/bin/screen "$@"
+          return $?
+          ;;
       esac
     done
   fi
