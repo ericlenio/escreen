@@ -48,6 +48,11 @@ ssh() {
         ;;
     esac
   done
+  if [ $# = 0 ]; then
+    # Might have done -V, allow to continue
+    /usr/bin/ssh "${ssh_opts[@]}"
+    return $?
+  fi
   # should now have user@ssh_host, or just plain ssh_host
   local ssh_user_host="$1"
   shift
@@ -79,6 +84,7 @@ ssh() {
   local ssh_port=$(ls $cp_prefix* | cut -d: -f 5)
   [ -z "$ssh_port" ] && {
     echo "ERROR: could not read ssh port, stop."
+    return
   }
   # find ssh host from ControlPath file that just was created
   local ssh_host=$(ls $cp_prefix* | cut -d: -f 3)
