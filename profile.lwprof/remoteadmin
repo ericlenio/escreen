@@ -75,7 +75,7 @@ function remoteadmin() {
       SSH_STY_LBL=$hostname ssh -t -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -p $ssh_port $extra_params lincdoc@remoteadmin.lincware.com
       ;;
     2)
-      exec sftp -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oProxyCommand="/usr/bin/ssh -q -A -T remoteadmin@remoteadmin.lincware.com remoteadmin_port=$ssh_port" lincdoc@remoteadmin.lincware.com
+      sftp -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oProxyCommand="/usr/bin/ssh -q -A -T remoteadmin@remoteadmin.lincware.com remoteadmin_port=$ssh_port" lincdoc@remoteadmin.lincware.com
       ;;
     3)
       #ldsupport_password=$(get_RA_attr ldsupport_password)
