@@ -20,6 +20,7 @@
 # values, just see the staging environment below, which uses PostgreSQL and
 # remember not to commit the modified file. 
 eos_build() {
+  
   local propsfile=ldc.properties
   local warfile=grails/target/ldc-0.1.war
   local context=/ldc
@@ -27,6 +28,23 @@ eos_build() {
   local tomcat_pass=lincdoc1
   local tomcat_base_url=http://localhost:8080/manager/text
   local grails_env=development
+
+  local OPTS clean=0
+  OPTS=$(getopt -o c -- "$@")
+  # set temporary positional parameters
+  eval set -- "$OPTS"
+  # strip out all ssh command line options
+  while true; do
+    case "$1" in
+      --) break
+        ;;
+      -c) clean=1
+        # ;& means continue matching
+        ;&
+      *) shift
+        ;;
+    esac
+  done
 
   if [ ! -d .git ]; then
     echo "Not inside base directory of a ldc checkout."
@@ -52,6 +70,13 @@ eos_build() {
 
   source $propsfile
   local auth_string=$(echo -n $tomcat_user:$tomcat_pass | base64 -w 0)
+
+  if [ $clean = 1 ]; then
+    ( cd angular; grunt clean )
+    ( cd angular_portal; grunt clean )
+    ( cd grails; grails clean )
+    return
+  fi
 
   rm -f $warfile
 
