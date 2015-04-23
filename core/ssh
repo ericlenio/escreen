@@ -31,7 +31,7 @@ ssh() {
   local origArgs=("$@")
   local -a ssh_opts
   local force_tty=0
-  OPTS=$(getopt -o $ssh_legal_opts -- "$@")
+  OPTS=$(getopt $ssh_legal_opts -- "$@")
   # set temporary positional parameters
   eval set -- "$OPTS"
   # strip out all ssh command line options
