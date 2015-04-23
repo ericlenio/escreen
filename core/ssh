@@ -36,17 +36,11 @@ ssh() {
   eval set -- "$OPTS"
   # strip out all ssh command line options
   while true; do
-    case "$1" in
-      --) shift
-        break
-        ;;
-      -t) force_tty=1
-        # ;& means continue matching
-        ;&
-      *) ssh_opts+=("$1")
-        shift
-        ;;
-    esac
+    local arg1=$1
+    shift
+    [ "$arg1" = -- ] && break
+    [ "$arg1" = -t ] && force_tty=1
+    ssh_opts+=("$arg1")
   done
   if [ $# = 0 ]; then
     # Might have done -V, allow to continue
