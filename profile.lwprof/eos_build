@@ -19,6 +19,10 @@
 # JDBC URL as well as driver, dialect, username and password. For proper
 # values, just see the staging environment below, which uses PostgreSQL and
 # remember not to commit the modified file. 
+#
+# Arguments:
+# -c: clean out old builds first
+#
 eos_build() {
   
   local propsfile=ldc.properties
@@ -74,8 +78,7 @@ eos_build() {
   if [ $clean = 1 ]; then
     ( cd angular; grunt clean )
     ( cd angular_portal; grunt clean )
-    ( cd grails; grails clean )
-    return
+    ( cd grails; grails clean-all )
   fi
 
   rm -f $warfile
