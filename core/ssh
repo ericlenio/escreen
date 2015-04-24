@@ -31,7 +31,12 @@ ssh() {
   local origArgs=("$@")
   local -a ssh_opts
   local force_tty=0
-  OPTS=$(getopt $ssh_legal_opts -- "$@")
+  local uname=$(uname)
+  if [ $uname = Darwin ]; then
+    OPTS=$(getopt $ssh_legal_opts -- "$@")
+  else
+    OPTS=$(getopt -o $ssh_legal_opts -- "$@")
+  fi
   # set temporary positional parameters
   eval set -- "$OPTS"
   # strip out all ssh command line options
