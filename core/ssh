@@ -33,7 +33,7 @@ ssh() {
   local force_tty=0
   local uname=$(uname)
   if [ $uname = Darwin ]; then
-    OPTS=$(getopt $ssh_legal_opts -- "$@")
+    OPTS=$(getopt $ssh_legal_opts "$@")
   else
     OPTS=$(getopt -o $ssh_legal_opts -- "$@")
   fi
