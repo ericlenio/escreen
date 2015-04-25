@@ -161,14 +161,18 @@ EscreenController.prototype.getCoreDir=function() {
 };
 
 EscreenController.prototype.computeHash=function(s) {
-  var h = crypto.createHash('sha1');
+  var h=crypto.createHash('sha256');
   h.update(s);
-  return h.digest('hex').toLowerCase();
+  var hex=h.digest('hex').toLowerCase();
+  return hex;
 };
 
 EscreenController.prototype.computePassword=function(s) {
   // MY_PASSWORD should be defined in esh.escreenRcFile
-  return this.computeHash( global.MY_PASSWORD + s ).substr(0,6);
+  var hash=this.computeHash( global.MY_PASSWORD + s );
+  var n=6;
+  var pw=hash.substr(hash.length-n,n);
+  return pw;
 };
 
 EscreenController.prototype.generateAuthToken=function() {
