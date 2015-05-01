@@ -1,9 +1,10 @@
 # vim:filetype=sh
 upload() {
   # esh_port0 is ESH_PORT from the system that launched escreen
-  local esh_port0=$(_esh_b getEshPort)
+  local esh_port0=$(_esh_b getEshPort0)
+  local sshuser=$(_esh_b getEscreenLaunchUsername)
   /usr/bin/ssh -t -q -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null \
-    -oProxyCommand='bash -c "{ echo $ESH_AT upload; cat; } | nc localhost $ESH_PORT"' fakehost \
+    -oProxyCommand='bash -c "{ echo $ESH_AT upload; cat; } | nc localhost $ESH_PORT"' $sshuser@fakehost \
     /bin/bash -c '"read -p \"Pick a file to upload:\" -e f; [ -r \"\$f\" ] && { echo '$ESH_AT' setUploadFilename \$(echo -n \"\$f\" | openssl enc -base64 -A) | nc localhost '$esh_port0'; } || exit 1"' && {
     local upload_file=$(_esh_b getUploadFilename)
     [ -z "$upload_file" ] && return
@@ -11,18 +12,19 @@ upload() {
     local ans
     read -p "Upload \"$upload_file\" now (y/n)? " ans
     [ "$ans" != y ] && return
-    echo $ESH_AT getUploadFile | nc localhost $ESH_PORT > "$upload_file"
-    local expected_sha256=$(_esh_b getUploadFileHash)
-    local sha256=$(openssl sha256 -hex "$upload_file")
-    # sha256 will look something like this:
-    # SHA256(.escreenrc)= ed122d03e3b28e1afe1591ed473d1770bdf576687d4677e39daa2d6858e6ced2
+    echo $ESH_AT getUploadFile | $ESH_NC localhost $ESH_PORT > "$upload_file"
+    local expected_md5=$(_esh_b getUploadFileHash)
+    local md5=$(openssl md5 -hex "$upload_file")
+    # md5 will look something like this:
+    # MD5(.escreenrc)= ed122d03e3b28e1afe1591ed473d1770bdf576687d4677e39daa2d6858e6ced2
     # remove the prefix
-    sha256=${sha256##*= }
+    md5=${md5##*= }
     # force to lowercase
-    sha256=${sha256,,}
-    if [ "$sha256" != "$expected_sha256" ]; then
-      echo "ERROR: sha256 check failed for $upload_file"
+    md5=${md5,,}
+    if [ "$md5" != "$expected_md5" ]; then
+      echo "ERROR: md5 check failed for $upload_file"
       return 1
     fi
+    echo "The file was successfully uploaded."
   }
 }

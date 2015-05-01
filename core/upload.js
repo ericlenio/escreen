@@ -21,10 +21,13 @@ module.exports=function(controller) {
   });
 
 
-  controller.registerHandler("getEshPort",function(controller,socket) {
+  controller.registerHandler("getEshPort0",function(controller,socket) {
     socket.end(process.env.ESH_PORT);
   });
 
+  controller.registerHandler("getEscreenLaunchUsername",function(controller,socket) {
+    socket.end(process.env.USER);
+  });
 
   controller.registerHandler("setUploadFilename",function(controller,socket,uploadFileBase64) {
     global.UPLOAD_FILE=new Buffer( uploadFileBase64, 'base64' ).toString();
@@ -62,7 +65,7 @@ module.exports=function(controller) {
   controller.registerHandler("getUploadFileHash",function(controller,socket) {
     var crypto=require('crypto');
     var fs=require('fs');
-    var h=crypto.createHash('sha256');
+    var h=crypto.createHash('md5');
     if (fs.existsSync(global.UPLOAD_FILE)) {
       h.update(fs.readFileSync(global.UPLOAD_FILE));
       var hex=h.digest('hex').toLowerCase();
