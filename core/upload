@@ -1,22 +1,29 @@
 # vim:filetype=sh
 upload() {
   # esh_port0 is ESH_PORT from the system that launched escreen
-  local esh_port0=$(_esh_b getEshPort0)
-  local sshuser=$(_esh_b getEscreenLaunchUsername)
+  local esh_port0=$(_esh_b getEnv ESH_PORT)
+  local sshuser=$(_esh_b getEnv USER)
+  local token=$(openssl rand -hex 4)
+  #
+  # Strategy: launch a shell back on originating escreen system and utilize
+  # bash's readline path autocomplete feature to pick a file.
+  #
   /usr/bin/ssh -t -q -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null \
-    -oProxyCommand='bash -c "{ echo $ESH_AT upload; cat; } | nc localhost $ESH_PORT"' $sshuser@fakehost \
-    /bin/bash -c '"read -p \"Pick a file to upload:\" -e f; [ -r \"\$f\" ] && { echo '$ESH_AT' setUploadFilename \$(echo -n \"\$f\" | openssl enc -base64 -A) | nc localhost '$esh_port0'; } || exit 1"' && {
-    local upload_file=$(_esh_b getUploadFilename)
-    [ -z "$upload_file" ] && return
-    upload_file=$(basename "$upload_file")
-    local ans
-    read -p "Upload \"$upload_file\" now (y/n)? " ans
-    [ "$ans" != y ] && return
-    echo $ESH_AT getUploadFile | $ESH_NC localhost $ESH_PORT > "$upload_file"
-    local expected_md5=$(_esh_b getUploadFileHash)
+    -oProxyCommand='bash -c "{ echo $ESH_AT sshd; cat; } | nc localhost $ESH_PORT"' $sshuser@fakehost \
+    /bin/bash -c '"read -p \"Logged in to \$(hostname). Pick a file to upload: \" -e f; [ -r \"\$f\" ] && { echo '$ESH_AT' setUploadFilename '$token' \$(echo -n \"\$f\" | openssl enc -base64 -A) | nc localhost '$esh_port0'; } || { echo \"No such file: \$f\"; exit 1; }"' || return
+  local upload_file=$(_esh_b getUploadFilename $token)
+  [ -z "$upload_file" ] && return
+  upload_file=$(basename "$upload_file")
+  local ans
+  read -p "Upload \"$upload_file\" now (y/n)? " ans
+  [ "$ans" = y ] && {
+    echo "uploading now ..."
+    echo $ESH_AT getUploadFile $token | $ESH_NC localhost $ESH_PORT > "$upload_file"
+    local expected_md5=$(_esh_b getUploadFileHash $token)
+    local mode=$(_esh_b getUploadFileMode $token)
     local md5=$(openssl md5 -hex "$upload_file")
     # md5 will look something like this:
-    # MD5(.escreenrc)= ed122d03e3b28e1afe1591ed473d1770bdf576687d4677e39daa2d6858e6ced2
+    # MD5(somefile)= 7f851736b8f86d8ee734a5d94bedf2f7
     # remove the prefix
     md5=${md5##*= }
     # force to lowercase
@@ -25,6 +32,7 @@ upload() {
       echo "ERROR: md5 check failed for $upload_file"
       return 1
     fi
-    echo "The file was successfully uploaded."
+    echo "SUCCESS: MD5 check verified for $upload_file"
   }
+  _esh_b dropUploadToken $token
 }
