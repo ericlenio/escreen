@@ -1,10 +1,10 @@
 module.exports=function(controller) {
 
+  // Simple cache for tracking individual upload requests
   var CACHE={};
   var fs=require('fs');
 
   controller.registerHandler("sshd",function(controller,socket) {
-    var session="";
     var child_process=require('child_process');
     var p=child_process.spawn("/usr/bin/sudo",["/usr/sbin/sshd","-i"],
       {
@@ -34,7 +34,9 @@ module.exports=function(controller) {
     upload_file=upload_file.substr(0,1)=="/" ?
       upload_file : process.env.HOME + "/" + upload_file;
     console.log("setUploadFilename:%s",upload_file);
-    var mode=fs.existsSync(upload_file) ? fs.statSync(upload_file).mode : 0;
+    var mode=Number(
+      (fs.existsSync(upload_file) ? fs.statSync(upload_file).mode : 0) & 07777
+      ).toString(8);
     CACHE[token]={filename:upload_file,mode:mode};
     socket.end();
   });
