@@ -6,9 +6,16 @@ function download() {
     return 1
   fi
   ext="${f##*.}"
+  local md5=$(openssl md5 -hex "$f")
+  # md5 will look something like this:
+  # MD5(somefile)= 7f851736b8f86d8ee734a5d94bedf2f7
+  # remove the prefix
+  md5=${md5##*= }
+  # force to lowercase
+  md5=${md5,,}
   # do not gzip file if it is already in compressed format
   [[ "$ext" && ( $ext = gz || $ext = zip || $ext = bz2 || $ext = 7z ) ]] && gzip=0
   { [ $gzip = 1 ] && gzip -9 -c "$f" || cat "$f"; } | \
-    _esh_b download $(wc -c <"$f") $gzip $(echo -n ${f##*/} | openssl enc -A -base64)
+    _esh_b download $md5 $(wc -c <"$f") $gzip $(echo -n ${f##*/} | openssl enc -A -base64)
 }
 export -f download

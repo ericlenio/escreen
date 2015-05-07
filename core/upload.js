@@ -77,11 +77,8 @@ module.exports=function(controller) {
 
 
   controller.registerHandler("getUploadFileHash",function(controller,socket,token) {
-    var crypto=require('crypto');
-    var h=crypto.createHash('md5');
     if (fs.existsSync(CACHE[token].filename)) {
-      h.update(fs.readFileSync(CACHE[token].filename));
-      var hex=h.digest('hex').toLowerCase();
+      var hex=controller.getMd5(CACHE[token].filename);
       socket.end(hex);
       return;
     }
