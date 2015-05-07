@@ -167,6 +167,16 @@ EscreenController.prototype.computeHash=function(s) {
   return hex;
 };
 
+EscreenController.prototype.getMd5=function(somefile) {
+  var h=crypto.createHash('md5');
+  var hex="";
+  if (fs.existsSync(somefile)) {
+    h.update(fs.readFileSync(somefile));
+    hex=h.digest('hex').toLowerCase();
+  }
+  return hex;
+};
+
 EscreenController.prototype.computePassword=function(s) {
   // MY_PASSWORD should be defined in esh.escreenRcFile
   var hash=this.computeHash( global.MY_PASSWORD + s );
