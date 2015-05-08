@@ -52,12 +52,12 @@ the file secured: `chmod 600 $HOME/.escreenrc`.
 
 **Step 3: start escreen.** Run the following to start a new session, which will
 load all your preferences and create stub functions. It launches GNU screen
-with a single window showing a log file for escreen. Press `cntl-a c` to open a
-new window.  You can interact with the shell as per normal.
+with a two windows: 1st window is a just a log file for escreen, 2nd window is
+a fresh shell to work in.
 
     # run with default profile
     escreen
-    # run with specific profile
+    # run with specific profile - OOPS this is not supported yet!
     escreen profile.lwprof
 
 **Step 4: use vim, ssh, etc.**
@@ -81,8 +81,8 @@ Any time escreen uploads a file to a remote server, it will cache it under
 combination of your personal password (`MY_PASSWORD`) and a SHA1 hash of the
 file. The next time you ssh to the same system, escreen attempts to use the
 cached version first, automatically supplying the password to decrypt it on the
-remote end. escreen will automatically re-upload and re-cache the file if either
-of the following are true:
+remote end. escreen will automatically re-upload and re-cache the file if
+either of the following are true:
 
 * the cached file is deleted
 * the password supplied by escreen fails to decrypt the file for any reason
@@ -181,6 +181,7 @@ The following core bash functions are system level and are therefore usable unde
 
 * `cp2cb`: takes 1 argument: the name of a file to be copied to the system clipboard of your Linux PC (or Mac). Or if no file is supplied, it reads from stdin.
 * `download`: takes 1 argument: the name of a file to be downloaded (from an ssh session) to /tmp.
+* `upload`: prompts the user to pick a file from the system on which escreen was launched, and uploads it to the current working directory of the current ssh session.
 
 # Security
 
