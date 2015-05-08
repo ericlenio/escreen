@@ -180,7 +180,7 @@ application.
 The following core bash functions are system level and are therefore usable under any profile.
 
 * `cp2cb`: takes 1 argument: the name of a file to be copied to the system clipboard of your Linux PC (or Mac). Or if no file is supplied, it reads from stdin.
-* `download`: takes 1 argument: the name of a file to be downloaded (from an ssh session) to /tmp.
+* `download`: takes 1 argument: the name of a file to be downloaded (from an ssh session) to /tmp on the system that launched escreen.
 * `upload`: prompts the user to pick a file from the system on which escreen was launched, and uploads it to the current working directory of the current ssh session.
 
 # Security
