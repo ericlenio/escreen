@@ -13,10 +13,25 @@ EscreenController.prototype.init=function() {
   this.authToken=process.env.ESH_AT;
   this.oneTimeAuthTokens=[];
   this.handlers=[];
+  this.forwardEvent={};
   this.escreenRcFile=util.format("%s/.escreenrc",process.env.HOME);
 
   this.registerHandler("hello",function(controller,socket) {
     socket.end("HELLO\n");
+  });
+
+  // forward certain handers to another escreen session
+  this.registerHandler("forwardEscreen",function(controller,socket,forward_ESH_PORT,forward_ESH_AT,forward_ESH_NC_base64) {
+    controller.forward_ESH_PORT=forward_ESH_PORT;
+    controller.forward_ESH_AT=forward_ESH_AT;
+    controller.forward_ESH_NC=new Buffer( forward_ESH_NC_base64, 'base64' ).toString();
+    socket.end();
+  });
+
+  this.registerHandler("unforwardEscreen",function(controller,socket) {
+    controller.forward_ESH_PORT=null;
+    controller.forward_ESH_AT=null;
+    socket.end();
   });
 
   // one time auth token - UNUSED
@@ -86,7 +101,7 @@ EscreenController.prototype.init=function() {
       if (xselBuf.length<=maxXselBuf) xselBuf+=new String(chunk);
     });
     socket.pipe(z).pipe(p.stdin);
-  });
+  },true);
 
   // send clipboard data to client
   this.registerHandler("zGetCb",function(controller,socket,key) {
@@ -247,8 +262,9 @@ EscreenController.prototype.registerOtherHandlers=function() {
   }
 };
 
-EscreenController.prototype.registerHandler=function(evtId,f) {
-  this.handlers[evtId]=f;
+EscreenController.prototype.registerHandler=function(evtId,handler,forwardEvent) {
+  this.handlers[evtId]=handler;
+  this.forwardEvent[evtId]=forwardEvent;
 };
 
 EscreenController.prototype.handleRequest=function(socket) {
@@ -285,11 +301,61 @@ EscreenController.prototype.handleRequest=function(socket) {
   hdr.splice(0,2);
   console.log(evtId+":"+hdr);
   hdr.unshift(this,socket);
-  try {
-    // Call the handler
-    //esh.handlers[evt.evtId](evt,hdr);
-    this.handlers[evtId].apply(null,hdr);
-  } catch (err) {
-    console.log("EXCEPTION:"+err);
+  if (this.forwardEvent[evtId] && this.forward_ESH_AT) {
+    hdr.unshift(evtId);
+    this.forwardRequest.apply(null,hdr);
+  } else {
+    try {
+      // Call the handler
+      //esh.handlers[evt.evtId](evt,hdr);
+      this.handlers[evtId].apply(null,hdr);
+    } catch (err) {
+      console.log("EXCEPTION:"+err);
+    }
   }
+};
+
+// forward request from a nested escreen to its parent escreen
+EscreenController.prototype.forwardRequest=function(evtId,controller,socket) {
+  console.log("forwardRequest: %s",evtId);
+
+  // TO DO: better mechanism to set the proper value for ESH_NC
+  var nc = controller.forward_ESH_NC;
+  if ( evtId == "setCb" ) {
+    nc="nc";
+  }
+
+  var bashArgs=[
+    "-c",
+    util.format(
+      'ESH_PORT=%s ESH_AT=%s ESH_NC="%s" _esh_b "$@"',
+      controller.forward_ESH_PORT,
+      controller.forward_ESH_AT,
+      nc
+    ),
+    '-',
+    evtId
+  ];
+  for (var i=3;i<arguments.length;i++) {
+    bashArgs.push(arguments[i]);
+  }
+  console.log("forwardRequest:bashArgs:%s",bashArgs);
+
+  var p=child_process.spawn( "/bin/bash", bashArgs,
+    {
+      //cwd:"/tmp",
+      stdio:['pipe','pipe','pipe']
+    });
+  socket.on('data', function(data){
+    p.stdin.write(data);
+  });
+  socket.on('end', function(data){
+    p.stdin.end();
+  });
+  p.stdout.pipe(socket);
+  p.stderr.pipe(socket);
+  p.on('exit',function(rc,signal) {
+    console.log("forwardRequest: bash exit, rc=%s, signal=%s",rc,signal);
+    socket.end();
+  });
 };
