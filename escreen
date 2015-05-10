@@ -1,5 +1,35 @@
 #! /bin/bash
 
+if [ "$1" = -r ]; then
+  if [ -z "$ESH_AT" ]; then
+    echo "Oops, you do not appear to already be in an escreen session, exiting."
+    exit 1
+  fi
+  screen_stys=($(screen -ls | grep -v $STY | perl -n -e 's{^\s*(\d+\.\S+).*}{$1} && print'))
+  if [ ${#screen_stys} = 0 ]; then
+    echo "No escreen sessions detected."
+    exit 1
+  fi
+  printf "Resume which escreen session?\n"
+  i=0
+  IFS='\n' screen -ls | grep -v $STY | perl -n -e 's{^\s*(\d+\..*)}{$1} && print' | while read l; do
+    printf "%s. %s\n" $i "$l"
+    i=$(($i+1))
+  done
+  read -p "Enter choice: " choice
+  if [ "$choice" -a ${screen_stys[$choice]+is_set} ]; then
+    sty=${screen_stys[$choice]}
+    /usr/bin/screen -S $sty -X screen bash -c "_esh_b forwardEscreen $ESH_PORT $ESH_AT $(echo -n $ESH_NC|openssl enc -A -base64)"
+    /usr/bin/screen -S $sty -X escape ^ee
+    /usr/bin/screen -d -r $sty
+    /usr/bin/screen -S $sty -X screen bash -c "_esh_b unforwardEscreen"
+    exit
+  else
+    echo "Invalid choice."
+    exit 1
+  fi
+fi
+
 # bootstrapping function: 1st arg is an event ID that the server will inspect
 # and run appropriate event handler for; event IDs starting with "z" send back
 # a gzip'd response from the server.
