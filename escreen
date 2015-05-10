@@ -114,7 +114,7 @@ eval '_esh_I() {
   export -f _esh_I _esh_b _esh_l
 }'
 
-export ESH_HOME=$(dirname $(readlink $0))
+export ESH_HOME=$(dirname $([ -h $0 ] && readlink $0 || echo $0))
 ESH_CORE=$ESH_HOME/core
 [ "$1" ] && ESH_PROFILE="$1" || ESH_PROFILE=$ESH_HOME/profile.lwprof
 export ESH_PORT=$(node $ESH_HOME/GetFreePort.js)
