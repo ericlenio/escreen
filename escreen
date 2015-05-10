@@ -6,14 +6,14 @@ if [ "$1" = -r ]; then
     exit 1
   fi
   curr_sty=${STY:-some_value}
-  screen_stys=($(screen -ls | grep -v $curr_sty | perl -n -e 's{^\s*(\d+\.\S+).*}{$1} && print'))
+  screen_stys=($(/usr/bin/screen -ls | grep -v $curr_sty | perl -n -e 's{^\s*(\d+\.\S+).*}{$1} && print'))
   if [ ${#screen_stys} = 0 ]; then
     echo "No escreen sessions detected."
     exit 1
   fi
   printf "Resume which escreen session?\n"
   i=0
-  IFS='\n' screen -ls | grep -v $curr_sty | perl -n -e 's{^\s*(\d+\..*)}{$1} && print' | while read l; do
+  IFS='\n' /usr/bin/screen -ls | grep -v $curr_sty | perl -n -e 's{^\s*(\d+\..*)}{$1} && print' | while read l; do
     printf "%s. %s\n" $i "$l"
     i=$(($i+1))
   done
