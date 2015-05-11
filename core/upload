@@ -33,8 +33,8 @@ upload() {
   # MD5(somefile)= 7f851736b8f86d8ee734a5d94bedf2f7
   # remove the prefix
   md5=${md5##*= }
-  # force to lowercase
-  md5=${md5,,}
+  # force to lowercase: OS X cannot do "md5=${md5,,}" so use tr
+  md5=$(echo $md5 | tr "[:upper:]" "[:lower:]")
   if [ "$md5" != "$expected_md5" ]; then
     echo "ERROR: md5 check failed for $upload_file"
   else
