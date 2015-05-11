@@ -303,14 +303,18 @@ EscreenController.prototype.handleRequest=function(socket) {
   hdr.unshift(this,socket);
   if (this.forwardEvent[evtId] && this.forward_ESH_AT) {
     hdr.unshift(evtId);
-    this.forwardRequest.apply(null,hdr);
+    try {
+      this.forwardRequest.apply(null,hdr);
+    } catch (err) {
+      console.log("EXCEPTION in forwardRequest:"+err);
+    }
   } else {
     try {
       // Call the handler
       //esh.handlers[evt.evtId](evt,hdr);
       this.handlers[evtId].apply(null,hdr);
     } catch (err) {
-      console.log("EXCEPTION:"+err);
+      console.log("EXCEPTION in handler:"+err);
     }
   }
 };
