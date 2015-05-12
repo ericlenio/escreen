@@ -2,6 +2,7 @@ var util=require('util');
 var fs=require('fs');
 var crypto=require('crypto');
 var zlib=require('zlib');
+var os=require('os');
 var child_process=require('child_process');
 
 function EscreenController(profileDir) {
@@ -73,13 +74,14 @@ EscreenController.prototype.init=function() {
     var xselBuf="";
     var maxXselBuf=255;
     var clipboardBytes=0;
-    var p=child_process.spawn("clipit", [], {stdio:['pipe',process.stdout,process.stderr]});
+    var cp_prog=os.platform()=="darwin" ? "pbcopy" : "clipit";
+    var p=child_process.spawn(cp_prog, [], {stdio:['pipe',process.stdout,process.stderr]});
     var clipitExit=false;
     //var pt=new (require('stream').PassThrough);
     p.on('exit',function(rc,signal) {
       clipitExit=true;
       console.log("copied %s bytes to clipboard, rc=%s, signal=%s",clipboardBytes,rc,signal);
-      if (clipboardBytes<=maxXselBuf) {
+      if (os.platform()=="linux" && clipboardBytes<=maxXselBuf) {
         // if small enough buffer, place into X Windows primary selection too for
         // convenience
         var p2 = child_process.spawn("xsel", ["-i","-p"], {stdio:['pipe',process.stdout,process.stderr]});
