@@ -11,8 +11,8 @@ function download() {
   # MD5(somefile)= 7f851736b8f86d8ee734a5d94bedf2f7
   # remove the prefix
   md5=${md5##*= }
-  # force to lowercase
-  md5=${md5,,}
+  # force to lowercase: OS X cannot do "md5=${md5,,}" so use tr
+  md5=$(echo $md5 | tr "[:upper:]" "[:lower:]")
   # do not gzip file if it is already in compressed format
   [[ "$ext" && ( $ext = gz || $ext = zip || $ext = bz2 || $ext = 7z ) ]] && gzip=0
   { [ $gzip = 1 ] && gzip -9 -c "$f" || cat "$f"; } | \
