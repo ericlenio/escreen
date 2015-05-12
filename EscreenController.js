@@ -74,14 +74,26 @@ EscreenController.prototype.init=function() {
     var xselBuf="";
     var maxXselBuf=255;
     var clipboardBytes=0;
-    var cp_prog=os.platform()=="darwin" ? "pbcopy" : "clipit";
+    var cp_prog=null;
+    var platform=os.platform();
+    switch (platform) {
+      case "darwin":
+        cp_prog="pbcopy";
+        break;
+      case "linux":
+        cp_prog="clipit";
+        break;
+      default:
+        console.log("setCb ERROR: no support for OS platform %s",os);
+        return;
+    }
     var p=child_process.spawn(cp_prog, [], {stdio:['pipe',process.stdout,process.stderr]});
     var clipitExit=false;
     //var pt=new (require('stream').PassThrough);
     p.on('exit',function(rc,signal) {
       clipitExit=true;
       console.log("copied %s bytes to clipboard, rc=%s, signal=%s",clipboardBytes,rc,signal);
-      if (os.platform()=="linux" && clipboardBytes<=maxXselBuf) {
+      if (platform=="linux" && clipboardBytes<=maxXselBuf) {
         // if small enough buffer, place into X Windows primary selection too for
         // convenience
         var p2 = child_process.spawn("xsel", ["-i","-p"], {stdio:['pipe',process.stdout,process.stderr]});
@@ -107,10 +119,25 @@ EscreenController.prototype.init=function() {
 
   // send clipboard data to client
   this.registerHandler("zGetCb",function(controller,socket,key) {
-    var p=child_process.spawn("clipit", ["-c"], {stdio:['ignore','pipe',process.stderr]});
+    var platform=os.platform();
+    switch (platform) {
+      case "darwin":
+        cp_prog="pbpaste";
+        cp_prog_args=[];
+        break;
+      case "linux":
+        cp_prog="clipit";
+        cp_prog_args=["-c"];
+        break;
+      default:
+        console.log("zGetCb ERROR: no support for OS platform %s",platform);
+        return;
+    }
+    var p=child_process.spawn(cp_prog, cp_prog_args,
+      {stdio:['ignore','pipe',process.stderr]});
     var z=controller.getZlib();
     p.stdout.pipe(z).pipe(socket);
-  });
+  },true);
 
   this.registerOtherHandlers();
 
