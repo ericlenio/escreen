@@ -21,12 +21,12 @@ module.exports=function(controller) {
       console.log("sshd exit, rc=%s, signal=%s",rc,signal);
       socket.end();
     });
-  });
+  },true);
 
 
   controller.registerHandler("getEnv",function(controller,socket,varname) {
     socket.end(process.env[varname]);
-  });
+  },true);
 
 
   controller.registerHandler("setUploadFilename",function(controller,socket,token,uploadFileBase64) {
@@ -39,23 +39,23 @@ module.exports=function(controller) {
       ).toString(8);
     CACHE[token]={filename:upload_file,mode:mode};
     socket.end();
-  });
+  },true);
 
 
   controller.registerHandler("getUploadFilename",function(controller,socket,token) {
     socket.end(CACHE[token].filename);
-  });
+  },true);
   
 
   controller.registerHandler("getUploadFileMode",function(controller,socket,token) {
     socket.end(""+CACHE[token].mode);
-  });
+  },true);
 
 
   controller.registerHandler("dropUploadToken",function(controller,socket,token) {
     delete CACHE[token];
     socket.end();
-  });
+  },true);
 
 
   controller.registerHandler("getUploadFile",function(controller,socket,token) {
@@ -73,7 +73,7 @@ module.exports=function(controller) {
       console.log("getUploadFile: request to upload file, but CACHE has no value for token %s",token);
     }
     socket.end();
-  });
+  },true);
 
 
   controller.registerHandler("getUploadFileHash",function(controller,socket,token) {
@@ -84,6 +84,6 @@ module.exports=function(controller) {
     }
     console.log("WARNING: getUploadFileHash: \"%s\" does not exist",CACHE[token].filename);
     socket.end();
-  });
+  },true);
 
 };
