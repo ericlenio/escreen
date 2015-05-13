@@ -3,17 +3,17 @@
 # shell's working directory.
 upload() {
   # esh_port0 is ESH_PORT from the system that launched escreen
-  local esh_port0=$(_esh_b getEnv ESH_PORT)
-  local sshuser=$(_esh_b getEnv USER)
+  local esh_port0=$(ESH_NC=nc _esh_b getEnv ESH_PORT)
+  local sshuser=$(ESH_NC=nc _esh_b getEnv USER)
   local token=$(openssl rand -hex 4)
   #
   # Strategy: launch a shell back on originating escreen system and utilize
   # bash's readline path autocomplete feature to pick a file.
   #
   /usr/bin/ssh -t -q -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null \
-    -oProxyCommand='bash -c "{ echo $ESH_AT sshd; cat; } | nc localhost $ESH_PORT"' $sshuser@fakehost \
+    -oProxyCommand='bash -c "{ echo $ESH_AT sshd; cat -u; } | nc localhost $ESH_PORT"' $sshuser@fakehost \
     /bin/bash -c '"read -p \"Logged in to \$(hostname). Pick a file to upload: \" -e f; [ -r \"\$f\" ] && [ ! -d \"\$f\" ] && { echo '$ESH_AT' setUploadFilename '$token' \$(echo -n \"\$f\" | openssl enc -base64 -A) | nc localhost '$esh_port0'; } || { echo \"Not a file, or not readable: \$f\"; exit 1; }"' || return
-  local upload_file=$(_esh_b getUploadFilename $token)
+  local upload_file=$(ESH_NC=nc _esh_b getUploadFilename $token)
   [ -z "$upload_file" ] && return
   upload_file=$(basename "$upload_file")
   echo "uploading now ..."
@@ -22,9 +22,9 @@ upload() {
   [ ! -f "$upload_file" ] && setmode=1
   echo $ESH_AT getUploadFile $token | $ESH_NC localhost $ESH_PORT > "$upload_file"
   # Use md5 to verify the file transferred correctly
-  local expected_md5=$(_esh_b getUploadFileHash $token)
+  local expected_md5=$(ESH_NC=nc _esh_b getUploadFileHash $token)
   if [ $setmode = 1 ]; then
-    local mode=$(_esh_b getUploadFileMode $token)
+    local mode=$(ESH_NC=nc _esh_b getUploadFileMode $token)
     chmod $mode "$upload_file"
     echo "set mode: $mode"
   fi
@@ -40,5 +40,5 @@ upload() {
   else
     echo "SUCCESS: MD5 check verified for $upload_file"
   fi
-  _esh_b dropUploadToken $token
+  ESH_NC=nc _esh_b dropUploadToken $token
 }
