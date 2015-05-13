@@ -2,8 +2,10 @@
 # Upload a file from the system that launched escreen to the current running
 # shell's working directory.
 upload() {
+  local ESH_NC=$ESH_NC
   # esh_port0 is ESH_PORT from the system that launched escreen
   local esh_port0=$(ESH_NC=nc _esh_b getEnv ESH_PORT)
+  local esh_at0=$(ESH_NC=nc _esh_b getEnv ESH_AT)
   local sshuser=$(ESH_NC=nc _esh_b getEnv USER)
   local token=$(openssl rand -hex 4)
   #
@@ -12,7 +14,7 @@ upload() {
   #
   /usr/bin/ssh -t -q -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null \
     -oProxyCommand='bash -c "{ echo $ESH_AT sshd; cat -u; } | nc localhost $ESH_PORT"' $sshuser@fakehost \
-    /bin/bash -c '"read -p \"Logged in to \$(hostname). Pick a file to upload: \" -e f; [ -r \"\$f\" ] && [ ! -d \"\$f\" ] && { echo '$ESH_AT' setUploadFilename '$token' \$(echo -n \"\$f\" | openssl enc -base64 -A) | nc localhost '$esh_port0'; } || { echo \"Not a file, or not readable: \$f\"; exit 1; }"' || return
+    /bin/bash -c '"read -p \"Logged in to \$(hostname). Pick a file to upload: \" -e f; [ -r \"\$f\" ] && [ ! -d \"\$f\" ] && { echo '$esh_at0' setUploadFilename '$token' \$(echo -n \"\$f\" | openssl enc -base64 -A) | nc localhost '$esh_port0'; } || { echo \"Not a file, or not readable: \$f\"; exit 1; }"' || return
   local upload_file=$(ESH_NC=nc _esh_b getUploadFilename $token)
   [ -z "$upload_file" ] && return
   upload_file=$(basename "$upload_file")
