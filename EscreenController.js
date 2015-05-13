@@ -323,8 +323,8 @@ EscreenController.prototype.handleRequest=function(socket) {
   if (this.oneTimeAuthTokens.indexOf(hdr[0])>=0) {
     this.expireOneTimeAuthToken(hdr[0]);
   } else if (hdr[0]!=this.authToken) {
-    console.log("ERROR: unmatched auth token");
-    setTimeout( function() { socket.end("bad auth token"); }, 5000 );
+    console.log("ERROR: unmatched auth token: %s (expected %s): %s",hdr[0],this.authToken,hdr[1]);
+    setTimeout( function() { socket.end("bad auth token"); }, 3000 );
     return;
   }
   var evtId = hdr[1];
@@ -351,14 +351,15 @@ EscreenController.prototype.handleRequest=function(socket) {
 
 // forward request from a nested escreen to its parent escreen
 EscreenController.prototype.forwardRequest=function(evtId,controller,socket) {
-  console.log("forwardRequest: %s",evtId);
+  console.log("forwardRequest:%s",evtId);
   var sock2=net.createConnection({port:controller.forward_ESH_PORT});
   var hdr=controller.forward_ESH_AT+" "+evtId;
   for (var i=3;i<arguments.length;i++) {
     hdr+=" "+arguments[i];
   }
+  console.log("forwardRequest:hdr:%s",hdr);
   sock2.on('connect', function(){
-    sock2.write(hdr);
+    sock2.write(hdr+"\n");
     socket.pipe(sock2);
     sock2.pipe(socket);
   });
