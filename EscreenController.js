@@ -1,5 +1,6 @@
 var util=require('util');
 var fs=require('fs');
+var net=require('net');
 var crypto=require('crypto');
 var zlib=require('zlib');
 var os=require('os');
@@ -351,44 +352,17 @@ EscreenController.prototype.handleRequest=function(socket) {
 // forward request from a nested escreen to its parent escreen
 EscreenController.prototype.forwardRequest=function(evtId,controller,socket) {
   console.log("forwardRequest: %s",evtId);
-
-  // TO DO: better mechanism to set the proper value for ESH_NC
-  var nc = controller.forward_ESH_NC;
-  if ( evtId == "setCb" ) {
-    nc="nc";
-  }
-
-  var bashArgs=[
-    "-c",
-    util.format(
-      'ESH_PORT=%s ESH_AT=%s ESH_NC="%s" _esh_b "$@"',
-      controller.forward_ESH_PORT,
-      controller.forward_ESH_AT,
-      nc
-    ),
-    '-',
-    evtId
-  ];
+  var sock2=net.createConnection({port:controller.forward_ESH_PORT});
+  var hdr=controller.forward_ESH_AT+" "+evtId;
   for (var i=3;i<arguments.length;i++) {
-    bashArgs.push(arguments[i]);
+    hdr+=" "+arguments[i];
   }
-  console.log("forwardRequest:bashArgs:%s",bashArgs);
-
-  var p=child_process.spawn( "/bin/bash", bashArgs,
-    {
-      //cwd:"/tmp",
-      stdio:['pipe','pipe','pipe']
-    });
-  socket.on('data', function(data){
-    p.stdin.write(data);
+  sock2.on('connect', function(){
+    sock2.write(hdr);
+    socket.pipe(sock2);
+    sock2.pipe(socket);
   });
-  socket.on('end', function(data){
-    p.stdin.end();
-  });
-  p.stdout.pipe(socket);
-  p.stderr.pipe(socket);
-  p.on('exit',function(rc,signal) {
-    console.log("forwardRequest: bash exit, rc=%s, signal=%s",rc,signal);
-    socket.end();
+  sock2.on('error', function(e){
+    console.log("ERROR in forwardRequest: %s",e);
   });
 };
