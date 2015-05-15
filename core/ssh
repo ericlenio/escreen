@@ -6,7 +6,7 @@ ssh() {
     return $?
   fi
   local cp_prefix=$ESH_TMP/$USER.sshcp:
-  local cp_mask=$cp_prefix%r:%h:%n:%p
+  local cp_mask=$cp_prefix%r:%h:%p
   rm -f $cp_prefix*
   local last_arg=${@:$#}
   [ -z "$last_arg" ] && { echo "no arguments to ssh?"; return; }
@@ -54,6 +54,7 @@ ssh() {
   fi
   # should now have user@ssh_host, or just plain ssh_host
   local ssh_user_host="$1"
+  local cmdline_ssh_host=${ssh_user_host##*@}
   shift
   local -a remote_cmd=( exec /bin/bash --norc --noprofile )
   # if anything left in the command line (and ssh option -t is not set), then
@@ -69,6 +70,11 @@ ssh() {
   fi
   # restore original positional parameters
   set -- "${origArgs[@]}"
+  local sshV=$(/usr/bin/ssh -V 2>&1)
+  local ssh_major=${sshV##OpenSSH_}
+  local ssh_minor=${ssh_major#*.}
+  ssh_major=${ssh_major%%.*}
+  ssh_minor=${ssh_minor%%[^[:digit:]]*}
   # set up ControlMaster
   # unless ssh-ing to localhost, this will produce the message "stdin: is not a tty",
   # which makes sense given the "-n" argument.
@@ -76,11 +82,13 @@ ssh() {
   # Good test:
   # ssh localhost -t -A -oPermitLocalCommand=yes -oLocalCommand="bash -c 'date && pwd'" uname
   #
-  /usr/bin/ssh -oControlMaster=auto -oControlPersist=1s -S $cp_mask "${ssh_opts[@]}" -n -N -A -T $ssh_user_host
+  [ $ssh_major -gt 5 -o \( $ssh_major = 5 -a $ssh_minor -gt 5 \) ] && \
+    ssh_opts+=(-oControlPersist=1s)
+  /usr/bin/ssh -oControlMaster=auto -S $cp_mask "${ssh_opts[@]}" -n -N -A -T $ssh_user_host
   local rc=$?
   [ $rc != 0 -a $rc != 1 ] && return $rc
   # find ssh port from ControlPath file that just was created
-  local ssh_port=$(ls $cp_prefix* | cut -d: -f 5)
+  local ssh_port=$(ls $cp_prefix* | cut -d: -f 4)
   [ -z "$ssh_port" ] && {
     echo "ERROR: could not read ssh port, stop."
     return
@@ -89,7 +97,7 @@ ssh() {
   local ssh_host=$(ls $cp_prefix* | cut -d: -f 3)
   # find ssh host, as specified on command line, from ControlPath file that
   # just was created: note it is NOT necessarily the same as $ssh_host
-  local cmdline_ssh_host=$(ls $cp_prefix* | cut -d: -f 4)
+  #local cmdline_ssh_host=$(ls $cp_prefix* | cut -d: -f 4)
   # get name of user on remote system we are ssh-ing to
   local ssh_user=$(ls $cp_prefix* | cut -d: -f 2)
   [ -n "$STY" ] && {
