@@ -142,13 +142,13 @@ EOF
       # now do actual ssh session
       if [ "$has_bash" = 1 ]; then
         local c="$(bash_init_string $rem_port|gzip -9 -c|openssl enc -a -A)"
-        /usr/bin/ssh -t -S $cp_mask -R$rem_port:localhost:$ESH_PORT "${ssh_opts[@]}" $ssh_user_host -- sh -c 'true;eval "$(echo '$c'|openssl enc -d -a -A|gzip -d -c)"' "${remote_cmd[@]}"
+        /usr/bin/ssh -t -S $cp_mask -R$rem_port:localhost:$ESH_PORT "${ssh_opts[@]}" $ssh_user_host -- /bin/bash -c 'true;eval "$(echo '$c'|openssl enc -d -a -A|gzip -d -c)"' "${remote_cmd[@]}"
       else
         /usr/bin/ssh -S $cp_mask "$@"
       fi
       /usr/bin/ssh -p $ssh_port -S $cp_mask -O exit $ssh_user_host
     fi
-    [ -n "$STY" ] && printf "\033k${HOSTNAME}\033\134"
+    [ "$STY" ] && printf "\033k${HOSTNAME}\033\134"
   }
 }
 export -f ssh
