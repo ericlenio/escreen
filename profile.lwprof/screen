@@ -47,6 +47,12 @@ msgwait 1
 #setenv PROMPT_COMMAND 'screen_prompt'
 #shell $shell
 #screen rm $SCREENRC
+
+# allow special screen user ":window:" to send keystrokes: used in ssh;
+# man screen for some other details (used in combination with screen
+# escape "ESC ] 83 ; cmd ^G")
+#addacl :window: -rwx #?
+#aclchg :window: +w+x stuff,sleep
 EOF
   cat >> $SCREENRC << EOF
 bind % source $printscreen_macro

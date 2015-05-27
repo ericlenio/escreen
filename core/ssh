@@ -1,4 +1,8 @@
 # vim:filetype=sh
+#
+# Good test:
+# ssh localhost -t -A -oPermitLocalCommand=yes -oLocalCommand="bash -c 'date && pwd'" uname
+#
 ssh() {
   if [ ! -t 0 -o ! -t 1 ]; then
     # in a pipeline
@@ -10,9 +14,6 @@ ssh() {
   # ControlPersist introduced in 5.6
   # must use unique cp_prefix that enables us to parse out the ssh port from
   # the control master socket
-  local cp_prefix=$ESH_TMP/$USER.sshcp.$$:
-  local cp_mask=$cp_prefix%r:%h:%p
-  rm -f $cp_prefix*
   local last_arg=${@:$#}
   [ -z "$last_arg" ] && { echo "no arguments to ssh?"; return; }
   # Need to determine now if we are just running a plain shell in the remote
@@ -61,94 +62,50 @@ ssh() {
   local ssh_user_host="$1"
   local cmdline_ssh_host=${ssh_user_host##*@}
   shift
+  local sshV=$(/usr/bin/ssh -V 2>&1)
+  if [[ "$sshV" =~ OpenSSH_([[:digit:]]+)\.([[:digit:]]+) ]]; then
+    local ssh_major=${BASH_REMATCH[1]}
+    local ssh_minor=${BASH_REMATCH[2]}
+  fi
   local -a remote_cmd=( exec /bin/bash --norc --noprofile )
+  [ -n "$STY" ] && {
+    local h=$cmdline_ssh_host
+    [ -n "$SSH_STY_LBL" ] && h=$SSH_STY_LBL
+    printf "\033k$h\033\134"
+  }
   # if anything left in the command line (and ssh option -t is not set), then
   # we just do straight through call to ssh, no ControlMaster. If -t is set
   # then we assume we want to still do a ControlMaster and initialize the
   # remote environment.
-  if [ $# -gt 0 ]; then
-    if [ $force_tty = 0 ]; then
-      /usr/bin/ssh "${origArgs[@]}"
-      return $?
-    fi
-    remote_cmd=( "$@" )
+  if [ $# -gt 0 -a $force_tty = 0 ]; then
+    /usr/bin/ssh "${origArgs[@]}"
+  else
+    [ $# -gt 0 ] && remote_cmd=( "$@" )
+    #
+    # We need an open port on the remote host. Pick a random port and hope it
+    # is open: worst case is the port is not open, and
+    # -oExitOnForwardFailure=yes causes it to fail, and user can then just
+    # re-issue the same ssh command.  Deemed a small enough risk to be
+    # acceptable. Other strategies that were considered:
+    # 1) ssh to host and find a known open port: at the expense of 2 separate
+    # ssh connections
+    # 2) run a ControlMaster, and then a separate ssh command to find the port:
+    # good with modern ssh's, but various issues with older ssh (like 4.7 on
+    # Ubuntu Hardy)
+    # 3) After connecting to remote ssh host, find open port, then run GNU
+    # screen escape to run ssh escape command (ESC ] 83 ; cmd ^G) to forward
+    # the port: this leads to terminal IO issues when stuffing the ssh escape
+    # command into the terminal driver.
+    local rem_port=$(( $RANDOM % 1000 + 56100 ))
+    local c="$(bash_init_string $rem_port|gzip -9 -c|openssl enc -a -A)"
+    #
+    # Assumption: /bin/sh exists on remote system. We use it to check for
+    # /bin/bash, and if that exists set up prefered bash shell settings.
+    # Otherwise, run default login shell.
+    /usr/bin/ssh "${ssh_opts[@]}" -t -oExitOnForwardFailure=yes -R$rem_port:localhost:$ESH_PORT $ssh_user_host -- sh -c "'"'test -f /bin/bash && exec /bin/bash -c "eval $(echo '$c'|openssl enc -d -a -A|gzip -d -c)" - "$@" || exec $SHELL -l'"'" - "${remote_cmd[@]}"
   fi
-  # restore original positional parameters
-  set -- "${origArgs[@]}"
-  local sshV=$(/usr/bin/ssh -V 2>&1)
-  local ssh_major=${sshV##OpenSSH_}
-  local ssh_minor=${ssh_major#*.}
-  ssh_major=${ssh_major%%.*}
-  ssh_minor=${ssh_minor%%[^[:digit:]]*}
-  # set up ControlMaster
-  # unless ssh-ing to localhost, this will produce the message "stdin: is not a tty",
-  # which makes sense given the "-n" argument.
-  #
-  # Good test:
-  # ssh localhost -t -A -oPermitLocalCommand=yes -oLocalCommand="bash -c 'date && pwd'" uname
-  #
-  local rem_port=59875 has_bash tty=$(tty) ssh_port
-  #local cp_preexisted=0
-  #if ls $cp_prefix* 2>/dev/null; then
-    #cp_preexisted=1
-  #fi
-  #
-  # set up channel to esh server: but there is a bug when when doing
-  # -R0:localhost:$ESH_PORT: https://groups.google.com/forum/#!topic/opensshunixdev/tFdpDBcfjLI
-  # Situation was no VPN, ssh zarafa1, then ssh to somewhere else.
-  # Workaround: use nc to find an open port instead
-  #
-  # This next ssh establishes the control master, then runs a bit of logic to
-  # see if bash exists on the remote system, and if /bin/nc exists to then find
-  # an open port.
-  #/usr/bin/ssh -oControlMaster=auto -S $cp_mask "${ssh_opts[@]}" -TnA $ssh_user_host sh -c '"p=0; [ -f /bin/bash ] && p=1; echo \$p; [ -f /bin/nc ] && for p in \$(seq 59876 59976); do nc -z localhost \$p >/dev/null || { echo \$p; break; }; done || echo '$rem_port'; sleep 5"' | cat -u | {
-  /usr/bin/ssh -oControlMaster=auto -S $cp_mask "${ssh_opts[@]}" -TA $ssh_user_host -- sh -s $rem_port << 'EOF' | {
-default_rem_port=$1
-p=0
-[ -f /bin/bash ] && p=1
-echo $p
-if [ -f /bin/nc ]; then
-  for p in $(seq 59876 59976); do
-    nc -z localhost $p >/dev/null || { echo $p; break; }
-  done
-else
-  echo $default_rem_port
-fi
-sleep 5
-EOF
-    read has_bash
-    read rem_port
-    exec 0<$tty
-    [ -n "$STY" ] && {
-      local h=$cmdline_ssh_host
-      [ -n "$SSH_STY_LBL" ] && h=$SSH_STY_LBL
-      printf "\033k$h\033\134"
-    }
-    if [ "$rem_port" ]; then
-      #while [ -z "$(ls $cp_prefix* 2>/dev/null)" ]; do
-        #echo "sleep:wait for $cp_mask..."
-        #sleep 0.4
-      #done
-      # find ssh port from ControlPath file that just was created
-      ssh_port=$(ls $cp_prefix* | cut -d: -f 4)
-      [ -z "$ssh_port" ] && {
-        echo "ERROR: could not read ssh port, stop."
-        return
-      }
-
-      # Cannot use this in older ssh (4.7) to remote forward the escreen port:
-      #/usr/bin/ssh -p $ssh_port -S $cp_mask -R$rem_port:localhost:$ESH_PORT -aTnN $ssh_user_host &
-
-      # now do actual ssh session
-      if [ "$has_bash" = 1 ]; then
-        local c="$(bash_init_string $rem_port|gzip -9 -c|openssl enc -a -A)"
-        /usr/bin/ssh -t -S $cp_mask -R$rem_port:localhost:$ESH_PORT "${ssh_opts[@]}" $ssh_user_host -- /bin/bash -c 'true;eval "$(echo '$c'|openssl enc -d -a -A|gzip -d -c)"' "${remote_cmd[@]}"
-      else
-        /usr/bin/ssh -S $cp_mask "$@"
-      fi
-      /usr/bin/ssh -p $ssh_port -S $cp_mask -O exit $ssh_user_host
-    fi
-    [ "$STY" ] && printf "\033k${HOSTNAME}\033\134"
-  }
+  local sshrc=$?
+  [ "$STY" ] && printf "\033k${HOSTNAME}\033\134"
+  return $sshrc
 }
 export -f ssh
