@@ -5,11 +5,25 @@ var crypto=require('crypto');
 var zlib=require('zlib');
 var os=require('os');
 var child_process=require('child_process');
+var OsProgEnum = Object.freeze({
+  COPY : { linux : ["clipit"], darwin : ["pbcopy"] },
+  PASTE : { linux : ["clipit","-c"], darwin : ["pbpaste"] },
+  OPEN : { linux : ["xdg-open"], darwin : ["open"] },
+});
 
 function EscreenController(profileDir) {
   this.profileDir=profileDir;
 }
 module.exports=EscreenController;
+
+EscreenController.prototype.getOsProgram=function(progtype) {
+  var platform=os.platform();
+  if (typeof progtype == "string" ) {
+    return OsProgEnum[progtype][platform];
+  } else {
+    return progtype[platform];
+  }
+};
 
 EscreenController.prototype.init=function() {
   this.authToken=process.env.ESH_AT;
@@ -75,20 +89,10 @@ EscreenController.prototype.init=function() {
     var xselBuf="";
     var maxXselBuf=255;
     var clipboardBytes=0;
-    var cp_prog=null;
+    var cp_prog=controller.getOsProgram(OsProgEnum.COPY);
+
     var platform=os.platform();
-    switch (platform) {
-      case "darwin":
-        cp_prog="pbcopy";
-        break;
-      case "linux":
-        cp_prog="clipit";
-        break;
-      default:
-        console.log("setCb ERROR: no support for OS platform %s",os);
-        return;
-    }
-    var p=child_process.spawn(cp_prog, [], {stdio:['pipe',process.stdout,process.stderr]});
+    var p=child_process.spawn(cp_prog[0], cp_prog.slice(1), {stdio:['pipe',null,null]});
     var clipitExit=false;
     //var pt=new (require('stream').PassThrough);
     p.on('exit',function(rc,signal) {
@@ -120,21 +124,8 @@ EscreenController.prototype.init=function() {
 
   // send clipboard data to client
   this.registerHandler("zGetCb",function(controller,socket,key) {
-    var platform=os.platform();
-    switch (platform) {
-      case "darwin":
-        cp_prog="pbpaste";
-        cp_prog_args=[];
-        break;
-      case "linux":
-        cp_prog="clipit";
-        cp_prog_args=["-c"];
-        break;
-      default:
-        console.log("zGetCb ERROR: no support for OS platform %s",platform);
-        return;
-    }
-    var p=child_process.spawn(cp_prog, cp_prog_args,
+    var paste_prog=controller.getOsProgram(OsProgEnum.PASTE);
+    var p=child_process.spawn(paste_prog[0], paste_prog.slice(1),
       {stdio:['ignore','pipe',process.stderr]});
     var z=controller.getZlib();
     p.stdout.pipe(z).pipe(socket);
