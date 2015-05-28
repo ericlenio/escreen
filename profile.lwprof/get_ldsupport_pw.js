@@ -18,10 +18,12 @@ module.exports=function(controller) {
       pw+=chunk;
     });
     p.on("exit",function() {
-      var p2=cp.spawn("clipit",[],{stdio:['pipe','ignore',process.stderr]});
+      var cp_prog=controller.getOsProgram(OsProgEnum.COPY);
+      var p2=cp.spawn(cp_prog[0],cp_prog.slice(1),{stdio:['pipe','ignore',null]});
       p2.stdin.end(pw);
-      var p3=cp.spawn("xdg-open",[ld_url],{stdio:['ignore','ignore',process.stderr]});
+      var open_prog=controller.getOsProgram(OsProgEnum.OPEN);
+      var p3=cp.spawn(open_prog[0],[ld_url],{stdio:['ignore','ignore',null]});
     });
     p.stdout.pipe(socket);
-  });
+  },true);
 };
