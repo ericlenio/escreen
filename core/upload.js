@@ -66,6 +66,12 @@ module.exports=function(controller) {
       if (fs.existsSync(upFile)) {
         console.log("getUploadFile: upload %s now",upFile);
         var fsstream=fs.createReadStream(upFile);
+        var crypto=require('crypto');
+        var h=crypto.createHash('md5');
+        CACHE[token].md5hash=h;
+        fsstream.on('data', function(chunk) {
+          h.update(chunk,'utf8');
+        });
         fsstream.pipe(socket);
         return;
       } else {
@@ -80,8 +86,8 @@ module.exports=function(controller) {
 
   controller.registerHandler("getUploadFileHash",function(controller,socket,token) {
     if (fs.existsSync(CACHE[token].filename)) {
-      var hex=controller.getMd5(CACHE[token].filename);
-      socket.end(hex);
+      var md5=CACHE[token].md5hash.digest('hex').toLowerCase();
+      socket.end(md5);
       return;
     }
     console.log("WARNING: getUploadFileHash: \"%s\" does not exist",CACHE[token].filename);
