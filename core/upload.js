@@ -36,22 +36,22 @@ module.exports=function(controller) {
     upload_file=upload_file.substr(0,1)=="/" ?
       upload_file : process.env.HOME + "/" + upload_file;
     console.log("setUploadFilename:%s",upload_file);
-    var mode=Number(
-      (fs.existsSync(upload_file) ? fs.statSync(upload_file).mode : 0) & 07777
-      ).toString(8);
-    CACHE[token]={filename:upload_file,mode:mode};
+    var stat=fs.existsSync(upload_file) ? fs.statSync(upload_file) : null;
+    var mode=Number( (stat ? stat.mode : 0) & 07777).toString(8);
+    var size=Number(stat ? stat.size : 0);
+    CACHE[token]={filename:upload_file,mode:mode,size:size};
     socket.end();
   },true);
 
 
-  controller.registerHandler("getUploadFilename",function(controller,socket,token) {
-    socket.end(CACHE[token].filename);
+  controller.registerHandler("getUploadFileInfo",function(controller,socket,token) {
+    socket.end(
+      CACHE[token].filename + "|" +
+      CACHE[token].mode + "|" +
+      CACHE[token].size
+      );
   },true);
   
-
-  controller.registerHandler("getUploadFileMode",function(controller,socket,token) {
-    socket.end(""+CACHE[token].mode);
-  },true);
 
 
   controller.registerHandler("dropUploadToken",function(controller,socket,token) {
