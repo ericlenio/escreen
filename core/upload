@@ -15,21 +15,41 @@ upload() {
   /usr/bin/ssh -t -q -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null \
     -oProxyCommand='bash -c "{ echo $ESH_AT sshd; cat -u; } | nc localhost $ESH_PORT"' $sshuser@fakehost \
     /bin/bash -c '"read -p \"Logged in to \$(hostname). Pick a file to upload: \" -e f; [ -r \"\$f\" ] && [ ! -d \"\$f\" ] && { echo '$esh_at0' setUploadFilename '$token' \$(echo -n \"\$f\" | openssl enc -base64 -A) | nc localhost '$esh_port0'; } || { echo \"Not a file, or not readable: \$f\"; exit 1; }"' || return
-  local upload_file=$(ESH_NC=nc _esh_b getUploadFilename $token)
+  # get upload file name, mode, and size:
+  local upload_file mode upload_file_size
+  IFS='|' read upload_file mode upload_file_size <<< "$(ESH_NC=nc _esh_b getUploadFileInfo $token)"
   [ -z "$upload_file" ] && return
   upload_file=$(basename "$upload_file")
   echo "uploading now ..."
   local setmode=0
   # only set the mode if file did not previously exist (locally)
   [ ! -f "$upload_file" ] && setmode=1
-  echo $ESH_AT getUploadFile $token | $ESH_NC localhost $ESH_PORT > "$upload_file"
+  echo $ESH_AT getUploadFile $token | $ESH_NC localhost $ESH_PORT | perl -pe '
+BEGIN {
+  $n=0;
+  $n2=0;
+  $s=shift @ARGV;
+  $freq=2**10*32;
+  printf STDERR "%10d/%10d",$n,$s;
+}
+END {
+  printf STDERR "\033[1G%10d",$n;
+  printf STDERR "\n";
+}
+$n+=length($_);
+$n2+=length($_);
+if ($n2 > $freq ) {
+  printf STDERR "\033[1G%10d",$n;
+  $n2=0;
+}
+' $upload_file_size > "$upload_file"
   # Use md5 to verify the file transferred correctly
   local expected_md5=$(ESH_NC=nc _esh_b getUploadFileHash $token)
   if [ $setmode = 1 ]; then
-    local mode=$(ESH_NC=nc _esh_b getUploadFileMode $token)
     chmod $mode "$upload_file"
     echo "set mode: $mode"
   fi
+  echo "Checking MD5 now ..."
   local md5=$(openssl md5 -hex "$upload_file")
   # md5 will look something like this:
   # MD5(somefile)= 7f851736b8f86d8ee734a5d94bedf2f7
