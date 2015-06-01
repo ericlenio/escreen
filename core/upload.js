@@ -26,8 +26,14 @@ module.exports=function(controller) {
   },true);
 
 
-  controller.registerHandler("getEnv",function(controller,socket,varname) {
-    socket.end(process.env[varname]);
+  // Get values of arbitrary environment variables: values separated by |
+  controller.registerHandler("getEnv",function(controller,socket) {
+    for (var i=2; i<arguments.length; i++) {
+      var varname=arguments[i];
+      socket.write(process.env[varname]);
+      if (i<arguments.length-1) socket.write("|");
+    }
+    socket.end("\n");
   },true);
 
 
