@@ -35,17 +35,21 @@ eos_build() {
   local grails_env=development
 
   local OPTS clean=0
-  OPTS=$(getopt -o c -- "$@")
+  local uname=$(uname)
+  if [ $uname = Darwin ]; then
+    OPTS=$(getopt c "$@")
+  else
+    OPTS=$(getopt -o c -- "$@")
+  fi
   # set temporary positional parameters
   eval set -- "$OPTS"
-  # strip out all ssh command line options
   while true; do
     case "$1" in
       --) break
         ;;
       -c) clean=1
-        # ;& means continue matching
-        ;&
+        shift
+        ;;
       *) shift
         ;;
     esac
@@ -74,7 +78,7 @@ eos_build() {
   fi
 
   source $propsfile
-  local auth_string=$(echo -n $tomcat_user:$tomcat_pass | base64 -w 0)
+  local auth_string=$(echo -n $tomcat_user:$tomcat_pass | openssl enc -base64 -A)
 
   if [ $clean = 1 ]; then
     ( cd angular; grunt clean )
