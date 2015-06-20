@@ -7,7 +7,11 @@ function get_ldsupport_pw() {
   fi
   if [ -d /etc/lincware/lwsa ]; then
     # 3.1 or higher
-    local ld_url="http://remoteadmin.lincware.com:$(sudo cat /var/run/lwsa-remoteadmin.http_port)/$app_context/login/_/system"
+    local pfile=/var/run/lwsa-remoteadmin.http_port
+    # newer style is pfile2, try to use that first
+    local pfile2=/var/run/remoteadmin.http_port
+    [ -f $pfile2 ] && pfile=$pfile2
+    local ld_url="http://remoteadmin.lincware.com:$(cat $pfile)/$app_context/login/_/system"
     local cmd="$(sudo lwsa --get_psql_connect --silent $app_context) -tAc \"select config from ld_admin.ld_config_map where key = 'ldsupport-crypt-pw'\""
     if [[ "$cmd" != *psql* ]]; then
       if [ -n "$app_context" ]; then
