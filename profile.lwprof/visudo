@@ -1,0 +1,4 @@
+# vim:filetype=sh
+visudo() {
+  s root vim -visudo "$@"
+}
