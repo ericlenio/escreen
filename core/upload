@@ -7,7 +7,7 @@ upload() {
   local esh_port0 esh_at0 sshuser
   { IFS='|' read esh_port0 esh_at0 sshuser; } <<< $(_esh_b getEnv ESH_PORT ESH_AT USER)
 echo esh_port0:$esh_port0 esh_at0:$esh_at0 sshuser:$sshuser
-  local token=$(openssl rand -hex 4)
+  local token=$(openssl rand -base64 4)
   #
   # Strategy: launch a shell back on originating escreen system and utilize
   # bash's readline path autocomplete feature to pick a file.
