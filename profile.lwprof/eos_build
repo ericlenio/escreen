@@ -13,6 +13,9 @@
 #   gvm install grails 2.4.4
 #   git clone -b develop ssh://git@svn.lincware.com/var/lib/git/ldc.git
 #
+#   09/24/2015: gvm apparently replaced by sdkman:
+#   export SDKMAN_DIR="/home/lenio/.sdkman" && source "/home/lenio/.sdkman/bin/sdkman-init.sh"
+#
 # DATABASE:
 # To reconfigure your local copy of LDC to use PostgreSQL instead of H2 memory
 # database, you can do this in the grails-app/conf/DataSource.groovy - just
@@ -26,9 +29,9 @@
 #
 eos_build() {
   
-  local propsfile=ldc.properties
-  local warfile=grails/target/ldc-0.1.war
-  local context=/ldc
+  local propsfile=eos.properties
+  local warfile=grails/target/eos-0.1.war
+  local context=/eos
   local tomcat_user=lwsa
   local tomcat_pass=lincdoc1
   local tomcat_base_url=http://localhost:8080/manager/text
@@ -37,9 +40,9 @@ eos_build() {
   local OPTS clean=0
   local uname=$(uname)
   if [ $uname = Darwin ]; then
-    OPTS=$(getopt c "$@")
+    OPTS=$(getopt pc "$@")
   else
-    OPTS=$(getopt -o c -- "$@")
+    OPTS=$(getopt -o pc -- "$@")
   fi
   # set temporary positional parameters
   eval set -- "$OPTS"
@@ -50,19 +53,22 @@ eos_build() {
       -c) clean=1
         shift
         ;;
+      -p) grails_env=production
+        shift
+        ;;
       *) shift
         ;;
     esac
   done
 
   if [ ! -d .git ]; then
-    echo "Not inside base directory of a ldc checkout."
+    echo "Not inside base directory of a eos checkout."
     return 1
   fi
 
   local git_url=$(git config --get remote.origin.url)
   if [ ${git_url##*/} != ldc.git ]; then
-    echo "Not a checkout of ldc."
+    echo "Not a checkout of eos."
     return 1
   fi
 
@@ -73,7 +79,7 @@ eos_build() {
     echo "tomcat_pass=$tomcat_pass" >> $propsfile
     echo "tomcat_base_url=$tomcat_base_url" >> $propsfile
     echo "grails_env=$grails_env" >> $propsfile
-    echo "Created ldc.properties file with stub properties, please edit it and re-run eos_build."
+    echo "Created eos.properties file with stub properties, please edit it and re-run eos_build."
     return
   fi
 
