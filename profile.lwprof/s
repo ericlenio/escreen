@@ -22,12 +22,12 @@ function s() {
   }
 
   local cmd=("$@")
-  [ $# -eq 0 ] && cmd=( exec /bin/bash --norc --noprofile )
+  [ $# -eq 0 ] && cmd=( exec env bash --norc --noprofile )
 
   #local init=$(bash_init_string $ESH_PORT)
-  #echo "exec </dev/tty; $init" | gzip -9 -c | sudo -H -u $user /bin/bash -c 'eval "$(gzip -d -c)"' -- "${cmd[@]}"
+  #echo "exec </dev/tty; $init" | gzip -9 -c | sudo -H -u $user env bash -c 'eval "$(gzip -d -c)"' -- "${cmd[@]}"
   
   # this way does not use /dev/tty
   local init=$(bash_init_string $ESH_PORT | gzip -9 -c | openssl enc -a -A)
-  sudo -H -u $user /bin/bash -c 'eval "$(echo -n '$init' | openssl enc -d -a -A | gzip -d -c)"' -- "${cmd[@]}"
+  sudo -H -u $user env bash -c 'eval "$(echo -n '$init' | openssl enc -d -a -A | gzip -d -c)"' -- "${cmd[@]}"
 }

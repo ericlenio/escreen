@@ -9,7 +9,7 @@ screen() {
     for opt in "$@"; do
       case $opt in
         -d|-D|-r|-R|-RR|-ls|-list|-Q|-v|-x|-X)
-          /usr/bin/screen "$@"
+          env screen "$@"
           return $?
           ;;
       esac
@@ -69,5 +69,5 @@ EOF
   fi
   local exec
   [ "$ESH_SCREEN_EXEC" = 1 ] && exec=exec
-  $exec /usr/bin/screen -e$esc -s $shell "${origArgs[@]}"
+  $exec env screen -e$esc -s $shell "${origArgs[@]}"
 }
