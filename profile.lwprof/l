@@ -1,10 +1,13 @@
 # vim:filetype=sh
 function l() {
   local os=$(uname -s)
-  if [ $os = Darwin ]; then
-    ls -laF "$@"
-  else
-    ls -laF --time-style=+'%D %H:%M:%S' "$@"
-  fi
+  case $os in
+    Darwin|FreeBSD)
+      ls -laF "$@"
+      ;;
+    *)
+      ls -laF --time-style=+'%D %H:%M:%S' "$@"
+      ;;
+  esac
 }
 export -f l

@@ -12,9 +12,9 @@ echo esh_port0:$esh_port0 esh_at0:$esh_at0 sshuser:$sshuser
   # Strategy: launch a shell back on originating escreen system and utilize
   # bash's readline path autocomplete feature to pick a file.
   #
-  /usr/bin/ssh -t -q -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null \
-    -oProxyCommand='bash -c "{ echo $ESH_AT sshd; cat -u; } | nc localhost $ESH_PORT"' $sshuser@fakehost \
-    /bin/bash -c '"read -p \"Logged in to \$(hostname). Pick a file to upload: \" -e f; [ -r \"\$f\" ] && [ ! -d \"\$f\" ] && { echo '$esh_at0' setUploadFilename '$token' \$(echo -n \"\$f\" | openssl enc -base64 -A) | nc localhost '$esh_port0'; } || { echo \"Not a file, or not readable: \$f\"; exit 1; }"' || return
+  SHELL=$(which sh) env ssh -t -q -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null \
+    -oProxyCommand='sh -c "{ echo $ESH_AT sshd; cat -u; } | nc localhost $ESH_PORT"' $sshuser@fakehost \
+    env bash -c '"read -p \"Logged in to \$(hostname). Pick a file to upload: \" -e f; [ -r \"\$f\" ] && [ ! -d \"\$f\" ] && { echo '$esh_at0' setUploadFilename '$token' \$(echo -n \"\$f\" | openssl enc -base64 -A) | nc localhost '$esh_port0'; } || { echo \"Not a file, or not readable: \$f\"; exit 1; }"' || return
   local upload_file mode upload_file_size
   { IFS='|' read upload_file mode upload_file_size; } <<< $(_esh_b getUploadFileInfo $token)
   [ -z "$upload_file" ] && return
