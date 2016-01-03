@@ -13,6 +13,8 @@ cp2cb() {
   fi
   # override ESH_NC to not use "-q -1": we want nc to close as soon as it has
   # read all of its stdin
-  perl -pe 'chomp if eof' -- "$f" | gzip -9 -c | ESH_NC="nc" _esh_b setCb
+  local nc=nc
+  [ `uname -s` = FreeBSD ] && nc="nc -N"
+  perl -pe 'chomp if eof' -- "$f" | gzip -9 -c | ESH_NC="$nc" _esh_b setCb
 }
 export -f cp2cb
