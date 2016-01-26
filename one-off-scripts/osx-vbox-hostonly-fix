@@ -1,0 +1,12 @@
+#! /bin/bash
+# Need to run this to get host only network to work with virtualbox guests on OSX
+#
+# based on notes from:
+# http://superuser.com/questions/429405/how-can-i-get-virtualbox-to-run-with-a-hosts-only-adapter
+if [ $(uname -s) = Darwin ]; then
+  sudo sysctl -w net.inet.ip.forwarding=1 net.inet.ip.fw.enable=1
+  sudo sysctl -a net.inet.ip.forwarding net.inet.ip.fw.enable
+  #sudo pfctl -F all -f /etc/pf.conf
+  echo "nat on en0 from vboxnet0:network -> (en0)" | sudo pfctl -mf -
+  sudo pfctl -e
+fi
