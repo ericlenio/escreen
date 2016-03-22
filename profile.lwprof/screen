@@ -44,6 +44,7 @@ caption always "%{= kw}%-w%{= BW}%n%t%{-}%+w %-= @%H %m/%d %c"
 shelltitle "$ |:"
 defmonitor on
 msgwait 1
+hardstatus ignore
 #setenv PROMPT_COMMAND 'screen_prompt'
 #shell $shell
 #screen rm $SCREENRC
