@@ -14,6 +14,7 @@ function update_gpg_key() {
       gpg --no-default-keyring --keyring $apt_keyring --yes --batch --delete-key "$old_key"
     }
     echo "$new_key_base64" | gpg --no-default-keyring --keyring $apt_lincware_key_file --import
+    chmod 644 $apt_lincware_key_file
 EOSUDO
 }
 export -f update_gpg_key
