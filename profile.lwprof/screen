@@ -8,7 +8,44 @@ screen() {
   if [ "$1" != -- ]; then
     for opt in "$@"; do
       case $opt in
-        -d|-D|-r|-R|-RR|-ls|-list|-Q|-v|-x|-X)
+        -r)
+          local screen_exec=$(which screen) curr_sty=${STY:-some_value} choice i=0 sty tempfile
+          local screen_stys=($($screen_exec -ls | grep -v $curr_sty | perl -n -e 's{^\s*(\d+\.\S+).*}{$1} && print'))
+          if [ ${#screen_stys} = 0 ]; then
+            echo "No screen sessions detected."
+            return 1
+          fi
+          printf "Resume which screen session?\n"
+          IFS='\n' $screen_exec -ls | grep -v $curr_sty | perl -n -e 's{^\s*(\d+\..*)}{$1} && print' | while read l; do
+            printf "%s. %s\n" $i "$l"
+            i=$(($i+1))
+          done
+          read -p "Enter choice: " choice
+          if [ "$choice" -a ${screen_stys[$choice]+is_set} ]; then
+            sty=${screen_stys[$choice]}
+            #tempfile=$(mktemp)
+            #rm $tempfile
+            #mkfifo $tempfile
+            # get the old value of ESH_PORT
+            #$screen_exec -S $sty -X exec sh -c "echo \$ESH_PORT > $tempfile"
+            # force new windows to use the new value of ESH_PORT
+            #$screen_exec -S $sty -X setenv ESH_PORT $ESH_PORT
+            _esh_p $sty $(_esh_p)
+#read -p "ready to resume screen session:" ans
+            #rm -f $tempfile
+            # This attempt to use nc as a relay is definitely NOT working ...
+            # wanted existing windows to relay from the old port to the new
+            #$ESH_NC -l $old_ESH_PORT 0<$tempfile | $ESH_NC localhost $ESH_PORT | $tempfile &
+            #local ncpid=$!
+            $screen_exec -d -r $sty
+            #kill $ncpid
+            return
+          else
+            echo "Invalid choice."
+            return 1
+          fi
+          ;;
+        -d|-D|-R|-RR|-ls|-list|-Q|-v|-x|-X)
           env screen "$@"
           return $?
           ;;
@@ -22,7 +59,9 @@ screen() {
   # maintained. Update: on OSX, sh is just a thin wrapper to bash, and it
   # resets PS1. So, use perl instead.
   echo -n '#!/usr/bin/perl
-($ENV{ESH_STY})=$ENV{STY}=~m{^(\d+)}g;
+#system("bash","-c",q(_esh_p $ESH_PORT));
+#($ENV{ESH_STY})=$ENV{STY}=~m{^(\d+)}g;
+$ENV{ESH_STY}=$ENV{STY};
 exec (qw(bash --norc --noprofile),@ARGV);
 ' > $shell
   local SCREENRC=$ESH_TMP/$USER.screenrc
@@ -32,7 +71,6 @@ exec (qw(bash --norc --noprofile),@ARGV);
   local hardcopy_file=$ESH_TMP/$USER.screenrc.hardcopy
   touch $SCREENRC $printscreen_macro $hardcopy_file
   chmod 600 $SCREENRC $printscreen_macro $hardcopy_file
-  export SCREENRC
   cat > $SCREENRC << 'EOF'
 startup_message off
 bind " " windowlist -b
@@ -45,10 +83,6 @@ shelltitle "$ |:"
 defmonitor on
 msgwait 1
 hardstatus ignore
-#setenv PROMPT_COMMAND 'screen_prompt'
-#shell $shell
-#screen rm $SCREENRC
-
 # allow special screen user ":window:" to send keystrokes: used in ssh;
 # man screen for some other details (used in combination with screen
 # escape "ESC ] 83 ; cmd ^G")
@@ -64,11 +98,10 @@ hardcopy $hardcopy_file
 screen bash -c "vim $hardcopy_file"
 EOF
 
-  local esc='^Ee'
-  if [ -z "$ESH_STY" ]; then
+  local esc='^Ee' exec
+  [ "$ESH_SCREEN_EXEC" = 1 ] && {
+    exec=exec
     esc='^Aa'
-  fi
-  local exec
-  [ "$ESH_SCREEN_EXEC" = 1 ] && exec=exec
-  $exec env screen -e$esc -s $shell "${origArgs[@]}"
+  }
+  $exec env SCREENRC=$SCREENRC screen -e$esc -s $shell "${origArgs[@]}"
 }

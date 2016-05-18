@@ -1,18 +1,10 @@
 # vim:filetype=sh
 # bash init string when entering new bash session (either by ssh or sudo)
 bash_init_string() {
-  local ESH_PORT=$1
-  # one time auth token
-  #local otat=$(_esh_b otat </dev/null)
-  #printf "/bin/bash -c 'export ESH_SCREEN_PIN=%s;ESH_STY=%s;exec 3<>/dev/tcp/localhost/%s;echo %s zB %s %s >&3;c=\"\$(gzip -d -c <&3)\";exec 3>&-;eval \"\$c\";\"\$@\"'" \
-  #"$ESH_SCREEN_PIN" "$ESH_STY" $port $otat $port $ESH_AT
+  # p is communication port
+  local ESH_STY=$1 p=$2
   declare -p $(compgen -v ESH_)
-  declare -f _esh_b _esh_l _esh_I
-  #echo 'export -f _esh_b _esh_l _esh_I'
-  #echo 'eval "$(_esh_b zI)"'
-  echo '_esh_I </dev/null'
-  #echo 'echo n=$#; for i in "$@"; do echo "i=$i."; done;'
-  # need to do </dev/tty here so "tomcatlog -e" works
-  #echo '"$@" </dev/tty'
+  declare -f _esh_p _esh_b _esh_l _esh_I
+  echo "_esh_I $ESH_STY $p </dev/null"
   echo -n '"$@"'
 }
