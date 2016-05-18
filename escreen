@@ -1,35 +1,52 @@
 #! /bin/bash
 
+screen_exec=$(which screen)
 if [ "$1" = -r ]; then
   if [ -z "$ESH_AT" ]; then
     echo "Oops, you do not appear to already be in an escreen session, exiting."
     exit 1
   fi
   curr_sty=${STY:-some_value}
-  screen_stys=($(/usr/bin/screen -ls | grep -v $curr_sty | perl -n -e 's{^\s*(\d+\.\S+).*}{$1} && print'))
+  screen_stys=($($screen_exec -ls | grep -v $curr_sty | perl -n -e 's{^\s*(\d+\.\S+).*}{$1} && print'))
   if [ ${#screen_stys} = 0 ]; then
     echo "No escreen sessions detected."
     exit 1
   fi
   printf "Resume which escreen session?\n"
   i=0
-  IFS='\n' /usr/bin/screen -ls | grep -v $curr_sty | perl -n -e 's{^\s*(\d+\..*)}{$1} && print' | while read l; do
+  IFS='\n' $screen_exec -ls | grep -v $curr_sty | perl -n -e 's{^\s*(\d+\..*)}{$1} && print' | while read l; do
     printf "%s. %s\n" $i "$l"
     i=$(($i+1))
   done
   read -p "Enter choice: " choice
   if [ "$choice" -a ${screen_stys[$choice]+is_set} ]; then
     sty=${screen_stys[$choice]}
-    /usr/bin/screen -S $sty -X screen bash -c "_esh_b forwardEscreen $ESH_PORT $ESH_AT $(echo -n $ESH_NC|openssl enc -A -base64)"
-    /usr/bin/screen -S $sty -X escape ^ee
-    /usr/bin/screen -d -r $sty
-    /usr/bin/screen -S $sty -X screen bash -c "_esh_b unforwardEscreen"
+    $screen_exec -S $sty -X screen bash -c "_esh_b forwardEscreen $ESH_PORT $ESH_AT $(echo -n $ESH_NC|openssl enc -A -base64)"
+    $screen_exec -S $sty -X escape ^ee
+    $screen_exec -d -r $sty
+    $screen_exec -S $sty -X screen bash -c "_esh_b unforwardEscreen"
     exit
   else
     echo "Invalid choice."
     exit 1
   fi
 fi
+#
+# get/set the main communications port
+#
+# should pass 0 or 2 args; if 0 args, return the current port
+#
+# if 2 args:
+# 1st arg: $ESH_STY value
+# 2nd arg: new port to be used
+#
+_esh_p() {
+  local s=$1 p=$2 f
+  [ -z "$s" ] && s=$ESH_STY
+  f=$ESH_TMP/STY-$s.port
+  [ "$p" ] && echo $p > $f || cat $f
+}
+export -f _esh_p
 
 # bootstrapping function: 1st arg is an event ID that the server will inspect
 # and run appropriate event handler for; event IDs starting with "z" send back
@@ -47,6 +64,7 @@ fi
 # older shells may not be able to do the /dev/tcp/host/port trick, this works
 # around that ... netcat will be needed though
 _esh_b() {
+  local p=$(_esh_p)
   {
     echo $ESH_AT "$*"
     # must unbuffer output for large file downloads ... "sed -u" not
@@ -54,7 +72,7 @@ _esh_b() {
     #[ ! -t 0 ] && sed -u ''
     [ ! -t 0 ] && perl -pe 'BEGIN{$|=1}'
   } | \
-  $ESH_NC localhost $ESH_PORT | {
+  $ESH_NC localhost $p | {
     [ ${1:0:1} = z ] && gzip -d -c || cat
   }
 }
@@ -91,12 +109,15 @@ _esh_l() {
 }
 export -f _esh_l
 
+# ESH_AT is a simple security access token
 export ESH_AT=$(openssl rand 3 -hex)
-export ESH_TMP=/tmp/esh
+[ -z "$ESH_TMP" ] && ESH_TMP=/tmp/esh
+export ESH_TMP
 [ ! -d $ESH_TMP ] && mkdir $ESH_TMP && chmod 1777 $ESH_TMP
 
 # shell init script here
 eval '_esh_I() {
+  _esh_p $1 $2
   ESH_NC="nc -q -1"
   # test if -q is supported with nc, due to 
   # https://bugs.launchpad.net/ubuntu/+source/netcat-openbsd/+bug/544935
@@ -110,14 +131,15 @@ eval '_esh_I() {
   for f in $(_esh_l $t/$u.fcnlist $p2 1); do
     _esh_gen_stub $t/$u.f.$f
   done
-  export ESH_PORT ESH_AT ESH_TMP ESH_STY ESH_NC
-  export -f _esh_I _esh_b _esh_l
+  export ESH_AT ESH_TMP ESH_STY ESH_NC
+  export -f _esh_p _esh_I _esh_b _esh_l
 }'
+export _esh_I
 
 export ESH_HOME=$(dirname $([ -h $0 ] && readlink $0 || echo $0))
 ESH_CORE=$ESH_HOME/core
 [ "$1" ] && ESH_PROFILE="$1" || ESH_PROFILE=$ESH_HOME/profile.lwprof
-export ESH_PORT=$(node $ESH_HOME/GetFreePort.js)
+ESH_PORT=$(node $ESH_HOME/GetFreePort.js)
 [ -z "$ESH_PORT" ] && {
   echo "ERROR: could not get free port."
   exit 1
@@ -128,9 +150,22 @@ touch $ESH_LOGFILE
 chmod 600 $ESH_LOGFILE
 node $ESH_HOME/EscreenRunServer.js $ESH_PROFILE $ESH_PORT >$ESH_LOGFILE 2>&1 </dev/null &
 export ESH_NODE_PID=$!
+
 while ! nc -z localhost $ESH_PORT; do
   sleep 0.1
 done
-_esh_I
+
+# ESH_STY is loosely tied to screen's STY variable ... it gets used as a unique
+# ID to properly track the communications port (ESH_PORT) to use in a given
+# shell between various combinations of screen, sudo, and ssh
+ESH_STY=0000
+_esh_I $ESH_STY $ESH_PORT
 ESH_SCREEN_EXEC=1
-screen -- bash -c '/usr/bin/screen -S $STY -X monitor off; /usr/bin/screen -S $STY -X screen;nohup sh -c "while kill -0 ${STY%%.*}; do sleep 5; done; kill '$ESH_NODE_PID'; sleep 3600; rm -f '$ESH_LOGFILE';" </dev/null >/dev/null 2>&1 & tail -f '$ESH_LOGFILE
+
+#screen -- bash -c $screen_exec' -S $STY -X monitor off; '$screen_exec' -S $STY -X screen;nohup sh -c "while kill -0 ${STY%%.*}; do sleep 5; done; kill '$ESH_NODE_PID'; sleep 3600; rm -f '$ESH_LOGFILE';" </dev/null >/dev/null 2>&1 & tail -f '$ESH_LOGFILE
+screen -- bash -c $screen_exec' -S $STY -X monitor off
+  '$screen_exec' -S $STY -X setenv ESH_STY $STY
+  _esh_p $STY $(_esh_p)
+  '$screen_exec' -S $STY -X screen
+  nohup sh -c "while kill -0 ${STY%%.*}; do sleep 5; done; kill '$ESH_NODE_PID'; sleep 3600; rm -f '$ESH_LOGFILE';" </dev/null >/dev/null 2>&1 &
+  tail -f '$ESH_LOGFILE
