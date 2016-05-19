@@ -6,7 +6,7 @@
 ssh() {
   if [ ! -t 0 -o ! -t 1 ]; then
     # in a pipeline
-    /usr/bin/ssh "$@"
+    env ssh "$@"
     return $?
   fi
   # openssh introduced multiplexing in 3.9
@@ -55,14 +55,14 @@ ssh() {
   done
   if [ $# = 0 ]; then
     # Might have done -V, allow to continue
-    /usr/bin/ssh "${ssh_opts[@]}"
+    env ssh "${ssh_opts[@]}"
     return $?
   fi
   # should now have user@ssh_host, or just plain ssh_host
   local ssh_user_host="$1"
   local cmdline_ssh_host=${ssh_user_host##*@}
   shift
-  local sshV=$(/usr/bin/ssh -V 2>&1)
+  local sshV=$(env ssh -V 2>&1)
   if [[ "$sshV" =~ OpenSSH_([[:digit:]]+)\.([[:digit:]]+) ]]; then
     local ssh_major=${BASH_REMATCH[1]}
     local ssh_minor=${BASH_REMATCH[2]}
@@ -78,7 +78,7 @@ ssh() {
   # then we assume we want to still do a ControlMaster and initialize the
   # remote environment.
   if [ $# -gt 0 -a $force_tty = 0 ]; then
-    /usr/bin/ssh "${origArgs[@]}"
+    env ssh "${origArgs[@]}"
   else
     [ $# -gt 0 ] && remote_cmd=( "$@" )
     #
@@ -102,7 +102,7 @@ ssh() {
     # Assumption: /bin/sh exists on remote system. We use it to check for
     # /bin/bash, and if that exists set up prefered bash shell settings.
     # Otherwise, run default login shell.
-    /usr/bin/ssh "${ssh_opts[@]}" -t -oExitOnForwardFailure=yes -R$rem_port:localhost:$(_esh_p) $ssh_user_host -- sh -c "'"'b=`which bash`; [ "$b" ] && exec $b -c "eval $(echo '$c'|openssl enc -d -a -A|gzip -d -c)" - "$@" || exec $SHELL -l'"'" - "${remote_cmd[@]}"
+    env ssh "${ssh_opts[@]}" -t -oExitOnForwardFailure=yes -R$rem_port:localhost:$(_esh_p) $ssh_user_host -- sh -c "'"'b=`which bash`; [ "$b" ] && exec $b -c "eval $(echo '$c'|openssl enc -d -a -A|gzip -d -c)" - "$@" || exec $SHELL -l'"'" - "${remote_cmd[@]}"
   fi
   local sshrc=$?
   [ "$STY" ] && printf "\033k${HOSTNAME}\033\134"

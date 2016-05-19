@@ -116,7 +116,7 @@ export ESH_TMP
 [ ! -d $ESH_TMP ] && mkdir $ESH_TMP && chmod 1777 $ESH_TMP
 
 # shell init script here
-eval '_esh_I() {
+eval '_esh_i() {
   _esh_p $1 $2
   ESH_NC="nc -q -1"
   # test if -q is supported with nc, due to 
@@ -132,9 +132,9 @@ eval '_esh_I() {
     _esh_gen_stub $t/$u.f.$f
   done
   export ESH_AT ESH_TMP ESH_STY ESH_NC
-  export -f _esh_p _esh_I _esh_b _esh_l
+  export -f _esh_p _esh_i _esh_b _esh_l
 }'
-export _esh_I
+export _esh_i
 
 export ESH_HOME=$(dirname $([ -h $0 ] && readlink $0 || echo $0))
 ESH_CORE=$ESH_HOME/core
@@ -159,7 +159,7 @@ done
 # ID to properly track the communications port (ESH_PORT) to use in a given
 # shell between various combinations of screen, sudo, and ssh
 ESH_STY=0000
-_esh_I $ESH_STY $ESH_PORT
+_esh_i $ESH_STY $ESH_PORT
 ESH_SCREEN_EXEC=1
 
 screen -- bash -c $screen_exec' -S $STY -X monitor off
