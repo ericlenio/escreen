@@ -117,6 +117,8 @@ export ESH_TMP
 
 # shell init script here
 eval '_esh_i() {
+  local 't=$ESH_TMP u=$USER'
+  [ ! -d $t ] && mkdir $t && chmod 1777 $t
   _esh_p $1 $2
   ESH_NC="nc -q -1"
   # test if -q is supported with nc, due to 
@@ -124,8 +126,7 @@ eval '_esh_i() {
   # we need it on newer ubuntu systems
   [ "$(nc -q -1 -z localhost 1 2>&1)" ] && ESH_NC="nc"
   # p0, p1, p2 are set by fpw call
-  local 't=$ESH_TMP u=$USER' $(_esh_b fpw cbf)
-  [ ! -d $t ] && mkdir $t && chmod 1777 $t
+  local $(_esh_b fpw cbf)
   _esh_l $t/$u.core $p0
   _esh_l $t/$u.bashrc $p1
   for f in $(_esh_l $t/$u.fcnlist $p2 1); do
