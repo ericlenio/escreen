@@ -87,22 +87,44 @@ ssh() {
     # -oExitOnForwardFailure=yes causes it to fail, and user can then just
     # re-issue the same ssh command. Deemed a small enough risk to be
     # acceptable. Other strategies that were considered:
+    #
     # 1) ssh to host and find a known open port: at the expense of 2 separate
     # ssh connections
+    #
     # 2) run a ControlMaster, and then a separate ssh command to find the port:
     # good with modern ssh's, but various issues with older ssh (like 4.7 on
     # Ubuntu Hardy)
+    #
     # 3) After connecting to remote ssh host, find open port, then run GNU
     # screen escape to run ssh escape command (ESC ] 83 ; cmd ^G) to forward
     # the port: this leads to terminal IO issues when stuffing the ssh escape
     # command into the terminal driver.
+    #
     local rem_port=$(( $RANDOM % 1000 + 56100 ))
-    local c="$(bash_init_string $ssh_user_host-0000 $rem_port|gzip -9 -c|openssl enc -a -A)"
     #
     # Assumption: /bin/sh exists on remote system. We use it to check for
     # /bin/bash, and if that exists set up prefered bash shell settings.
     # Otherwise, run default login shell.
-    env ssh "${ssh_opts[@]}" -t -oExitOnForwardFailure=yes -R$rem_port:localhost:$(_esh_p) $ssh_user_host -- sh -c "'"'b=`which bash`; [ "$b" ] && exec $b -c "eval $(echo '$c'|openssl enc -d -a -A|gzip -d -c)" - "$@" || exec $SHELL -l'"'" - "${remote_cmd[@]}"
+    #
+    # OLD WAY: gzip + base64 encode to pass init code to remote session ...
+    #
+    #local c="$(bash_init_string $ssh_user_host-0000 $rem_port|gzip -9 -c|openssl enc -a -A)"
+    #env ssh "${ssh_opts[@]}" -t -oExitOnForwardFailure=yes -R$rem_port:localhost:$(_esh_p) $ssh_user_host -- sh -c "'"'b=`which bash`; [ "$b" ] && exec $b -c "eval $(echo '$c'|openssl enc -d -a -A|gzip -d -c)" - "$@" || exec $SHELL -l'"'" - "${remote_cmd[@]}"
+    #
+    # NEW WAY: just gzip and send the init code via netcat; requires opening a
+    # 2nd forwarded port; this way saves the overhead of the base64 encoding
+    #
+    # Kinda dumb, just add 1 to rem_port for our 2nd port ...
+    local port2=$(( $rem_port + 1 ))
+    local nc_pid
+    exec 3>&0
+    (bash_init_string $ssh_user_host-0000 $rem_port | gzip -9 -c | nc -l localhost $port2 & echo $!) | {
+      read nc_pid
+      env ssh "${ssh_opts[@]}" -t -oExitOnForwardFailure=yes -R$rem_port:localhost:$(_esh_p) -R$port2:localhost:$port2 $ssh_user_host -- sh -c "'"'b=`which bash`; [ "$b" ] && exec $b -c "eval $(nc localhost '$port2' | gzip -d -c)" - "$@" || exec $SHELL -l'"'" - "${remote_cmd[@]}" 0>&3
+      # make sure nc process is stopped
+      kill $nc_pid 2>/dev/null
+    }
+    exec 3>&-
   fi
   local sshrc=$?
   [ "$STY" ] && printf "\033k${HOSTNAME}\033\134"
