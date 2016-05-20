@@ -61,7 +61,7 @@ screen() {
   echo -n '#!/usr/bin/perl
 #system("bash","-c",q(_esh_p $ESH_PORT));
 #($ENV{ESH_STY})=$ENV{STY}=~m{^(\d+)}g;
-$ENV{ESH_STY}=$ENV{STY};
+#$ENV{ESH_STY}=$ENV{STY};
 exec (qw(bash --norc --noprofile),@ARGV);
 ' > $shell
   local SCREENRC=$ESH_TMP/$USER.screenrc
@@ -103,5 +103,10 @@ EOF
     exec=exec
     esc='^Aa'
   }
-  $exec env SCREENRC=$SCREENRC screen -e$esc -s $shell "${origArgs[@]}"
+  #$exec env SCREENRC=$SCREENRC screen -e$esc -s $shell "${origArgs[@]}"
+  $exec env SCREENRC=$SCREENRC screen -e$esc -s $shell bash -c \
+    'env screen -S $STY -X setenv ESH_STY $STY
+    _esh_p $STY $(_esh_p)
+    env screen -S $STY -X screen
+    "$@"' "${origArgs[@]}"
 }

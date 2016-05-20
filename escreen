@@ -164,8 +164,8 @@ _esh_i $ESH_STY $ESH_PORT
 ESH_SCREEN_EXEC=1
 
 screen -- bash -c $screen_exec' -S $STY -X monitor off
-  '$screen_exec' -S $STY -X setenv ESH_STY $STY
-  _esh_p $STY $(_esh_p)
-  '$screen_exec' -S $STY -X screen
+  #'$screen_exec' -S $STY -X setenv ESH_STY $STY
+  #_esh_p $STY $(_esh_p)
+  #'$screen_exec' -S $STY -X screen
   nohup sh -c "while kill -0 ${STY%%.*}; do sleep 5; done; kill '$ESH_NODE_PID'; sleep 3600; rm -f '$ESH_LOGFILE';" </dev/null >/dev/null 2>&1 &
   tail -f '$ESH_LOGFILE
