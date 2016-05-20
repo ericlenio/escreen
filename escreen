@@ -163,7 +163,7 @@ ESH_STY=0000
 _esh_i $ESH_STY $ESH_PORT
 ESH_SCREEN_EXEC=1
 
-screen -- bash -c $screen_exec' -S $STY -X monitor off
+screen -- sh -c $screen_exec' -S $STY -X monitor off
   #'$screen_exec' -S $STY -X setenv ESH_STY $STY
   #_esh_p $STY $(_esh_p)
   #'$screen_exec' -S $STY -X screen
