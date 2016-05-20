@@ -98,15 +98,17 @@ hardcopy $hardcopy_file
 screen bash -c "vim $hardcopy_file"
 EOF
 
-  local esc='^Ee' exec
   [ "$ESH_SCREEN_EXEC" = 1 ] && {
-    exec=exec
-    esc='^Aa'
+    exec env SCREENRC=$SCREENRC screen -e^Aa -s $shell bash -c \
+      '_esh_p $STY $(_esh_p)
+      env screen -S $STY -X setenv ESH_STY $STY
+      env screen -S $STY -X screen
+      "$@"' "${origArgs[@]}"
   }
-  #$exec env SCREENRC=$SCREENRC screen -e$esc -s $shell "${origArgs[@]}"
-  $exec env SCREENRC=$SCREENRC screen -e$esc -s $shell bash -c \
-    'env screen -S $STY -X setenv ESH_STY $STY
-    _esh_p $STY $(_esh_p)
-    env screen -S $STY -X screen
-    "$@"' "${origArgs[@]}"
+  local c=$(declare -p PS1)
+  c+=';_esh_p $STY $(_esh_p)'
+  c+=';export ESH_STY=$STY'
+  c+=';env screen -S $STY -X setenv ESH_STY $STY'
+  c+=';exec env bash --norc --noprofile'
+  env SCREENRC=$SCREENRC screen -e^Ee -s $shell bash -c "$c"
 }
