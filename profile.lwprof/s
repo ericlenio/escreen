@@ -28,6 +28,6 @@ function s() {
   #echo "exec </dev/tty; $init" | gzip -9 -c | sudo -H -u $user env bash -c 'eval "$(gzip -d -c)"' -- "${cmd[@]}"
   
   # this way does not use /dev/tty
-  local init=$(bash_init_string $user@$ESH_STY $(_esh_p) | gzip -9 -c | openssl enc -a -A)
+  local init=$(bash_init_string $ESH_STY $(_esh_p) | gzip -9 -c | openssl enc -a -A)
   sudo -H -u $user env bash -c 'eval "$(echo -n '$init' | openssl enc -d -a -A | gzip -d -c)"' -- "${cmd[@]}"
 }

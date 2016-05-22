@@ -44,7 +44,7 @@ _esh_p() {
   local s=$1 p=$2 f
   [ -z "$s" ] && s=$ESH_STY
   f=$ESH_TMP/STY-$s.port
-  [ "$p" ] && echo $p > $f || cat $f
+  [ "$p" ] && (umask 0000; echo $p>$f) || cat $f
 }
 export -f _esh_p
 
