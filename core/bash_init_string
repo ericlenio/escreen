@@ -4,7 +4,7 @@ bash_init_string() {
   # p is communication port
   local ESH_STY=$1 p=$2
   declare -p $(compgen -v ESH_)
-  declare -f _esh_p _esh_b _esh_l _esh_i
-  echo "_esh_i $ESH_STY $p </dev/null"
+  declare -f _esh_e _esh_b _esh_l _esh_i
+  echo "_esh_i $ESH_STY ESH_PORT $p </dev/null"
   echo -n '"$@"'
 }

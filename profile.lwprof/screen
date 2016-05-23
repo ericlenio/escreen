@@ -30,7 +30,8 @@ screen() {
             #$screen_exec -S $sty -X exec sh -c "echo \$ESH_PORT > $tempfile"
             # force new windows to use the new value of ESH_PORT
             #$screen_exec -S $sty -X setenv ESH_PORT $ESH_PORT
-            _esh_p $sty $(_esh_p)
+            eval $(_esh_e)
+            _esh_e $sty ESH_PORT $ESH_PORT SSH_AUTH_SOCK $SSH_AUTH_SOCK
 #read -p "ready to resume screen session:" ans
             #rm -f $tempfile
             # This attempt to use nc as a relay is definitely NOT working ...
@@ -59,7 +60,6 @@ screen() {
   # maintained. Update: on OSX, sh is just a thin wrapper to bash, and it
   # resets PS1. So, use perl instead.
   echo -n '#!/usr/bin/perl
-#system("bash","-c",q(_esh_p $ESH_PORT));
 #($ENV{ESH_STY})=$ENV{STY}=~m{^(\d+)}g;
 #$ENV{ESH_STY}=$ENV{STY};
 exec (qw(bash --norc --noprofile),@ARGV);
@@ -100,13 +100,14 @@ EOF
 
   [ "$ESH_SCREEN_EXEC" = 1 ] && {
     exec env SCREENRC=$SCREENRC screen -e^Aa -s $shell bash -c \
-      '_esh_p $STY $(_esh_p)
+      '_esh_e $STY
       env screen -S $STY -X setenv ESH_STY $STY
       env screen -S $STY -X screen
       "$@"' "${origArgs[@]}"
   }
+  #
   local c=$(declare -p PS1)
-  c+=';_esh_p $STY $(_esh_p)'
+  c+=';_esh_e $STY'
   c+=';export ESH_STY=$STY'
   c+=';env screen -S $STY -X setenv ESH_STY $STY'
   c+=';exec env bash --norc --noprofile'
