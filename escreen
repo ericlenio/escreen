@@ -32,21 +32,47 @@ if [ "$1" = -r ]; then
   fi
 fi
 #
-# get/set the main communications port
+# get/set the main communications port, and other environment variables
 #
-# should pass 0 or 2 args; if 0 args, return the current port
+# if 0 args: cat out current variables from file
 #
-# if 2 args:
+# if 1 arg: copy variables from old file to new file
+#
+# if 2+ args:
 # 1st arg: $ESH_STY value
-# 2nd arg: new port to be used
+# 2nd arg: name of variable 1
+# 3rd arg: value of variable 1
+# 4th arg: name of variable 2
+# 5th arg: value of variable 2
+# ... etc.
 #
-_esh_p() {
-  local s=$1 p=$2 f
-  [ -z "$s" ] && s=$ESH_STY
-  f=$ESH_TMP/STY-$s.port
-  [ "$p" ] && (umask 0000; echo $p>$f) || cat $f
+_esh_e() {
+  local s=${1:-$ESH_STY} n v f
+  F() {
+    printf "%s/STY-%s.ENV" $ESH_TMP $1
+  }
+  f=$(F $s)
+  case $# in
+    0)
+      cat $f
+      ;;
+    1)
+      cat $(F $ESH_STY) > $f
+      echo wrote $f: $(cat $f) 1>&2
+      ;;
+    *)
+      shift
+      rm -f $f && touch $f f && {
+        while [ $# -gt 0 ]; do
+          n=$1; shift
+          v=$1; shift
+          echo "declare $n='$v'">>$f
+        done
+        echo wrote $f: $(cat $f) 1>&2
+      }
+  esac
 }
-export -f _esh_p
+export -f _esh_e
 
 # bootstrapping function: 1st arg is an event ID that the server will inspect
 # and run appropriate event handler for; event IDs starting with "z" send back
@@ -64,7 +90,7 @@ export -f _esh_p
 # older shells may not be able to do the /dev/tcp/host/port trick, this works
 # around that ... netcat will be needed though
 _esh_b() {
-  local p=$(_esh_p)
+  eval $(_esh_e)
   {
     echo $ESH_AT "$*"
     # must unbuffer output for large file downloads ... "sed -u" not
@@ -72,7 +98,7 @@ _esh_b() {
     #[ ! -t 0 ] && sed -u ''
     [ ! -t 0 ] && perl -pe 'BEGIN{$|=1}'
   } | \
-  $ESH_NC localhost $p | {
+  $ESH_NC localhost $ESH_PORT | {
     [ ${1:0:1} = z ] && gzip -d -c || cat
   }
 }
@@ -119,7 +145,7 @@ export ESH_TMP
 eval '_esh_i() {
   local 't=$ESH_TMP u=$USER'
   [ ! -d $t ] && mkdir $t && chmod 1777 $t
-  _esh_p $1 $2
+  _esh_e "$@"
   ESH_NC="nc -q -1"
   # test if -q is supported with nc, due to 
   # https://bugs.launchpad.net/ubuntu/+source/netcat-openbsd/+bug/544935
@@ -133,7 +159,7 @@ eval '_esh_i() {
     _esh_gen_stub $t/$u.f.$f
   done
   export ESH_AT ESH_TMP ESH_STY ESH_NC
-  export -f _esh_p _esh_i _esh_b _esh_l
+  export -f _esh_e _esh_i _esh_b _esh_l
 }'
 export _esh_i
 
@@ -160,12 +186,9 @@ done
 # ID to properly track the communications port (ESH_PORT) to use in a given
 # shell between various combinations of screen, sudo, and ssh
 ESH_STY=0000
-_esh_i $ESH_STY $ESH_PORT
+_esh_i $ESH_STY ESH_PORT $ESH_PORT
 ESH_SCREEN_EXEC=1
 
 screen -- sh -c $screen_exec' -S $STY -X monitor off
-  #'$screen_exec' -S $STY -X setenv ESH_STY $STY
-  #_esh_p $STY $(_esh_p)
-  #'$screen_exec' -S $STY -X screen
   nohup sh -c "while kill -0 ${STY%%.*}; do sleep 5; done; kill '$ESH_NODE_PID'; sleep 3600; rm -f '$ESH_LOGFILE';" </dev/null >/dev/null 2>&1 &
   tail -f '$ESH_LOGFILE
