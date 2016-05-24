@@ -49,7 +49,7 @@ fi
 _esh_e() {
   local s=${1:-$ESH_STY} n v f
   F() {
-    printf "%s/STY-%s.ENV" $ESH_TMP $1
+    printf "%s/STY-%s.env" $ESH_TMP $1
   }
   f=$(F $s)
   case $# in
@@ -57,12 +57,19 @@ _esh_e() {
       cat $f
       ;;
     1)
-      cat $(F $ESH_STY) > $f
-      echo wrote $f: $(cat $f) 1>&2
+      case $1 in
+        -f)
+          F $ESH_STY
+          ;;
+        *)
+          cat $(F $ESH_STY) > $f
+          echo wrote $f: $(cat $f) 1>&2
+          ;;
+      esac
       ;;
     *)
       shift
-      rm -f $f && touch $f f && {
+      rm -f $f && touch $f && {
         while [ $# -gt 0 ]; do
           n=$1; shift
           v=$1; shift
@@ -160,6 +167,7 @@ eval '_esh_i() {
   done
   export ESH_AT ESH_TMP ESH_STY ESH_NC
   export -f _esh_e _esh_i _esh_b _esh_l
+  nohup sh -c "while kill -0 $$; do sleep 5; done; f=$(_esh_e -f); rm -f \$f" </dev/null >/dev/null 2>&1 &
 }'
 export _esh_i
 
@@ -189,6 +197,7 @@ ESH_STY=0000
 _esh_i $ESH_STY ESH_PORT $ESH_PORT
 ESH_SCREEN_EXEC=1
 
-screen -- sh -c $screen_exec' -S $STY -X monitor off
-  nohup sh -c "while kill -0 ${STY%%.*}; do sleep 5; done; kill '$ESH_NODE_PID'; sleep 3600; rm -f '$ESH_LOGFILE';" </dev/null >/dev/null 2>&1 &
-  tail -f '$ESH_LOGFILE
+  #nohup sh -c "while kill -0 ${STY%%.*}; do sleep 5; done; kill '$ESH_NODE_PID'; sleep 3600; rm -f '$ESH_LOGFILE';" </dev/null >/dev/null 2>&1 &
+screen -- sh -c 'env screen -S $STY -X monitor off
+  nohup sh -c "while kill -0 ${STY%%.*}; do sleep 5; done; kill $ESH_NODE_PID; sleep 6; rm -f $ESH_LOGFILE" </dev/null >/dev/null 2>&1 &
+  tail -f $ESH_LOGFILE'
