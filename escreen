@@ -167,7 +167,9 @@ eval '_esh_i() {
   done
   export ESH_AT ESH_TMP ESH_STY ESH_NC
   export -f _esh_e _esh_i _esh_b _esh_l
-  #nohup sh -c "while kill -0 $$; do sleep 5; done; f=$(_esh_e -f); rm -f \$f" </dev/null >/dev/null 2>&1 &
+  # if initializng a new ssh session, set up job to delete the ESH_STY file
+  # when the shell exits
+  [ "$SSH_CLIENT" ] && nohup sh -c "while kill -0 $$; do sleep 5; done; f=$(_esh_e -f); rm -f \$f" </dev/null >/dev/null 2>&1 &
 }'
 export _esh_i
 
