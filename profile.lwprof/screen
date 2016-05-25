@@ -89,11 +89,10 @@ EOF
   c='env screen -S $STY -X setenv ESH_STY $STY'
   c+=';_esh_e $STY'
   c+=';export ESH_STY=$STY'
-  c+=';env screen -S $STY -X screen'
   c+=';nohup sh -c "while kill -0 ${STY%%.*}; do sleep 5; done; rm -f $(_esh_e -f)" </dev/null >/dev/null 2>&1 & '
   c+='"$@"'
 
-  [ "$ESH_SCREEN_EXEC" = 1 ] && {
+  if [ "$ESH_SCREEN_EXEC" = 1 ]; then
     esc=^Aa
 
     #exec env SCREENRC=$SCREENRC screen -e^Aa -s $shell bash -c \
@@ -108,7 +107,10 @@ EOF
     #c+=';nohup sh -c "while kill -0 ${STY%%.*}; do sleep 5; done; kill $ESH_NODE_PID; sleep 5; rm -f $ESH_LOGFILE $(ESH_STY=$STY _esh_e -f)" </dev/null >/dev/null 2>&1 & '
     #c+='"$@"'
     #exec env SCREENRC=$SCREENRC screen -e^Aa -s $shell bash -c "$c" "${origArgs[@]}"
-  }
+  else
+    c="$(declare -p PS1);$c"
+    [ ${#origArgs[@]} = 0 ] && origArgs=(exec env bash --norc --noprofile)
+  fi
 
   #c=$(declare -p PS1)
   #c+=';_esh_e $STY'
