@@ -48,6 +48,8 @@ fi
 #
 _esh_e() {
   local s=${1:-$ESH_STY} n v f
+  # little nested function here to derive name of file to stash environment
+  # vars
   F() {
     printf "%s/STY-%s.env" $ESH_TMP $1
   }
@@ -152,7 +154,8 @@ export ESH_TMP
 eval '_esh_i() {
   local 't=$ESH_TMP u=$USER'
   [ ! -d $t ] && mkdir $t && chmod 1777 $t
-  _esh_e "$@"
+  # only write out ESH_STY file if we are NOT in a sudo session
+  [ -z "$SUDO_USER" ] && _esh_e "$@"
   ESH_NC="nc -q -1"
   # test if -q is supported with nc, due to 
   # https://bugs.launchpad.net/ubuntu/+source/netcat-openbsd/+bug/544935
