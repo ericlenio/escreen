@@ -135,8 +135,9 @@ _esh_l() {
   # try to use the cached file first ...
   [ -f $f ] && c="$($o -d -in $f 2>/dev/null)" || {
     # cached file does not exist or is expired, so re-cache it
-    echo up:${f/*.} >&2
+    echo -n "up:${f/*.} " >&2
     c="$(_esh_b zup ${f/*.})"
+    echo ${#c} bytes >&2
     echo "$c" | $o >$f
     chmod 666 $f
   }

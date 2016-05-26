@@ -119,5 +119,6 @@ EOF
   #c+=';exec env bash --norc --noprofile'
   #env SCREENRC=$SCREENRC screen -e^Ee -s $shell bash -c "$c"
 
-  env SCREENRC=$SCREENRC screen -e$esc -s $shell bash -c "$c" "${origArgs[@]}"
+  # need --import-functions when on freebsd
+  env SCREENRC=$SCREENRC screen -e$esc -s $shell bash $(bash --help|grep -- --import-functions) -c "$c" "${origArgs[@]}"
 }
