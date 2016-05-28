@@ -126,7 +126,7 @@ ssh() {
       read nc_pid
       # make sure nc process is stopped
       (sleep 60; kill $nc_pid 2>/dev/null) &
-      env ssh "${ssh_opts[@]}" -t -oExitOnForwardFailure=yes -R$rem_port:localhost:$ESH_PORT -R$port2:localhost:$port2 $ssh_user_host -- sh -c "'"'b=`which bash`; [ "$b" ] && exec $b -c "eval $(nc -d localhost '$port2' | gzip -d -c)" - "$@" || exec $SHELL -l'"'" - "${remote_cmd[@]}" 0>&3
+      env ssh "${ssh_opts[@]}" -t -oExitOnForwardFailure=yes -R$rem_port:localhost:$ESH_PORT -R$port2:localhost:$port2 $ssh_user_host -- sh -c "'"'b=`which bash`; [ "$b" ] && exec $b -c "eval $(nc localhost '$port2' </dev/null | gzip -d -c)" - "$@" || exec $SHELL -l'"'" - "${remote_cmd[@]}" 0>&3
       sshrc=$?
     }
     exec 3>&-
