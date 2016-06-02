@@ -1,0 +1,5 @@
+# vim:filetype=sh
+# simple alias for cp2cb
+c() {
+  cp2cb "$@"
+}
