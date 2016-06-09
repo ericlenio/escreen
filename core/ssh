@@ -131,9 +131,8 @@ ssh() {
       # most systems but fall back to "nc .... </dev/null" which was needed for
       # (at least) Ubuntu 10.
       #
-      #env ssh "${ssh_opts[@]}" -t -oExitOnForwardFailure=yes -R$rem_port:localhost:$ESH_PORT -R$port2:localhost:$port2 $ssh_user_host -- sh -c "'"'b=`which bash`; [ "$b" ] && exec $b -c "eval $({ nc -d localhost '$port2' 2>/dev/null || nc localhost '$port2' </dev/null; } | gzip -d -c)" - "$@" || exec $SHELL -l'"'" - "${remote_cmd[@]}" 0>&3
-      env ssh "${ssh_opts[@]}" -t -oExitOnForwardFailure=yes -R$rem_port:localhost:$ESH_PORT -R$port2:localhost:$port2 $ssh_user_host \
-'exec sh << '"'"EOF1"'"'
+      ssh_opts+=(-t -oExitOnForwardFailure=yes -R$rem_port:localhost:$ESH_PORT -R$port2:localhost:$port2 $ssh_user_host)
+      ssh_opts+=('exec sh << '"'"EOF1"'"'
 b=`which bash`
 [ -z "$b" ] && exec $SHELL -l </dev/tty
 exec $b << '"'"EOF2"'"'
@@ -141,7 +140,8 @@ eval "$({ nc -d localhost '$port2' 2>/dev/null || nc localhost '$port2' </dev/nu
 '"${remote_cmd[@]}"'</dev/tty
 EOF2
 EOF1
-' 0>&3
+')
+      env ssh "${ssh_opts[@]}" 0>&3
       sshrc=$?
     }
     exec 3>&-
