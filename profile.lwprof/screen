@@ -9,7 +9,7 @@ screen() {
     for opt in "$@"; do
       case $opt in
         -r)
-          local curr_sty=${STY:-some_value} choice i=0 sty tempfile
+          local curr_sty=${STY:-some_value} choice i=0 sty
           local screen_stys=($(env screen -ls | grep -v $curr_sty | perl -n -e 's{^\s*(\d+\.\S+).*}{$1} && print'))
           if [ ${#screen_stys} = 0 ]; then
             echo "No screen sessions detected."
@@ -21,11 +21,11 @@ screen() {
             i=$(($i+1))
           done
           read -p "Enter choice: " choice
-          if [ "$choice" -a ${screen_stys[$choice]+is_set} ]; then
+          # http://unix.stackexchange.com/questions/249907/screen-fails-with-writemessage-bad-file-descriptor
+          if echo ${!screen_stys[@]} | grep -q -w -- "$choice"; then
             sty=${screen_stys[$choice]}
             eval $(_esh_e)
             _esh_e $sty ESH_PORT $ESH_PORT SSH_AUTH_SOCK $SSH_AUTH_SOCK
-            #rm -f $tempfile
             env screen -d -r $sty
             return $?
           else

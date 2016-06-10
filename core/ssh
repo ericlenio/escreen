@@ -126,16 +126,17 @@ ssh() {
       read nc_pid
       # make sure nc process is stopped
       (sleep 60; kill $nc_pid 2>/dev/null) &
-      # 
-      # notice the weird use of nc below: we first try "nc -d" which works on
-      # most systems but fall back to "nc .... </dev/null" which was needed for
-      # (at least) Ubuntu 10.
-      #
-      ssh_opts+=(-t -oExitOnForwardFailure=yes -R$rem_port:localhost:$ESH_PORT -R$port2:localhost:$port2 $ssh_user_host)
-      ssh_opts+=('exec sh << '"'"EOF1"'"'
+      ssh_opts+=(
+        -t -oExitOnForwardFailure=yes
+        -R$rem_port:localhost:$ESH_PORT -R$port2:localhost:$port2 $ssh_user_host
+        'exec sh << '"'"EOF1"'"'
 b=`which bash`
 [ -z "$b" ] && exec $SHELL -l <$SSH_TTY
 exec $b << '"'"EOF2"'"'
+# 
+# weird use of nc below: we first try "nc -d" which works on most systems but
+# fall back to "nc ... </dev/null" which was needed for (at least) Ubuntu 10
+#
 eval "$({ nc -d localhost '$port2' 2>/dev/null || nc localhost '$port2' </dev/null; } | gzip -d -c)"
 '"${remote_cmd[@]}"'<$SSH_TTY
 EOF2
