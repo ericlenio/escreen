@@ -134,10 +134,10 @@ ssh() {
       ssh_opts+=(-t -oExitOnForwardFailure=yes -R$rem_port:localhost:$ESH_PORT -R$port2:localhost:$port2 $ssh_user_host)
       ssh_opts+=('exec sh << '"'"EOF1"'"'
 b=`which bash`
-[ -z "$b" ] && exec $SHELL -l </dev/tty
+[ -z "$b" ] && exec $SHELL -l <$SSH_TTY
 exec $b << '"'"EOF2"'"'
 eval "$({ nc -d localhost '$port2' 2>/dev/null || nc localhost '$port2' </dev/null; } | gzip -d -c)"
-'"${remote_cmd[@]}"'</dev/tty
+'"${remote_cmd[@]}"'<$SSH_TTY
 EOF2
 EOF1
 ')
