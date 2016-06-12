@@ -119,8 +119,7 @@ ssh() {
     # Kinda dumb, just add 1 to rem_port for our 2nd port ... probably should
     # use something for find known open local port at least (but knowing it is
     # open on the remote end is still an unknown)
-    local port2=$(( $rem_port + 1 ))
-    local id=$(printf %x $(date +%s))
+    local port2=$(( $rem_port + 1 )) id=$(printf %x $(date +%s))
     (
       # set up a channel to pass code to remote end to init the session; doing
       # it in a sub-shell here so that the backgrounded nc process does not
@@ -142,14 +141,14 @@ exec sh << "EOF1"
 # test if remote end has bash
 #
 b=`which bash`
-[ ! "$b" ] && exec $SHELL -l <>$SSH_TTY
+[ ! "$b" ] && exec $SHELL -l 0<>$SSH_TTY
 exec $b << "EOF2"
 # 
 # weird use of nc below: we first try "nc -d" which works on most systems but
 # fall back to "nc ... </dev/null" which was needed for (at least) Ubuntu 10
 #
 eval "$({ nc -d localhost '$port2' 2>/dev/null || nc localhost '$port2' </dev/null; } | gzip -d -c)"
-'"${remote_cmd[@]}"' <>$SSH_TTY
+'"${remote_cmd[@]}"' 0<>$SSH_TTY
 EOF2
 EOF1
 ')
