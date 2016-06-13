@@ -32,17 +32,10 @@ ssh() {
   #   Match exec "bash -c 'echo orighost=%n'"
   # but that statement cannot work on a command line, only inside
   # ~/.ssh/config, so not really a viable option.
-  local ssh_legal_opts="1246ab:c:e:fgi:kl:m:no:p:qstvxACD:E:F:I:KL:MNO:PQ:R:S:TVw:W:XYy"
-  local OPTS
-  local origArgs=("$@")
+  local ssh_legal_opts="1246ab:c:e:fgi:kl:m:no:p:qstvxACD:E:F:I:KL:MNO:PQ:R:S:TVw:W:XYy" \
+    OPTS origArgs=("$@") force_tty=0 uname=$(uname)
   local -a ssh_opts
-  local force_tty=0
-  local uname=$(uname)
-  if [ $uname = Darwin ]; then
-    OPTS=$(getopt $ssh_legal_opts "$@")
-  else
-    OPTS=$(getopt -o $ssh_legal_opts -- "$@")
-  fi
+  [ $uname = Darwin ] && OPTS=$(getopt $ssh_legal_opts "$@") || OPTS=$(getopt -o $ssh_legal_opts -- "$@")
   # set temporary positional parameters
   eval set -- "$OPTS"
   # strip out all ssh command line options
@@ -59,16 +52,14 @@ ssh() {
     return $?
   fi
   # should now have user@ssh_host, or just plain ssh_host
-  local ssh_user_host="$1"
-  local cmdline_ssh_host=${ssh_user_host##*@}
+  local ssh_user_host="$1" cmdline_ssh_host=${ssh_user_host##*@} sshV=$(env ssh -V 2>&1) sshrc \
+    ssh_major ssh_minor
   shift
-  local sshV=$(env ssh -V 2>&1) sshrc
-  if [[ "$sshV" =~ OpenSSH_([[:digit:]]+)\.([[:digit:]]+) ]]; then
-    local ssh_major=${BASH_REMATCH[1]}
-    local ssh_minor=${BASH_REMATCH[2]}
+  if [[ $sshV =~ OpenSSH_([0-9]+)\.([0-9]+) ]]; then
+    ssh_major=${BASH_REMATCH[1]} ssh_minor=${BASH_REMATCH[2]}
   fi
   local -a remote_cmd=(exec env bash --norc --noprofile)
-  [ -n "$STY" ] && {
+  [ "$STY" ] && {
     local h=$cmdline_ssh_host
     [ -n "$SSH_STY_LBL" ] && h=$SSH_STY_LBL
     printf "\033k$h\033\134"
