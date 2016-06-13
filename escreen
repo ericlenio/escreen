@@ -130,17 +130,25 @@ export -f _esh_b
 # to eval it
 _esh_l() {
   local f=$1 c p o
-  p=$([ "$2" ] && echo $2 || echo $(_esh_b fpw ${f/*.}))
-  o="openssl enc -a -aes256 -pass pass:$p"
+  export p=$([ "$2" ] && echo $2 || echo $(_esh_b fpw ${f/*.}))
+  # https://cryptosense.com/weak-key-derivation-in-openssl/
+  o="openssl enc -a -aes256 -pass env:p"
   # try to use the cached file first ...
-  [ -f $f ] && c="$($o -d -in $f 2>/dev/null)" || {
-    # cached file does not exist or is expired, so re-cache it
+  [ -f $f ] && 
+    c="$($o -d -in $f 2>/dev/null)" &&
+    # check for 16 byte header block injected by server: integrity check for
+    # #16
+    [[ "$c" =~ ^0000000000000000 ]] || {
+    # cached file does not exist or is expired, or failed integrity check so
+    # re-cache it
     echo -n "up:${f/*.} " >&2
     c="$(_esh_b zup ${f/*.})"
     echo ${#c} bytes >&2
     echo "$c" | $o >$f
     chmod 666 $f
   }
+  # strip out 16 byte header block for integrity check
+  c=${c:16}
   [ -z "$3" ] && eval "$c" || echo "$c"
 }
 export -f _esh_l

@@ -252,7 +252,14 @@ EscreenController.prototype.getSource=function(key) {
       }
     }
   }
-  var buf2=String(buf).replace(/(^|\n)\s*#(?!#)[^\n]*\n/mg,"$1");
+  var buf2=
+    // #16: make a header block that can be checked on remote end to ensure
+    // code integrity: from man enc: "All the block ciphers normally use PKCS#5
+    // padding also known as standard block padding: this allows a rudimentary
+    // integrity or password check to be performed. However since the chance of
+    // random data passing the test is better than 1 in 256 it isn't a very
+    // good test."
+    "0000000000000000\n"+String(buf).replace(/(^|\n)\s*#(?!#)[^\n]*\n/mg,"$1");
   return buf2;
 };
 
