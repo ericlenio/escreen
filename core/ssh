@@ -54,6 +54,7 @@ ssh() {
   # should now have user@ssh_host, or just plain ssh_host
   local ssh_user_host="$1" cmdline_ssh_host=${ssh_user_host##*@} sshV=$(env ssh -V 2>&1) sshrc \
     ssh_major ssh_minor
+  local cmdline_ssh_host=${ssh_user_host##*@}
   shift
   if [[ $sshV =~ OpenSSH_([0-9]+)\.([0-9]+) ]]; then
     ssh_major=${BASH_REMATCH[1]} ssh_minor=${BASH_REMATCH[2]}
@@ -61,7 +62,7 @@ ssh() {
   local -a remote_cmd=(exec env bash --norc --noprofile)
   [ "$STY" ] && {
     local h=$cmdline_ssh_host
-    [ -n "$SSH_STY_LBL" ] && h=$SSH_STY_LBL
+    [ "$SSH_STY_LBL" ] && h=$SSH_STY_LBL
     printf "\033k$h\033\134"
   }
   eval $(_esh_e)
