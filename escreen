@@ -211,10 +211,14 @@ ESH_STY=0000
 _esh_i $ESH_STY ESH_PORT $ESH_PORT
 ESH_SCREEN_EXEC=1
 
-  #nohup sh -c "while kill -0 ${STY%%.*}; do sleep 5; done; kill '$ESH_NODE_PID'; sleep 3600; rm -f '$ESH_LOGFILE';" </dev/null >/dev/null 2>&1 &
+initfile=$ESH_TMP/$USER.screeninit
+rm -f $initfile && {
+  cat <<"EOF" > $initfile
+env screen -S $STY -X monitor off
+env screen -S $STY -X screen
+nohup sh -c "while kill -0 ${STY%%.*}; do sleep 5; done; kill $ESH_NODE_PID; sleep 6; rm -f $ESH_LOGFILE" </dev/null >/dev/null 2>&1 &
+tail -f $ESH_LOGFILE
+EOF
 
-c='env screen -S $STY -X monitor off;'
-c+='env screen -S $STY -X screen;'
-c+='nohup sh -c "while kill -0 ${STY%%.*}; do sleep 5; done; kill $ESH_NODE_PID; sleep 6; rm -f $ESH_LOGFILE" </dev/null >/dev/null 2>&1 &'
-c+='tail -f $ESH_LOGFILE'
-screen -- sh -c "$c"
+  screen -- sh -c "source $initfile"
+} || echo "$(basename $0): error deleting $initfile"
