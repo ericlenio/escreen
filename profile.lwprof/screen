@@ -119,6 +119,10 @@ EOF
   #c+=';exec env bash --norc --noprofile'
   #env SCREENRC=$SCREENRC screen -e^Ee -s $shell bash -c "$c"
 
+  local initfile=$(mktemp -t escreen.XXX)
+  echo "rm $initfile;$c" > $initfile
+
   # need --import-functions when on freebsd
-  env SCREENRC=$SCREENRC screen -e$esc -s $shell bash $(bash --help|grep -- --import-functions) -c "$c" "${origArgs[@]}"
+  #env SCREENRC=$SCREENRC screen -e$esc -s $shell bash $(bash --help|grep -- --import-functions) -c "$c" "${origArgs[@]}"
+  env SCREENRC=$SCREENRC screen -e$esc -s $shell bash $(bash --help|grep -- --import-functions) -c "source $initfile" "${origArgs[@]}"
 }
