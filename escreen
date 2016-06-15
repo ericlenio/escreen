@@ -211,6 +211,14 @@ ESH_STY=0000
 _esh_i $ESH_STY ESH_PORT $ESH_PORT
 ESH_SCREEN_EXEC=1
 
+#
+# possible future use of perl code to send and execute commands to a tty
+# (similar to linux's writevt):
+#
+# require "sys/ioctl.ph";
+# ioctl(STDIN, &TIOCSTI, $_) for split "", join " ", @ARGV;
+#
+
 initfile=$(mktemp -t escreen.XXX)
 echo "rm $initfile" > $initfile
 
@@ -221,4 +229,4 @@ nohup sh -c "while kill -0 ${STY%%.*}; do sleep 5; done; kill $ESH_NODE_PID; sle
 tail -f $ESH_LOGFILE
 EOF
 
-screen -- sh -c "source $initfile"
+screen -- exec sh -c "source $initfile"

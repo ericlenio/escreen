@@ -85,7 +85,7 @@ hardcopy $hardcopy_file
 screen bash -c "vim $hardcopy_file"
 EOF
 
-  local c esc=^Ee
+  local c esc=^Ee initfile=$(mktemp -t escreen.XXX)
   c='env screen -S $STY -X setenv ESH_STY $STY'
   c+=';_esh_e $STY'
   c+=';export ESH_STY=$STY'
@@ -94,35 +94,13 @@ EOF
 
   if [ "$ESH_SCREEN_EXEC" = 1 ]; then
     esc=^Aa
-
-    #exec env SCREENRC=$SCREENRC screen -e^Aa -s $shell bash -c \
-      #'_esh_e $STY
-      #env screen -S $STY -X setenv ESH_STY $STY
-      #env screen -S $STY -X screen
-      #"$@"' "${origArgs[@]}"
-
-    #c='_esh_e $STY'
-    #c+=';env screen -S $STY -X setenv ESH_STY $STY'
-    #c+=';env screen -S $STY -X screen'
-    #c+=';nohup sh -c "while kill -0 ${STY%%.*}; do sleep 5; done; kill $ESH_NODE_PID; sleep 5; rm -f $ESH_LOGFILE $(ESH_STY=$STY _esh_e -f)" </dev/null >/dev/null 2>&1 & '
-    #c+='"$@"'
-    #exec env SCREENRC=$SCREENRC screen -e^Aa -s $shell bash -c "$c" "${origArgs[@]}"
   else
     c="$(declare -p PS1);$c"
     [ ${#origArgs[@]} = 0 ] && origArgs=(exec env bash --norc --noprofile)
   fi
 
-  #c=$(declare -p PS1)
-  #c+=';_esh_e $STY'
-  #c+=';export ESH_STY=$STY'
-  #c+=';env screen -S $STY -X setenv ESH_STY $STY'
-  #c+=';exec env bash --norc --noprofile'
-  #env SCREENRC=$SCREENRC screen -e^Ee -s $shell bash -c "$c"
-
-  local initfile=$(mktemp -t escreen.XXX)
   echo "rm $initfile;$c" > $initfile
 
   # need --import-functions when on freebsd
-  #env SCREENRC=$SCREENRC screen -e$esc -s $shell bash $(bash --help|grep -- --import-functions) -c "$c" "${origArgs[@]}"
   env SCREENRC=$SCREENRC screen -e$esc -s $shell bash $(bash --help|grep -- --import-functions) -c "source $initfile" "${origArgs[@]}"
 }
