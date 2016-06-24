@@ -40,11 +40,7 @@ fi
 #
 # if 2+ args:
 # 1st arg: $ESH_STY value
-# 2nd arg: name of variable 1
-# 3rd arg: value of variable 1
-# 4th arg: name of variable 2
-# 5th arg: value of variable 2
-# ... etc.
+# all remaining args: names of variables
 #
 _esh_e() {
   local s=${1:-$ESH_STY} n v f
@@ -73,8 +69,9 @@ _esh_e() {
       shift
       rm -f $f && touch $f && {
         while [ $# -gt 0 ]; do
-          n=$1; shift
-          v=$1; shift
+          n=$1
+          shift
+          eval v=\$$n
           echo "declare $n='$v'">>$f
         done
         echo wrote $f: $(cat $f) 1>&2
@@ -208,7 +205,7 @@ done
 # ID to properly track the communications port (ESH_PORT) to use in a given
 # shell between various combinations of screen, sudo, and ssh
 ESH_STY=0000
-_esh_i $ESH_STY ESH_PORT $ESH_PORT
+_esh_i $ESH_STY ESH_PORT
 ESH_SCREEN_EXEC=1
 
 #

@@ -25,7 +25,7 @@ screen() {
           if echo ${!screen_stys[@]} | grep -q -w -- "$choice"; then
             sty=${screen_stys[$choice]}
             eval $(_esh_e)
-            _esh_e $sty ESH_PORT $ESH_PORT SSH_AUTH_SOCK $SSH_AUTH_SOCK
+            _esh_e $sty ESH_PORT SSH_AUTH_SOCK ESH_AT
             env screen -d -r $sty
             return $?
           else
