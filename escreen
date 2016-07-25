@@ -223,7 +223,7 @@ cat <<"EOF" >> $initfile
 env screen -S $STY -X monitor off
 env screen -S $STY -X screen
 nohup sh -c "while kill -0 ${STY%%.*}; do sleep 5; done; kill $ESH_NODE_PID; sleep 6; rm -f $ESH_LOGFILE" </dev/null >/dev/null 2>&1 &
-tail -f $ESH_LOGFILE
+exec tail -f $ESH_LOGFILE
 EOF
 
-screen -- exec sh -c "source $initfile"
+screen sh -c "source $initfile"
