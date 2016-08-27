@@ -226,4 +226,4 @@ nohup sh -c "while kill -0 ${STY%%.*}; do sleep 5; done; kill $ESH_NODE_PID; sle
 exec tail -f $ESH_LOGFILE
 EOF
 
-screen sh -c "source $initfile"
+screen sh -c ". $initfile"
