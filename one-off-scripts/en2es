@@ -1,0 +1,5 @@
+#! /bin/bash
+
+ans=$(trans en:es -b "$*")
+echo "$ans" | cp2cb
+echo "$ans"
