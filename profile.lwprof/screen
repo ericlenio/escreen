@@ -43,21 +43,23 @@ screen() {
   local shell=$ESH_TMP/$USER.screen.shell
   touch $shell
   chmod 700 $shell
-  # Create custom shell based on sh: call sh first so that original PS1 is
-  # maintained. Update: on OSX, sh is just a thin wrapper to bash, and it
-  # resets PS1. So, use perl instead.
-  echo -n '#!/usr/bin/env perl
+  local bashE=$(which bash) bashA="$(bash --help|grep -- --import-functions)"
+  [ "$bashA" ] && bashE="$bashE $bashA"
+  echo -n '#!'$bashE'
 # Force SHELL back to normal (freebsd workaround)
-$ENV{SHELL}="'$(which bash)'";
-if ($ENV{STY} ne $ENV{ESH_STY}) {
+SHELL=$(which bash)
+if [ "$STY" != "$ESH_STY" ]; then
+  # we are in the first window of the screen session, init some things
+  #
   # setting SHELL in freebsd does not seem to work
-  system(q(env screen -S $STY -X setenv SHELL $SHELL));
-  system(q(env screen -S $STY -X setenv ESH_STY $STY));
-  system(q(bash `bash --help|grep -- --import-functions` -c "_esh_e $STY"));
-  $ENV{ESH_STY}=$ENV{STY};
-  printf "ESH_STY is now %s\n",$ENV{ESH_STY};
-}
-exec (qw(bash --norc --noprofile),@ARGV);
+  env screen -S $STY -X setenv SHELL $SHELL
+  env screen -S $STY -X setenv ESH_STY $STY
+  _esh_e $STY
+  ESH_STY=$STY;
+  printf "ESH_STY is now %s\n" $ESH_STY;
+fi
+'$(declare -p PS1)'
+exec $SHELL --norc --noprofile "$@"
 ' > $shell
   local SCREENRC=$ESH_TMP/$USER.screenrc
   # Set up a little macro so that ^a% will dump the current screen to a file,
