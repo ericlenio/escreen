@@ -1,6 +1,7 @@
 # vim:filetype=sh
 vim() {
-  local VIMINIT VIM_CB exec=vim shell=bash os=$(uname -s)
+  local VIMINIT VIM_CB exec=vim shell=bash sharg="$(bash --help|grep -- --import-functions)"
+  [ "$sharg" ] && shell="$shell $sharg"
   if [ "$1" = "-visudo" ]; then
     local VISUAL=vim
     exec=visudo
@@ -13,6 +14,5 @@ vim() {
     return
   }
   export VIMINIT='map <c-v> :let @"=system("_esh_b zGetCb")<cr>:if col("$")-col(".")==1<bar>call feedkeys("p")<bar>else<bar>call feedkeys("P")<bar>endif<bar>redraw<bar>echon "Pasted " len(@") " characters"<cr>|vnoremap <C-c> y:call writefile(split(@","\n","b"),$VIM_CB)<cr>:!cp2cb $VIM_CB<cr>|colorscheme elflord|syntax enable|set noswapfile number hlsearch incsearch sw=2 ignorecase wrap nocompatible ruler ai showmatch modeline modelines=5 nobackup nowritebackup textwidth=0 expandtab formatoptions=croql wildignore=*.class path=.,,**|autocmd Filetype java setlocal omnifunc=javacomplete#Complete'
-  [ $os = FreeBSD ] && shell="bash --import-functions"
   env SHELL="$shell" $exec "$@"
 }
