@@ -1,9 +1,17 @@
 # vim:filetype=sh
 function pg_activity() {
   local version=$(pg_version)
-  local query="SELECT datname,usename,pid,client_addr,waiting,query_start,query FROM pg_stat_activity order by datname,usename,query_start"
-  perl -e "exit ( $version <= 9.2 ? 0 : 1 )" && \
-    query="SELECT datname,usename,procpid,client_addr,waiting,query_start,current_query FROM pg_stat_activity order by datname,usename,query_start"
+  # little version comparison function here, up to 4 levels e.g. 9.6.10.3
+  function ver {
+    printf "%03d%03d%03d%03d" $(echo "$1" | tr '.' ' ')
+  }
+  local order_by="order by datname,usename,query_start"
+  local query="SELECT datname,usename,pid,client_addr,waiting,query_start,query FROM pg_stat_activity $order_by"
+  if [ $(ver $version) -le $(ver 9.2) ]; then
+    query="SELECT datname,usename,procpid,client_addr,waiting,query_start,current_query FROM pg_stat_activity $order_by"
+  elif [ $(ver $version) -ge $(ver 9.6) ]; then
+    query="SELECT datname,usename,pid,client_addr,wait_event,query_start,query FROM pg_stat_activity $order_by"
+  fi
   sudo -u postgres psql -c "$query"
 }
 export -f pg_activity
