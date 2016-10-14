@@ -1,25 +1,25 @@
 # vim:filetype=sh
 function tomcatlog() {
-  local OPTS=$(getopt -o 23ecx -- "$@")
-  eval set -- "$OPTS"
-  local flag=$1
-  local logfile=/var/log/tomcat7/catalina.out
-  local tomcat_user=tomcat7
-  local op
-  while true ; do
-    case "$1" in
-      -2) logfile=/var/log/lincdoc/catalina.out
+  local opts="23ecx" flag=$1 op opt
+  # if ssh-ing to remote system with odd/custom tomcat setup: create
+  # /etc/escreen.sshrc and set ESH_TOMCATLOG and ESH_TOMCATLOGUSER
+  local logfile=${ESH_TOMCATLOG:-/var/log/tomcat7/catalina.out}
+  local tomcat_user=${ESH_TOMCATLOGUSER:-tomcat7}
+  while getopts $opts opt; do
+    case "$opt" in
+      2) # for LincDoc 2.x
+        logfile=/var/log/lincdoc/catalina.out
         tomcat_user=tomcat
         shift
         ;;
-      -3) logfile=/var/log/lincdoc/catalina.log
+      3) # for LincDoc 3.0
+        logfile=/var/log/lincdoc/catalina.log
         tomcat_user=tomcat
         shift
         ;;
-      -e) op=edit; shift;;
-      -c) op=clear; shift;;
-      -x) op=exceptions; shift;;
-      --) shift ; break ;;
+      e) op=edit; shift;;
+      c) op=clear; shift;;
+      x) op=exceptions; shift;;
     esac
   done
   if [ "$op" = "edit" ]; then

@@ -52,8 +52,7 @@ ssh() {
     return $?
   fi
   # should now have user@ssh_host, or just plain ssh_host
-  local ssh_user_host="$1" cmdline_ssh_host=${ssh_user_host##*@} sshV=$(env ssh -V 2>&1) sshrc \
-    ssh_major ssh_minor
+  local ssh_user_host="$1" sshV=$(env ssh -V 2>&1) sshrc ssh_major ssh_minor
   local cmdline_ssh_host=${ssh_user_host##*@}
   shift
   if [[ $sshV =~ OpenSSH_([0-9]+)\.([0-9]+) ]]; then
@@ -139,6 +138,7 @@ exec $b << "EOF2"
 # weird use of nc below: we first try "nc -d" which works on most systems but
 # fall back to "nc ... </dev/null" which was needed for (at least) Ubuntu 10
 #
+[ -f /etc/escreen.sshrc ] && source /etc/escreen.sshrc
 eval "$({ nc -d localhost '$port2' 2>/dev/null || nc localhost '$port2' </dev/null; } | gzip -d -c)"
 '"${remote_cmd[@]}"' 0<>$SSH_TTY
 EOF2
