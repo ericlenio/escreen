@@ -69,8 +69,10 @@ once? To save time. Because otherwise you have to wait for everything to
 upload. escreen attempts to only upload (and cache) the minimally necessary
 files it needs at the moment.
 
-The file `/etc/escreen.sshrc` is sourced on the remote server when ssh
-initializes.
+The file `/etc/escreen.sshrc`, if it exists, is sourced on the remote server
+when ssh initializes the new bash session on the remote end. Normal ssh session
+initialization files like `.ssh/rc` behave as per normal (see `man ssh` for
+details).
 
 **Step 5: exit**
 
