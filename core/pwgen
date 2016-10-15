@@ -1,0 +1,6 @@
+# vim:filetype=sh
+pwgen() {
+  local l=${1:-16}
+  openssl rand -base64 $l | tr -d /=+ | head -c $l
+  echo
+}

@@ -24,13 +24,13 @@ multiple escreen invocations are completely isolated.
 
 # Requirements
 
-* Support for running on Linux and Mac OS X (though mostly built/tested on just Linux)
+* Support for running on Linux, FreeBSD and Mac OS X
 * Assumes you use bash as your main shell
 * When started, escreen will automatically launch a nodejs server to serve up all of your profile preferences/settings. So you will have to have nodejs installed (recommend 0.10.35 or later).
-* Depends on some basic standard Unix programs like gzip, grep, cut
-* Also must have openssl installed
+* Depends on some basic Unix programs like gzip, grep, cut
+* Also must have perl and openssl
 * Useful to have vim
-* For copy/paste usage you should install clipit and xsel (not necessary for OSX)
+* For copy/paste usage you should install clipit and xsel (not necessary for OS X)
 
 # How it works
 
@@ -52,8 +52,8 @@ the file secured: `chmod 600 $HOME/.escreenrc`.
 
 **Step 3: start escreen.** Run the following to start a new session, which will
 load all your preferences and create stub functions. It launches GNU screen
-with a two windows: 1st window is a just a log file for escreen, 2nd window is
-a fresh shell to work in.
+with two windows: 1st window is a just a log file for escreen, 2nd window is a
+fresh shell to work in.
 
     # run with default profile
     escreen
@@ -66,8 +66,11 @@ If you ssh to another system, escreen will proceed to upload escreen core
 functions to the remote system, plus the profile's basic settings from
 `bashrc`. Why not upload the entire profile and all of your preferences at
 once? To save time. Because otherwise you have to wait for everything to
-upload. escreen will only upload (and cache) the minimally necessary files it
-needs at the moment.
+upload. escreen attempts to only upload (and cache) the minimally necessary
+files it needs at the moment.
+
+The file `/etc/escreen.sshrc` is sourced on the remote server when ssh
+initializes.
 
 **Step 5: exit**
 
@@ -78,14 +81,14 @@ is automatically killed.
 
 Any time escreen uploads a file to a remote server, it will cache it under
 `/tmp/esh`. Each cached file is AES256 encrypted with a password derived from a
-combination of your personal password (`MY_PASSWORD`) and a SHA1 hash of the
+combination of your personal password (`MY_PASSWORD`) and a SHA256 hash of the
 file. The next time you ssh to the same system, escreen attempts to use the
 cached version first, automatically supplying the password to decrypt it on the
 remote end. escreen will automatically re-upload and re-cache the file if
 either of the following are true:
 
 * the cached file is deleted
-* the password supplied by escreen fails to decrypt the file for any reason
+* the password supplied by escreen fails to decrypt the file
 
 The latter is typically indicative that the original profile file was changed:
 since the password depends on the hash of the file, changing the original file
@@ -171,9 +174,9 @@ GNU screen windows. To use:
 * do NOT put vim into insert mode
 * press ctrl-V
 
-Since copying text actually copies to your system clipboard, you can also
-ctrl-V (command-V if on Mac) the text you selected from vim into some other
-application.
+Since copying text actually copies to your system clipboard, you can also paste
+the text you selected into some other application via your desktop OS's regular
+way of pasting.
 
 ## Other core bash functions
 
