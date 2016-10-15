@@ -1,30 +1,29 @@
 #! /bin/bash
 
-screen_exec=$(which screen)
 if [ "$1" = -r ]; then
   if [ -z "$ESH_AT" ]; then
     echo "Oops, you do not appear to already be in an escreen session, exiting."
     exit 1
   fi
   curr_sty=${STY:-some_value}
-  screen_stys=($($screen_exec -ls | grep -v $curr_sty | perl -n -e 's{^\s*(\d+\.\S+).*}{$1} && print'))
+  screen_stys=($(env screen -ls | grep -v $curr_sty | perl -n -e 's{^\s*(\d+\.\S+).*}{$1} && print'))
   if [ ${#screen_stys} = 0 ]; then
     echo "No escreen sessions detected."
     exit 1
   fi
   printf "Resume which escreen session?\n"
   i=0
-  IFS='\n' $screen_exec -ls | grep -v $curr_sty | perl -n -e 's{^\s*(\d+\..*)}{$1} && print' | while read l; do
+  IFS='\n' env screen -ls | grep -v $curr_sty | perl -n -e 's{^\s*(\d+\..*)}{$1} && print' | while read l; do
     printf "%s. %s\n" $i "$l"
     i=$(($i+1))
   done
   read -p "Enter choice: " choice
   if [ "$choice" -a ${screen_stys[$choice]+is_set} ]; then
     sty=${screen_stys[$choice]}
-    $screen_exec -S $sty -X screen bash -c "_esh_b forwardEscreen $ESH_PORT $ESH_AT $(echo -n $ESH_NC|openssl enc -A -base64)"
-    $screen_exec -S $sty -X escape ^ee
-    $screen_exec -d -r $sty
-    $screen_exec -S $sty -X screen bash -c "_esh_b unforwardEscreen"
+    env screen -S $sty -X screen bash -c "_esh_b forwardEscreen $ESH_PORT $ESH_AT $(echo -n $ESH_NC|openssl enc -A -base64)"
+    env screen -S $sty -X escape ^ee
+    env screen -d -r $sty
+    env screen -S $sty -X screen bash -c "_esh_b unforwardEscreen"
     exit
   else
     echo "Invalid choice."
@@ -110,14 +109,6 @@ _esh_b() {
 }
 export -f _esh_b
 
-#_esh_b_TEST() {
-  #perl -pe 'BEGIN{shift;@a=@ARGV;undef @ARGV;printf "%s %s\n",$ENV{ESH_AT},join(" ",@a)}' -- - "$@" | \
-  #sed -u "1i$ESH_AT $*" | \
-  #nc -q -1 localhost $ESH_PORT | {
-    #[ ${1:0:1} = z ] && gzip -d -c || cat
-  #}
-#}
-#export -f _esh_b_TEST
 
 # load a bash function into the session: first try using cached version,
 # re-uploading if it is out of date (or non-existent). Args:
