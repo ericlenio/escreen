@@ -3,7 +3,7 @@ update_cacerts() {
   local cacerts=/etc/ssl/certs/java/cacerts
   local storepass=changeit
   local sslhost=${1%%:*}
-  local alias=$sslhost
+  local alias
   local sslport=${1##*:}
   local ans
   
@@ -18,7 +18,9 @@ update_cacerts() {
   fi
 
   if [ "$1" = usage ]; then
-    echo "Usage: update_cacerts server.example.com:port"
+    echo "Usage:"
+    echo "update_cacerts server.example.com:port"
+    echo "update_cacerts some-cert.pem"
     return
   fi
 
@@ -26,11 +28,25 @@ update_cacerts() {
   read -p "OK to continue (y/n)? " ans
   [ "$ans" != y ] && return
 
-  [ -z "$sslhost" ] && update_cacerts usage
-  [ "$sslhost" = "$sslport" ] && update_cacerts usage
+  local cert_source
 
-  keytool -keystore $cacerts -storepass $storepass -delete -alias $alias
-  echo | openssl s_client -showcerts -connect $sslhost:$sslport | keytool -keystore $cacerts -storepass $storepass -noprompt -alias $alias -importcert
-  keytool -keystore $cacerts -storepass $storepass -list -alias $alias
+  if [ -f "$1" ]; then
+    cert_source="cat \"$1\""
+    alias=$(openssl x509 -in "$1" -noout -subject | perl -pe 's{.*?CN=(.*)}{$1}')
+    echo alias="$alias."
+  else
+    [ -z "$sslhost" -o "$sslhost" = "$sslport" ] && {
+      update_cacerts usage
+      return
+    }
+    alias=$sslhost
+    cert_source="echo | openssl s_client -showcerts -connect $sslhost:$sslport"
+  fi
+
+  keytool -keystore $cacerts -storepass "$storepass" -delete -alias "$alias"
+  eval "$cert_source | keytool -keystore $cacerts -storepass \"$storepass\" -noprompt -alias \"$alias\" -importcert"
+  keytool -keystore $cacerts -storepass "$storepass" -list -alias "$alias"
   echo "Restart tomcat for changes to take effect in tomcat."
+
 }
+# vim:filetype=sh
