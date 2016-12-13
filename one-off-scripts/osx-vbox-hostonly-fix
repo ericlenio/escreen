@@ -7,6 +7,11 @@ if [ $(uname -s) = Darwin ]; then
   sudo sysctl -w net.inet.ip.forwarding=1 net.inet.ip.fw.enable=1
   sudo sysctl -a net.inet.ip.forwarding net.inet.ip.fw.enable
   #sudo pfctl -F all -f /etc/pf.conf
-  echo "nat on en0 from vboxnet0:network -> (en0)" | sudo pfctl -mf -
+  {
+    echo "nat on en0 from vboxnet0:network -> (en0)"
+    # this next one to allow virtualbox guests to communicate to lincware
+    # servers when VPN is on
+    echo "nat on utun0 from vboxnet0:network -> (utun0)"
+  } | sudo pfctl -mf -
   sudo pfctl -e
 fi
