@@ -12,12 +12,17 @@ if [ $(uname -s) = Darwin ]; then
     # this next one to allow virtualbox guests to communicate to lincware
     # servers when VPN is on
     echo "nat on utun0 from vboxnet0:network -> (utun0)"
+    # this one to allow asus flip on 192.168.1.102 to go through the router to
+    # elmbp and across elmbp's VPN to lincware
+    echo "nat on utun0 from en0:network -> (utun0)"
     #echo "pass in quick proto tcp to any keep state"
     # set up a private static route in the netgear router to pass
-    # 192.168.5.0/24 to PC's en0 IP address, then this next "pass" rule gets
+    # 192.168.5.0/24 to elmbp's en0 IP address, then this next "pass" rule gets
     # that traffic passed from en0 to vboxnet0
-    #echo "pass in quick proto tcp to 192.168.5.0/24 keep state"
     echo "pass in quick proto { tcp udp } from 192.168.1.0/24 to 192.168.5.0/24 keep state"
+    # forward VPN traffic to lincware VPN: also must set up a static route on
+    # the router to pass 10.9.0.0/16 to elmbp's en0 IP address
+    echo "pass in quick proto { tcp udp } from 192.168.1.0/24 to 10.9.0.0/16 keep state"
   } | sudo pfctl -mf -
   sudo pfctl -e
 fi
