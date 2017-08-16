@@ -33,18 +33,13 @@ ssh() {
   # but that statement cannot work on a command line, only inside
   # ~/.ssh/config, so not really a viable option.
   local ssh_legal_opts="1246ab:c:e:fgi:kl:m:no:p:qstvxACD:E:F:I:KL:MNO:PQ:R:S:TVw:W:XYy" \
-    OPTS origArgs=("$@") force_tty=0 uname=$(uname)
+    OPTS origArgs=("$@") force_tty=0 uname=$(uname) arg1
   local -a ssh_opts
-  [ $uname = Darwin ] && OPTS=$(getopt $ssh_legal_opts "$@") || OPTS=$(getopt -o $ssh_legal_opts -- "$@")
-  # set temporary positional parameters
-  eval set -- "$OPTS"
-  # strip out all ssh command line options
-  while true; do
-    local arg1=$1
-    shift
-    [ "$arg1" = -- ] && break
+  OPTIND=1
+  while builtin getopts $ssh_legal_opts arg1; do
     [ "$arg1" = -t ] && force_tty=1
-    ssh_opts+=("$arg1")
+    ssh_opts+=("-$arg1")
+    shift
   done
   if [ $# = 0 ]; then
     # Might have done -V, allow to continue
@@ -124,20 +119,15 @@ ssh() {
     ssh_opts+=(
       -t -oExitOnForwardFailure=yes
       -R$rem_port:localhost:$ESH_PORT -R$port2:localhost:$port2 $ssh_user_host
+      # for the last arg to ssh_opts we build out a pretty long initialization
+      # string; assume that remote end at least has sh; weird use of nc below:
+      # we first try "nc -d" which works on most systems but fall back to "nc
+      # ... </dev/null" which was needed for (at least) Ubuntu 10
 '
-# assume that remote end at least has sh
-#
 exec sh << "EOF1"
-#
-# test if remote end has bash
-#
 b=`which bash`
 [ ! "$b" ] && exec $SHELL -l 0<>$SSH_TTY
 exec $b << "EOF2"
-# 
-# weird use of nc below: we first try "nc -d" which works on most systems but
-# fall back to "nc ... </dev/null" which was needed for (at least) Ubuntu 10
-#
 [ -f /etc/escreen.sshrc ] && source /etc/escreen.sshrc
 eval "$({ nc -d localhost '$port2' 2>/dev/null || nc localhost '$port2' </dev/null; } | gzip -d -c)"
 '"${remote_cmd[@]}"' 0<>$SSH_TTY
