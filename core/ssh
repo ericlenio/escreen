@@ -39,6 +39,12 @@ ssh() {
   while builtin getopts $ssh_legal_opts arg1; do
     [ "$arg1" = -t ] && force_tty=1
     ssh_opts+=("-$arg1")
+    [ "$OPTARG" ] && ssh_opts+=("$OPTARG")
+  done
+  # shift the argument list until we strip out all ssh arguments just acquired
+  # from getopts; after this loop we know the ssh host is left in $1 (assuming
+  # an ssh host was provided on the command line, which is most of the time)
+  for arg1 in $(seq 2 $OPTIND); do
     shift
   done
   if [ $# = 0 ]; then
@@ -46,7 +52,8 @@ ssh() {
     env ssh "${ssh_opts[@]}"
     return $?
   fi
-  # should now have user@ssh_host, or just plain ssh_host
+  # should now have user@ssh_host left in function arguments, or just plain
+  # ssh_host
   local ssh_user_host="$1" sshV=$(env ssh -V 2>&1) sshrc ssh_major ssh_minor
   local cmdline_ssh_host=${ssh_user_host##*@}
   shift
