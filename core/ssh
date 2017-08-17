@@ -41,10 +41,9 @@ ssh() {
     ssh_opts+=("-$arg1")
     [ "$OPTARG" ] && ssh_opts+=("$OPTARG")
   done
-  # shift the argument list until we strip out all ssh arguments just acquired
-  # from getopts; after this loop we know the ssh host is left in $1 (assuming
-  # an ssh host was provided on the command line, which is most of the time)
-  [ $OPTIND -gt 1 ] && for arg1 in {2..$OPTIND}; do shift; done
+  # after this "for" loop we know the ssh host is left in $1 (assuming an ssh
+  # host was provided on the command line, which is most of the time)
+  for (( i=1; i<$OPTIND; i++ )); do shift; done
   if [ $# = 0 ]; then
     # Might have done -V, allow to continue
     env ssh "${ssh_opts[@]}"
