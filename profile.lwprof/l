@@ -2,7 +2,7 @@
 function l() {
   local os=$(uname -s)
   case $os in
-    Darwin|FreeBSD)
+    Darwin|FreeBSD|OpenBSD)
       ls -laF "$@"
       ;;
     *)
