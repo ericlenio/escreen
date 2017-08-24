@@ -6,5 +6,5 @@ bash_init_string() {
   declare -p $(compgen -v ESH_)
   declare -f _esh_e _esh_b _esh_l _esh_i
   echo "ESH_PORT=$p _esh_i $ESH_STY ESH_PORT </dev/null"
-  echo -n '"$@"'
+  echo '"$@"'
 }
