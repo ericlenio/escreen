@@ -106,34 +106,18 @@ ssh() {
     # NEW WAY: just gzip and send the init code via netcat; requires opening a
     # 2nd forwarded port; this way saves the overhead of the base64 encoding
     #
-    # Kinda dumb, just add 1 to rem_port for our 2nd port ... probably should
-    # use something for find known open local port at least (but knowing it is
-    # open on the remote end is still an unknown)
-    local port2=$(( $rem_port + 1 )) id=$(printf %x $(date +%s))
-    (
-      # set up a channel to pass code to remote end to init the session; doing
-      # it in a sub-shell here so that the backgrounded nc process does not
-      # display its job number to the screen (bash does it by default for all
-      # backgrounded jobs)
-      bash_init_string $ssh_user_host-$id $rem_port | gzip -9 -c | nc -l localhost $port2 &
-      pid=$!
-      # make sure nc process is stopped
-      (sleep 30; kill $pid 2>/dev/null) &
-    )
+    # New way sucks ... too many bugs with different versions of nc on Mac,
+    # freebsd, openbsd, et al, and also when dealing with slower connections
+    # you get weird timeout issues, so going back to old way
+    #
     ssh_opts+=(
-      -t -oExitOnForwardFailure=yes
-      -R$rem_port:localhost:$ESH_PORT -R$port2:localhost:$port2 $ssh_user_host
-      # for the last arg to ssh_opts we build out a pretty long initialization
-      # string; assume that remote end at least has sh; weird use of nc below:
-      # we first try "nc -d" which works on most systems but fall back to "nc
-      # ... </dev/null" which was needed for (at least) Ubuntu 10
-'
-exec sh << "EOF1"
+      -t -oServerAliveInterval=90 -oExitOnForwardFailure=yes -R$rem_port:localhost:$ESH_PORT $ssh_user_host
+'exec sh << "EOF1"
 b=`which bash`
 [ ! "$b" ] && exec $SHELL -l 0<>$SSH_TTY
 exec $b << "EOF2"
 [ -f /etc/escreen.sshrc ] && source /etc/escreen.sshrc
-eval "$(nc localhost '$port2' </dev/null | gzip -d -c)"
+eval "$(echo '$(bash_init_string $ssh_user_host-$id $rem_port | gzip -9 -c | openssl enc -a -A)' | openssl enc -a -d -A | gzip -d -c)"
 '"${remote_cmd[@]}"' 0<>$SSH_TTY
 EOF2
 EOF1
