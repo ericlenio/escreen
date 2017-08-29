@@ -1,9 +1,9 @@
 # vim:filetype=sh
 function rgrep() {
   # double quote each file in perl, in case filename contains a single quote
-  find . -type f ! -wholename './dist/*' ! -wholename './build/*' ! -wholename '*/.svn*' \
-    ! -wholename '*.class' ! -wholename '*.jar' ! -wholename '*.swp' ! -wholename './node_modules/*' \
-    ! -wholename './.git/*' ! -wholename '*.pdf' ! -wholename '*.png' ! -wholename '*.jpg' \
+  find . -type f ! -path './dist/*' ! -path './build/*' ! -path '*/.svn*' \
+    ! -path '*.class' ! -path '*.jar' ! -path '*.swp' ! -path './node_modules/*' \
+    ! -path './.git/*' ! -path '*.pdf' ! -path '*.png' ! -path '*.jpg' \
     | perl -pe 's{(.*)}{"$1"}' | xargs grep "$@"
 }
 export -f rgrep
