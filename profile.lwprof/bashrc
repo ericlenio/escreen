@@ -7,7 +7,7 @@ export -f add_to_path
 export HISTCONTROL=ignoreboth:erasedups FCEDIT=vim VISUAL='bash -c "vim \$0 \$@"' \
   PS1='${debian_chroot:+($debian_chroot)}\u@\H:\[\033[1;32m\]\w:\[\033[7m\]\$\[\033[0m\] '
 export EDITOR="$VISUAL"
-export PAGER="less -sigR"
+export PAGER="less -siR"
 add_to_path /usr/local/bin
 add_to_path $HOME/bin
 # true here so _esh_l does not echo this file
