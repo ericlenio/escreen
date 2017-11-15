@@ -1,5 +1,7 @@
 # vim:filetype=sh
 # bash init string when entering new bash session (either by ssh or sudo)
+#
+# NOTE: vim function does some similar stuff for spawning subshells
 bash_init_string() {
   # p is communication port
   local ESH_STY=$1 p=$2
