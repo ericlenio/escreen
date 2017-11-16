@@ -11,10 +11,10 @@ vim() {
     shift
   fi
 
-  export VIMINIT='map <c-v> :let @"=system("_esh_b zGetCb")<cr>:if col("$")-col(".")==1<bar>call feedkeys("p")<bar>else<bar>call feedkeys("P")<bar>endif<bar>redraw<bar>echon "Pasted " len(@") " characters"<cr>|vnoremap <C-c> y:call system("cp2cb",split(@","\n","b"))<cr>:echon "Copied " len(@") " characters"<cr>|colorscheme elflord|syntax enable|set cursorline noswapfile number hlsearch incsearch sw=2 ignorecase wrap nocompatible ruler ai showmatch modeline modelines=5 nobackup nowritebackup textwidth=0 expandtab formatoptions=croql wildignore=*.class path=.,,**|autocmd Filetype java setlocal omnifunc=javacomplete#Complete'
+  export VIMINIT='map <c-v> :let @"=system("_esh_b zGetCb")<cr>:if col("$")-col(".")==1<bar>call feedkeys("p")<bar>else<bar>call feedkeys("P")<bar>endif<bar>redraw<bar>echon "Pasted " len(@") " characters"<cr>|vnoremap <C-c> y:call system("cp2cb",@")<cr>:echon "Copied " len(@") " characters"<cr>|colorscheme elflord|syntax enable|set cursorline noswapfile number hlsearch incsearch sw=2 ignorecase wrap nocompatible ruler ai showmatch modeline modelines=5 nobackup nowritebackup textwidth=0 expandtab formatoptions=croql wildignore=*.class path=.,,**|autocmd Filetype java setlocal omnifunc=javacomplete#Complete'
 
   # create a shell script for vim system calls/subshells so that clipboard
-  # functions properly, even when editing crontabs
+  # functions properly, even when editing crontabs or psql commands (with \e)
   #
   # NOTE: bash_init_string does similar things, might need to keep logic
   # between these 2 similar
