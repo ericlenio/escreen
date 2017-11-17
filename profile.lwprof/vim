@@ -39,6 +39,5 @@ vim() {
   } > $shfile
   chmod 700 $shfile
 
-  env SHELL=$shfile $exec "$@"
-  rm $shfile
+  env SHELL=$shfile $exec "$@" && rm $shfile
 }
