@@ -3,10 +3,10 @@
 #
 # NOTE: vim function does some similar stuff for spawning subshells
 bash_init_string() {
-  # p is communication port
-  local ESH_STY=$1 p=$2
+  # p is communication port, e is flag to exec bash or not
+  local ESH_STY=$1 p=$2 e=${3:-0}
   declare -p $(compgen -v ESH_)
   declare -f _esh_e _esh_b _esh_l _esh_i
   echo "ESH_PORT=$p _esh_i $ESH_STY ESH_PORT </dev/null"
-  echo '"$@"'
+  [ "$e" = 0 ] && echo 'exec bash --norc --noprofile "$@"' || echo '"$@"'
 }

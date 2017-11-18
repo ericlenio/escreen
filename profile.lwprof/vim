@@ -29,13 +29,8 @@ vim() {
 
   {
     echo "#!/usr/bin/env bash"
-    declare -p $(compgen -v ESH_)
-    _esh_e
-    declare -f _esh_e _esh_b _esh_l _esh_i
-    # unset SSH_CLIENT so that _esh_i does not delete ESH_STY file, see _esh_i
-    # for more detail
-    echo "SSH_CLIENT='' _esh_i $ESH_STY ESH_PORT </dev/null"
-    echo 'exec bash --norc --noprofile "$@"'
+    eval $(_esh_e)
+    bash_init_string $ESH_STY $ESH_PORT
   } > $shfile
   chmod 700 $shfile
 
