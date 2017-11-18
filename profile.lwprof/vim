@@ -1,6 +1,6 @@
 # vim:filetype=sh
 vim() {
-  local VIMINIT VIM_CB exec=vim shfile=$ESH_TMP/$USER.vimshell.$RANDOM
+  local VIMINIT exec=vim shfile=$ESH_TMP/$USER.vimshell.$RANDOM
   if [ "$1" = "-visudo" ]; then
     local VISUAL=vim
     exec=visudo
