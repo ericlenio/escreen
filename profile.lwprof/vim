@@ -30,7 +30,7 @@ vim() {
   {
     echo "#!/usr/bin/env bash"
     eval $(_esh_e)
-    bash_init_string $ESH_STY $ESH_PORT
+    bash_init_string $(basename $shfile) $ESH_PORT
   } > $shfile
   chmod 700 $shfile
 
