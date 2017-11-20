@@ -149,10 +149,12 @@ export ESH_TMP
 
 # shell init script here
 eval '_esh_i() {
-  local 't=$ESH_TMP u=$USER'
+  local 't=$ESH_TMP u=$USER' f=$(_esh_e -f)
   [ ! -d $t ] && mkdir $t && chmod 1777 $t
   # only write out ESH_STY file if we are NOT in a sudo session
-  [ -z "$SUDO_USER" ] && _esh_e "$@"
+  #[ -z "$SUDO_USER" ] && _esh_e "$@"
+  # ... actually, write it out if it does not exist
+  [ ! -f $f ] && _esh_e "$@"
   ESH_NC="nc -q -1"
   # test if -q is supported with nc, due to 
   # https://bugs.launchpad.net/ubuntu/+source/netcat-openbsd/+bug/544935
@@ -196,6 +198,7 @@ done
 # ID to properly track the communications port (ESH_PORT) to use in a given
 # shell between various combinations of screen, sudo, and ssh
 ESH_STY=0000
+rm -f $(_esh_e -f)
 _esh_i $ESH_STY ESH_PORT
 ESH_SCREEN_EXEC=1
 
