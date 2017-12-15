@@ -15,6 +15,10 @@ function update_gpg_key() {
     }
     echo "$new_key_base64" | gpg --no-default-keyring --keyring $apt_lincware_key_file --import
     chmod 644 $apt_lincware_key_file
+    aptfile=/etc/apt/sources.list.d/lincware.list
+    if [ ! -f \$aptfile ]; then
+      echo "deb http://apt.lincware.com/ubuntu three core" > \$aptfile
+    fi
 EOSUDO
 }
 export -f update_gpg_key
