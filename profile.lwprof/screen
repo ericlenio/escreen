@@ -44,31 +44,31 @@ screen() {
   fi
   local shell=$ESH_TMP/$USER.screen.shell
   touch $shell
-  chmod 700 $shell
+  chmod 755 $shell
   local bashE=$(which bash) bashA="$(bash --help|grep -- --import-functions)"
   [ "$bashA" ] && bashE="$bashE $bashA"
-  echo -n '#!'$bashE' --init-file
+  printf '#!%s
 # Force SHELL back to normal (freebsd workaround)
 SHELL=$(which bash)
-if [ "$STY" != "$ESH_STY" ]; then
+[ "$STY" -a "$STY" != "$ESH_STY" ] && {
   # we are in the first window of the screen session, init some things
   #
   # setting SHELL in freebsd does not seem to work
   env screen -S $STY -X setenv SHELL $SHELL
   env screen -S $STY -X setenv ESH_STY $STY
+  env screen -S $STY -X setenv ESH_SHELL %s
   _esh_e $STY
-  ESH_STY=$STY;
-  printf "ESH_STY is now %s\n" $ESH_STY;
-fi
+  ESH_STY=$STY
+  export ESH_SHELL=%s
+}
 # use this trap with DEBUG signal trick to load key environment variables
 # before any/all commands are run - useful for resuming screen sessions on
 # remote hosts; might want to utilize $BASH_COMMAND at some point to
 # conditionally call _esh_e
 trap "eval \$(_esh_e)" DEBUG
-'$(declare -p PS1)'
-# no need to exec bash since we use --init-file above
-#exec $SHELL --norc --noprofile "$@"
-' > $shell
+%s
+[ $# -eq 0 -o "$1" = "-c" ] && exec $SHELL --norc --noprofile "$@"
+"$@"\n' $bashE $shell $shell "$(declare -p PS1)" > $shell
   local SCREENRC=$ESH_TMP/$USER.screenrc
   # Set up a little macro so that ^a% will dump the current screen to a file,
   # then edit it in vim.

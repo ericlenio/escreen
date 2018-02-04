@@ -1,6 +1,6 @@
 # vim:filetype=sh
 vim() {
-  local VIMINIT exec=vim shfile=$ESH_TMP/$USER.vimshell.$RANDOM
+  local VIMINIT exec=vim
   if [ "$1" = "-visudo" ]; then
     local VISUAL=vim
     exec=visudo
@@ -13,26 +13,5 @@ vim() {
 
   export VIMINIT='map <c-v> :let @"=system("_esh_b zGetCb")<cr>:if col("$")-col(".")==1<bar>call feedkeys("p")<bar>else<bar>call feedkeys("P")<bar>endif<bar>redraw<bar>echon "Pasted " len(@") " characters"<cr>|vnoremap <C-c> y:call system("cp2cb",@")<cr>:echon "Copied " len(@") " characters"<cr>|colorscheme elflord|syntax enable|set cursorline noswapfile number hlsearch incsearch sw=2 ignorecase wrap nocompatible ruler ai showmatch modeline modelines=5 nobackup nowritebackup textwidth=0 expandtab formatoptions=croql wildignore=*.class path=.,,**|autocmd Filetype java setlocal omnifunc=javacomplete#Complete'
 
-  # create a shell script in $shfile for vim system calls/subshells so that
-  # clipboard functions properly, even when editing crontabs or psql commands
-  # (with \e)
-  #
-  # NOTE: bash_init_string does similar things, might need to keep logic
-  # between these 2 similar
-
-  [ -e $shfile ] && { 
-    rm -f $shfile || {
-      echo "vim: could not remove $shfile"
-      return 1
-    }
-  }
-
-  {
-    echo "#!/usr/bin/env bash"
-    eval $(_esh_e)
-    bash_init_string $(basename $shfile) $ESH_PORT
-  } > $shfile
-  chmod 700 $shfile
-
-  env SHELL=$shfile $exec "$@" && rm $shfile
+  env SHELL=$ESH_SHELL $exec "$@"
 }

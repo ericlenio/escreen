@@ -23,6 +23,6 @@ s() {
 
   eval $(_esh_e)
   sudo -H -u $user env bash -s "$@" <<EOF
-$(bash_init_string $ESH_STY $ESH_PORT $#) <>/dev/tty
+$(bash_init_string $ESH_STY $(_esh_e -f) $#) <>/dev/tty
 EOF
 }
