@@ -146,10 +146,11 @@ export ESH_AT=$(openssl rand 3 -hex)
 [ -z "$ESH_TMP" ] && ESH_TMP=/tmp/esh
 export ESH_TMP
 [ ! -d $ESH_TMP ] && mkdir $ESH_TMP && chmod 1777 $ESH_TMP
+export ESH_USER=$USER
 
 # shell init script here
-eval '_esh_i() {
-  local 't=$ESH_TMP u=$USER' f=$(_esh_e -f)
+_esh_i() {
+  local t=$ESH_TMP u=$ESH_USER f=$(_esh_e -f)
   [ ! -d $t ] && mkdir $t && chmod 1777 $t
   # only write out ESH_STY file if we are NOT in a sudo session
   #[ -z "$SUDO_USER" ] && _esh_e "$@"
@@ -169,11 +170,12 @@ eval '_esh_i() {
   done
   export ESH_AT ESH_TMP ESH_STY ESH_NC
   export -f _esh_e _esh_i _esh_b _esh_l
-  # if initializng a new ssh session, set up job to delete the ESH_STY file
+  # if initializing a new ssh session, set up job to delete the ESH_STY file
   # when the shell exits
   [ "$SSH_CLIENT" ] && nohup sh -c "while kill -0 $$; do sleep 5; done; f=$(_esh_e -f); rm -f \$f" </dev/null >/dev/null 2>&1 &
-}'
+}
 export _esh_i
+
 
 export ESH_HOME=$(dirname $([ -h $0 ] && readlink $0 || echo $0))
 ESH_CORE=$ESH_HOME/core
