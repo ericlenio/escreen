@@ -7,8 +7,10 @@ bash_init_string() {
   #   p is the communication port
   #   e is flag to exec bash or not
   local ESH_STY=$1 p=$2 e=${3:-0}
-  declare -p $(compgen -v ESH_)
+  #declare -p $(compgen -v ESH_)
+  declare -p ESH_AT ESH_TMP ESH_STY ESH_USER
   declare -f _esh_e _esh_b _esh_l _esh_i
+  [ $# = 1 ] && return
   printf 'ESH_PORT=%s _esh_i %s ESH_PORT </dev/null\n' $p $ESH_STY
   [ "$e" = 0 ] && echo 'exec bash --norc --noprofile "$@"' || echo '"$@"'
 }

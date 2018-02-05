@@ -56,10 +56,10 @@ SHELL=$(which bash)
   # setting SHELL in freebsd does not seem to work
   env screen -S $STY -X setenv SHELL $SHELL
   env screen -S $STY -X setenv ESH_STY $STY
-  env screen -S $STY -X setenv ESH_SHELL %s
+  export ESH_SHELL=%s
+  env screen -S $STY -X setenv ESH_SHELL $ESH_SHELL
   _esh_e $STY
   ESH_STY=$STY
-  export ESH_SHELL=%s
 }
 # use this trap with DEBUG signal trick to load key environment variables
 # before any/all commands are run - useful for resuming screen sessions on
@@ -68,7 +68,8 @@ SHELL=$(which bash)
 trap "eval \$(_esh_e)" DEBUG
 %s
 [ $# -eq 0 -o "$1" = "-c" ] && exec $SHELL --norc --noprofile "$@"
-"$@"\n' $bashE $shell $shell "$(declare -p PS1)" > $shell
+"$@"' $bashE $shell "$(declare -p PS1)" > $shell
+
   local SCREENRC=$ESH_TMP/$USER.screenrc
   # Set up a little macro so that ^a% will dump the current screen to a file,
   # then edit it in vim.

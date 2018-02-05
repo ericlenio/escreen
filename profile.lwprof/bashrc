@@ -2,12 +2,8 @@ add_to_path() {
   [ -d "$1" ] && [[ ":$PATH:" != *":$1:"* ]] && PATH="$1:$PATH"
 }
 export -f add_to_path
-# Setting VISUAL with weird command to work around bash functions not being
-# exported to sh, which is used by crontab. Fallout from shellshock.
-export HISTCONTROL=ignoreboth:erasedups FCEDIT=vim VISUAL='bash -c "vim \$0 \$@"' \
-  PS1='${debian_chroot:+($debian_chroot)}\u@\H:\[\033[1;32m\]\w:\[\033[7m\]\$\[\033[0m\] '
-export EDITOR="$VISUAL"
-export PAGER="less -siR"
+export ESH_EDITOR=$ESH_TMP/$USER.editor
+export FCEDIT=$ESH_EDITOR VISUAL=$ESH_EDITOR EDITOR=$ESH_EDITOR HISTCONTROL=ignoreboth:erasedups PS1='${debian_chroot:+($debian_chroot)}\u@\H:\[\033[1;32m\]\w:\[\033[7m\]\$\[\033[0m\] ' PAGER="less -siR"
 add_to_path /usr/local/bin
 add_to_path $HOME/bin
 # true here so _esh_l does not echo this file

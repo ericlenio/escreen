@@ -1,17 +1,14 @@
 # vim:filetype=sh
 vim() {
-  local VIMINIT exec=vim
-  if [ "$1" = "-visudo" ]; then
-    local VISUAL=vim
-    exec=visudo
+
+  vime
+
+  if [ "$1" = "-visudo" -o "$1" = "-crontab" ]; then
+    local exec=${1#-}
     shift
-  elif [ "$1" = "-crontab" ]; then
-    local VISUAL=vim
-    exec=crontab
-    shift
+    env SHELL=$ESH_SHELL EDITOR=$ESH_EDITOR $exec "$@"
+  else
+    SHELL=$ESH_SHELL $ESH_EDITOR "$@"
   fi
 
-  export VIMINIT='map <c-v> :let @"=system("_esh_b zGetCb")<cr>:if col("$")-col(".")==1<bar>call feedkeys("p")<bar>else<bar>call feedkeys("P")<bar>endif<bar>redraw<bar>echon "Pasted " len(@") " characters"<cr>|vnoremap <C-c> y:call system("cp2cb",@")<cr>:echon "Copied " len(@") " characters"<cr>|colorscheme elflord|syntax enable|set cursorline noswapfile number hlsearch incsearch sw=2 ignorecase wrap nocompatible ruler ai showmatch modeline modelines=5 nobackup nowritebackup textwidth=0 expandtab formatoptions=croql wildignore=*.class path=.,,**|autocmd Filetype java setlocal omnifunc=javacomplete#Complete'
-
-  env SHELL=$ESH_SHELL $exec "$@"
 }
