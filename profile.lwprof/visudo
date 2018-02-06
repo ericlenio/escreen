@@ -1,4 +1,4 @@
 # vim:filetype=sh
 visudo() {
-  s root vim -visudo "$@"
+  env SHELL=$ESH_SHELL EDITOR=$ESH_EDITOR visudo "$@"
 }
