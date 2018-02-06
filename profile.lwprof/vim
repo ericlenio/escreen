@@ -1,14 +1,4 @@
 # vim:filetype=sh
 vim() {
-
-  vime
-
-  if [ "$1" = "-visudo" -o "$1" = "-crontab" ]; then
-    local exec=${1#-}
-    shift
-    env SHELL=$ESH_SHELL EDITOR=$ESH_EDITOR $exec "$@"
-  else
-    SHELL=$ESH_SHELL $ESH_EDITOR "$@"
-  fi
-
+  SHELL=$ESH_SHELL $ESH_EDITOR "$@"
 }
