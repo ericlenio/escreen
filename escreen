@@ -155,7 +155,13 @@ _esh_i() {
   # only write out ESH_STY file if we are NOT in a sudo session
   #[ -z "$SUDO_USER" ] && _esh_e "$@"
   # ... actually, write it out if it does not exist
-  [ ! -f $f ] && _esh_e "$@"
+  [ ! -f $f ] && {
+    _esh_e "$@"
+    # if initializing a new ssh session, set up job to delete the ESH_STY file
+    # when the shell exits
+    #[[ $ESH_STY =~ ssh- ]] && nohup sh -c "while kill -0 $$; do sleep 5; done; f=$(_esh_e -f); rm -f \$f" </dev/null >/dev/null 2>&1 &
+    nohup sh -c "while kill -0 $$; do sleep 5; done; f=$(_esh_e -f); rm -f \$f" </dev/null >/dev/null 2>&1 &
+  }
   ESH_NC="nc -q -1"
   # test if -q is supported with nc, due to 
   # https://bugs.launchpad.net/ubuntu/+source/netcat-openbsd/+bug/544935
@@ -168,11 +174,8 @@ _esh_i() {
   for f in $(_esh_l $t/$u.fcnlist $p2 1); do
     _esh_gen_stub $t/$u.f.$f
   done
-  export ESH_AT ESH_TMP ESH_STY ESH_NC
+  export ESH_AT ESH_TMP ESH_STY ESH_NC SHELL=$(which bash)
   export -f _esh_e _esh_i _esh_b _esh_l
-  # if initializing a new ssh session, set up job to delete the ESH_STY file
-  # when the shell exits
-  [ "$SSH_CLIENT" ] && nohup sh -c "while kill -0 $$; do sleep 5; done; f=$(_esh_e -f); rm -f \$f" </dev/null >/dev/null 2>&1 &
 }
 export _esh_i
 
