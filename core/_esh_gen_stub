@@ -1,17 +1,17 @@
 # vim:filetype=sh
 #
-# _ES_gen_stub generates a stub function for each user's custom function.
+# generate a self-loading stub function for each function
 #
 function _esh_gen_stub() {
   local funcfile=$1
   local funcname=${funcfile/*.}
-  [ -z "$(declare -F $funcname)" ] && {
+  if [ -z "$(declare -F $funcname)" ]; then
     local f="function $funcname() { "
     f+='_esh_bootstrap '$funcfile' "$@";'
     f+='}'
     eval $f
     export -f $funcname
     unalias $funcname 2>/dev/null || true
-  }
+  fi
 }
 export -f _esh_gen_stub
