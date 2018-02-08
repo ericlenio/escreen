@@ -1,4 +1,5 @@
 #! /bin/bash
+set -e
 
 if [ "$1" = -r ]; then
   if [ -z "$ESH_AT" ]; then
@@ -178,7 +179,8 @@ _esh_i() {
   done
   export ESH_AT ESH_TMP ESH_STY ESH_NC SHELL=$(which bash)
   export -f _esh_e _esh_i _esh_b _esh_l
-  # generate vim executable so it is ready for user, e.g.:
+  # generate vim executable so it is ready for user, e.g. if escreen starts and
+  # then immediately:
   #   s nobody
   #   fc
   _vime
