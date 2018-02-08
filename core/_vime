@@ -1,5 +1,8 @@
 # vim:filetype=sh
 # _vime: generate wrapped vim executable
+#
+# calls _esh_i to init the session, to make sure the communication port is
+# functional
 _vime() {
   local VIMINIT='map <c-v> :let @"=system("_esh_b zGetCb")<cr>:if col("$")-col(".")==1<bar>call feedkeys("p")<bar>else<bar>call feedkeys("P")<bar>endif<bar>redraw<bar>echon "Pasted " len(@") " characters"<cr>|vnoremap <C-c> y:call system("cp2cb",@")<cr>:echon "Copied " len(@") " characters"<cr>|colorscheme elflord|syntax enable|set cursorline noswapfile number hlsearch incsearch sw=2 ignorecase wrap nocompatible ruler ai showmatch modeline modelines=5 nobackup nowritebackup textwidth=0 expandtab formatoptions=croql wildignore=*.class path=.,,**|autocmd Filetype java setlocal omnifunc=javacomplete#Complete'
   eval "$(_esh_e)"
@@ -7,7 +10,7 @@ _vime() {
 %s
 export VIMINIT=%s
 ESH_PORT=%s _esh_i %s ESH_PORT </dev/null
-exec vim +2 "$@"' \
+exec vim "$@"' \
   "$(bash_init_string $ESH_STY)" \
   "'$VIMINIT'" \
   $ESH_PORT \
