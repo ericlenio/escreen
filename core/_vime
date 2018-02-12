@@ -11,7 +11,7 @@ _vime() {
 export VIMINIT=%s
 ESH_PORT=%s _esh_i %s ESH_PORT </dev/null
 exec vim "$@"' \
-  "$(bash_init_string $ESH_STY)" \
+  "$(_bash_init $ESH_STY)" \
   "'$VIMINIT'" \
   $ESH_PORT \
   $ESH_STY \

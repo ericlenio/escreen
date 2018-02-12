@@ -1,8 +1,7 @@
 # vim:filetype=sh
-# bash init string when entering new bash session (either by ssh or sudo)
-#
-# NOTE: vim function does some similar stuff for spawning subshells
-bash_init_string() {
+# bash init string when entering new bash session (e.g. either by ssh or sudo,
+# or a system call inside of vim)
+_bash_init() {
   # Args:
   #   p is the communication port
   #   e is flag to exec bash or not
@@ -14,3 +13,4 @@ bash_init_string() {
   printf 'ESH_PORT=%s _esh_i %s ESH_PORT </dev/null\n' $p $ESH_STY
   [ "$e" = 0 ] && echo 'exec bash --norc --noprofile "$@"' || echo '"$@"'
 }
+export -f _bash_init
