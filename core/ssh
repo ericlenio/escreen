@@ -113,7 +113,7 @@ b=`which bash`
 [ ! "$b" ] && exec $SHELL -l 0<>$SSH_TTY
 exec $b << "EOF2"
 [ -f /etc/escreen.sshrc ] && source /etc/escreen.sshrc
-eval "$(echo '$(_bash_init $ssh_user_host-$(pwgen) $rem_port | gzip -9 -c | openssl enc -a -A)' | openssl enc -a -d -A | gzip -d -c)" 0<>$SSH_TTY
+eval "$(echo '$(_bash_init $ssh_user_host-$(pwgen 6) $rem_port | gzip -9 -c | openssl enc -a -A)' | openssl enc -a -d -A | gzip -d -c)" 0<>$SSH_TTY
 EOF2
 EOF1
 ')
