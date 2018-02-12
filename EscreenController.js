@@ -220,6 +220,8 @@ EscreenController.prototype.getZlib=function() {
   return zlib.createGzip({level:zlib.Z_BEST_COMPRESSION});
 };
 
+//
+// this returns a group of core functions necessary for all bash sessions
 EscreenController.prototype.getCore=function() {
   var dir=this.getCoreDir();
   var ls=fs.readdirSync(dir);
