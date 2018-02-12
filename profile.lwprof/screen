@@ -42,6 +42,9 @@ screen() {
       esac
     done
   fi
+  # anticipitory optimization: pre-load vim, so it does not need to be loaded
+  # in every screen window
+  v --version >/dev/null
   local shell=$ESH_TMP/$USER.screen.shell
   touch $shell
   chmod 755 $shell
