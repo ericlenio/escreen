@@ -3,15 +3,42 @@ update_cacerts() {
   local cacerts=/etc/ssl/certs/java/cacerts
   local storepass=changeit
   local sslhost=${1%%:*}
-  local alias
+  local alias startdate enddate
   local sslport=${1##*:}
   local ans
-  
-  if [ $EUID != 0 ]; then
-    echo "Must be root."
-    return
-  fi
 
+  get_cert() {
+    perl -- - "$@" cert_idx << 'EOF'
+my $cert_source=shift;
+my $cert_idx=shift;
+my $idx=1;
+while ($cert_source=~m{(-----BEGIN CERT.*?-----END CERTIFICATE-----)}sg) {
+  if ($idx==$cert_idx) {
+    print $1;
+    exit;
+  }
+  $idx++;
+}
+EOF
+  }
+
+  get_cert_cn() {
+    {
+      [ -f "$1" ] && cat "$1" || echo "$1"
+    } | openssl x509 -noout -subject | perl -pe 's{.*?CN=(.*)}{$1}'
+  }
+
+  get_cert_date() {
+    local which_date=$1
+    {
+      [ -f "$2" ] && cat "$2" || echo "$2"
+    } | openssl x509 -noout -$which_date
+  }
+
+  get_num_certs() {
+    echo "$1" | grep -c -- '-----BEGIN'
+  }
+  
   if [ $# != 1 ]; then
     update_cacerts usage
     return
@@ -28,25 +55,39 @@ update_cacerts() {
   read -p "OK to continue (y/n)? " ans
   [ "$ans" != y ] && return
 
-  local cert_source
+  local cert_source num_certs cert
 
   if [ -f "$1" ]; then
     cert_source="cat \"$1\""
-    alias=$(openssl x509 -in "$1" -noout -subject | perl -pe 's{.*?CN=(.*)}{$1}')
-    echo alias="$alias."
   else
     [ -z "$sslhost" -o "$sslhost" = "$sslport" ] && {
       update_cacerts usage
       return
     }
-    alias=$sslhost
-    cert_source="echo | openssl s_client -showcerts -connect $sslhost:$sslport"
+    cert_source="$(echo|openssl s_client -showcerts -connect $sslhost:$sslport 2>/dev/null)"
   fi
 
-  keytool -keystore $cacerts -storepass "$storepass" -delete -alias "$alias"
-  eval "$cert_source | keytool -keystore $cacerts -storepass \"$storepass\" -noprompt -alias \"$alias\" -importcert"
-  keytool -keystore $cacerts -storepass "$storepass" -list -alias "$alias"
-  echo "Restart tomcat for changes to take effect in tomcat."
+  num_certs=$(get_num_certs "$cert_source")
+  echo "detected $num_certs cert(s)"
+  for i in $(seq 1 $num_certs); do
+    cert=$(get_cert "$cert_source" $i)
+    alias=$(get_cert_cn "$cert")
+    echo "cert #$i alias: $alias"
+    startdate=$(get_cert_date startdate "$cert")
+    echo "cert #$i start date: $startdate"
+    enddate=$(get_cert_date enddate "$cert")
+    echo "cert #$i end date: $enddate"
 
+    read -p "Add $alias to $cacerts (y/n)? " ans
+    [ "$ans" = y ] && {
+      # first delete any existing alias of the same name
+      keytool -keystore $cacerts -storepass "$storepass" -delete -alias "$alias" >/dev/null 2>&1
+      # now actually add the cert
+      echo "$cert" | keytool -keystore $cacerts -storepass "$storepass" -noprompt -alias "$alias" -importcert
+      #keytool -keystore $cacerts -storepass "$storepass" -list -alias "$alias"
+    }
+    echo
+
+  done
+  echo "Restart tomcat for changes to take effect in tomcat."
 }
-# vim:filetype=sh
