@@ -1,6 +1,15 @@
+# vim:filetype=sh
 update_cacerts() {
   # Update java cacerts file with SSL cert from given host:port
   local cacerts=/etc/ssl/certs/java/cacerts
+  if [ $# = 2 ]; then
+    cacerts="$1"
+    if [ ! -f "$cacerts" ]; then
+      update_cacerts usage
+      return
+    fi
+    shift
+  fi
   local storepass=changeit
   local sslhost=${1%%:*}
   local alias startdate enddate
@@ -39,15 +48,15 @@ EOF
     echo "$1" | grep -c -- '-----BEGIN'
   }
   
-  if [ $# != 1 ]; then
+  if [ $# != 1 -a $# != 2 ]; then
     update_cacerts usage
     return
   fi
 
   if [ "$1" = usage ]; then
     echo "Usage:"
-    echo "update_cacerts server.example.com:port"
-    echo "update_cacerts some-cert.pem"
+    echo "update_cacerts [/path/to/cacerts] server.example.com:port"
+    echo "update_cacerts [/path/to/cacerts] some-cert.pem"
     return
   fi
 
@@ -58,7 +67,7 @@ EOF
   local cert_source num_certs cert
 
   if [ -f "$1" ]; then
-    cert_source="cat \"$1\""
+    cert_source=$(cat "$1")
   else
     [ -z "$sslhost" -o "$sslhost" = "$sslport" ] && {
       update_cacerts usage
