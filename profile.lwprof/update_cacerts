@@ -78,6 +78,7 @@ EOF
 
   num_certs=$(get_num_certs "$cert_source")
   echo "detected $num_certs cert(s)"
+  local did_one=0
   for i in $(seq 1 $num_certs); do
     cert=$(get_cert "$cert_source" $i)
     alias=$(get_cert_cn "$cert")
@@ -94,9 +95,15 @@ EOF
       # now actually add the cert
       echo "$cert" | keytool -keystore $cacerts -storepass "$storepass" -noprompt -alias "$alias" -importcert
       #keytool -keystore $cacerts -storepass "$storepass" -list -alias "$alias"
+      did_one=1
     }
     echo
 
   done
-  echo "Restart tomcat for changes to take effect in tomcat."
+
+  if [ $did_one = 1 ]; then
+    echo "Restart tomcat for changes to take effect in tomcat."
+  else
+    echo "No changes made to $cacerts."
+  fi
 }
