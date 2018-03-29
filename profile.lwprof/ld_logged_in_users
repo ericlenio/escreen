@@ -1,0 +1,7 @@
+# vim:filetype=sh
+ld_logged_in_users() {
+  local db="${1:-lincdoc}"
+  echo "Scanning database \"$db\" for logged in users"
+  local query="SELECT * FROM ld_admin.ld_session_log WHERE source NOT IN ('groovy') AND logout IS NULL ORDER BY login DESC"
+  sudo -u postgres psql -c "$query" $db
+}
