@@ -12,7 +12,7 @@ function get_ldsupport_pw() {
     local pfile2=/var/run/remoteadmin.http_port
     [ -f $pfile2 ] && pfile=$pfile2
     local ld_url="http://remoteadmin.lincware.com:$(cat $pfile)/$app_context/login/_/system"
-    local cmd="$(sudo lwsa --get_psql_connect --silent $app_context) -tAc \"select config from ld_admin.ld_config_map where key = 'ldsupport-crypt-pw'\""
+    local cmd="$(sudo lwsa --silent --get_psql_connect $app_context) -tAc \"select config from ld_admin.ld_config_map where key = 'ldsupport-crypt-pw'\""
     if [[ "$cmd" != *psql* ]]; then
       if [ -n "$app_context" ]; then
         echo "ERROR: no such app context: $app_context"
