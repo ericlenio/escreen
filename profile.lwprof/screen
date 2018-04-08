@@ -87,7 +87,7 @@ vbell on
 vbell_msg DING
 #shelltitle "$ |bash:"
 bindkey "\032" stuff "\032"
-caption always "%{= kw}%-w%{= BW}%n%t%{-}%+w %-= @%H %m/%d %c"
+caption always "%{= kw}%-w%{= BW}%n%t%{-}%+w %-= @%H %{= Y}%l%{-} %m/%d %c"
 shelltitle "$ |:"
 defmonitor on
 msgwait 1
