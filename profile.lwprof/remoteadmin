@@ -34,13 +34,6 @@ function remoteadmin() {
     assume_ssh=0
   fi
 
-
-  function psql_ld() {
-    local cmd="$(sudo lwsa --get_psql_connect --silent)"
-    echo $cmd
-    eval $cmd
-  }
-
   function get_extra_ssh_params() {
     local hostname=$(echo $1 | tr "[:upper:]" "[:lower:]")
     local hostname2
