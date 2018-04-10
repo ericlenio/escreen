@@ -3,6 +3,8 @@ add_to_path() {
 }
 export -f add_to_path
 export ESH_EDITOR=$ESH_TMP/$USER.editor
+export INPUTRC=$ESH_TMP/$USER.inputrc
+echo "set mark-symlinked-directories on" > $INPUTRC
 export FCEDIT=$ESH_EDITOR VISUAL=$ESH_EDITOR EDITOR=$ESH_EDITOR HISTCONTROL=ignoreboth:erasedups PS1='${debian_chroot:+($debian_chroot)}\u@\H:\[\033[1;32m\]\w:\[\033[7m\]\$\[\033[0m\] ' PAGER="less -siR"
 add_to_path /usr/local/bin
 add_to_path $HOME/bin
