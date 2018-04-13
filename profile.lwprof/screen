@@ -97,6 +97,7 @@ hardstatus ignore
 # escape "ESC ] 83 ; cmd ^G")
 #addacl :window: -rwx #?
 #aclchg :window: +w+x stuff,sleep
+bind / screen $ESH_EDITOR bin/passwords
 EOF
   cat >> $SCREENRC << EOF
 bind % source $printscreen_macro
@@ -104,7 +105,7 @@ EOF
   cat > $printscreen_macro << EOF
 hardcopy_append off
 hardcopy $hardcopy_file
-screen bash -c "vim $hardcopy_file"
+screen $ESH_EDITOR $hardcopy_file
 EOF
 
   #local c esc=^Ee initfile=$(mktemp -t escreen.XXX)
