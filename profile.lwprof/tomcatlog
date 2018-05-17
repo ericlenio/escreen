@@ -1,5 +1,5 @@
 # vim:filetype=sh
-function tomcatlog() {
+tomcatlog() {
   local opts="23ecx" flag=$1 op opt
   # if ssh-ing to remote system with odd/custom tomcat setup: create
   # /etc/escreen.sshrc and set ESH_TOMCATLOG and ESH_TOMCATLOGUSER

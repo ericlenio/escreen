@@ -1,7 +1,3 @@
-add_to_path() {
-  [ -d "$1" ] && [[ ":$PATH:" != *":$1:"* ]] && PATH="$1:$PATH"
-}
-export -f add_to_path
 export ESH_EDITOR=$ESH_TMP/$USER.editor
 export INPUTRC=$ESH_TMP/$USER.inputrc
 echo "set mark-symlinked-directories on" > $INPUTRC
@@ -12,6 +8,10 @@ export FCEDIT=$ESH_EDITOR \
   PS1='${debian_chroot:+($debian_chroot)}\[\033[100;97m\]\u@\H:\[\033[0m\]\[\033[36m\]\w\[\033[0m\]\[\033[93m\]\$\[\033[0m\] ' \
   PAGER=less \
   LESS="-siR"
+add_to_path() {
+  [ -d "$1" ] && [[ ":$PATH:" != *":$1:"* ]] && PATH="$1:$PATH"
+}
+export -f add_to_path
 add_to_path /usr/local/bin
 add_to_path $HOME/bin
 # true here so _esh_l does not echo this file

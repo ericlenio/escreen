@@ -165,11 +165,23 @@ EscreenController.prototype.getFcnlist=function() {
       if (ls[j].search('^\\w+$')<0) continue;
       if (list.indexOf(ls[j])>=0) continue;
       if (ls[j]=="README") continue;
+      if (!this.looksLikeBashFunction(util.format("%s/%s",dir,ls[j]))) continue;
       list.push(ls[j]);
     }
   }
   list.sort();
   return list.join("\n");
+};
+
+EscreenController.prototype.looksLikeBashFunction=function(f) {
+  var lines=fs.readFileSync(f).toString().split(/\n/);
+  for (var i=0; i<lines.length; i++) {
+    var line=lines[i];
+    if (line.indexOf("#")!=0 && line.search(/^\s*$/)<0) {
+      return line.search(/^\w+\(\)\s*\{/)==0;
+    }
+  }
+  return false;
 };
 
 EscreenController.prototype.getProfileDir=function() {

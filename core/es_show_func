@@ -2,7 +2,7 @@
 #
 # es_show_func: decrypt and show cached script file
 #
-function es_show_func() {
+es_show_func() {
   local marker="$(_ES_marker GET_SCRIPT_PW)"
   local funcname=$1
   local f=$_ES_FCN_PREFIX$funcname

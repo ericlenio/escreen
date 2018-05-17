@@ -16,7 +16,7 @@
 #exec > >(tee >(grep ^: >$cmds) | grep -v ^:)
 #trap "rm -f $stdout $cmds; echo $stdout was deleted" EXIT INT
 
-function remoteadmin() {
+remoteadmin() {
   local exec ssh_params assume_ssh
   declare -a exec
   declare -a ssh_params

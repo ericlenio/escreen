@@ -1,5 +1,5 @@
 # vim:filetype=sh
-function openssl_show_cert() {
+openssl_show_cert() {
   local cert=$1
   if [ -z "$cert" ]; then
     # assume stdin

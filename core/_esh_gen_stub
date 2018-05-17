@@ -2,7 +2,7 @@
 #
 # generate a self-loading stub function for each function
 #
-function _esh_gen_stub() {
+_esh_gen_stub() {
   local funcfile=$1
   local funcname=${funcfile/*.}
   if [ -z "$(declare -F $funcname)" ]; then

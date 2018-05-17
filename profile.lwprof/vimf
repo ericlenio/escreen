@@ -1,5 +1,5 @@
 # vim:filetype=sh
-function vimf() {
+vimf() {
   local patt="$1" files
   if [ -z "$patt" ]; then
     patt="*"

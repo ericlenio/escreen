@@ -1,5 +1,5 @@
 # vim:filetype=sh
-function get_ldsupport_pw() {
+get_ldsupport_pw() {
   #local marker="$(_ES_marker LDSUPPORT_PW)"
   local app_context=$1
   if [ -z "$app_context" ]; then
