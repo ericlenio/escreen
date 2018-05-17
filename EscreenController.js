@@ -64,9 +64,10 @@ EscreenController.prototype.init=function() {
     var pw="";
     if (key=="cbf") {
       // optimization: return 3 passwords for core, bashrc, and fcnlist
-      pw=util.format("p0=%s p1=%s p2=%s",
+      // 05/17/2018: actually just for core and fcnlist, bashrc is bundled in
+      // to core now
+      pw=util.format("p0=%s p1=%s",
         controller.computePassword(controller.getSource("core")),
-        controller.computePassword(controller.getSource("bashrc")),
         controller.computePassword(controller.getSource("fcnlist"))
         );
     } else {
@@ -188,6 +189,15 @@ EscreenController.prototype.getBashrc=function() {
   return s;
 };
 
+EscreenController.prototype.getVimrc=function() {
+  var f=util.format("%s/vimrc",this.getProfileDir());
+  var s="";
+  if (fs.existsSync(f)) {
+    s=fs.readFileSync(f);
+  }
+  return s;
+};
+
 EscreenController.prototype.getCachedCoreFile=function() {
   return util.format("%s/%s.core",process.env.ESH_TMP,process.env.USER);
 };
@@ -230,6 +240,14 @@ EscreenController.prototype.getCore=function() {
     if (ls[i].search("^_")<0) continue;
     s+=fs.readFileSync(dir+"/"+ls[i]);
   }
+  s+=this.getBashrc();
+  s+="_vimrc() {\n";
+  s+="local f=$1\n";
+  s+="cat << 'EOF' > $f\n";
+  s+=this.getVimrc();
+  s+="EOF\n";
+  s+="chmod 600 $f || { echo \"ERROR: _vimrc: could not chmod 600 on $f\" >&2; return 1; }\n";
+  s+="}\n";
   return s;
 };
 
@@ -237,8 +255,6 @@ EscreenController.prototype.getSource=function(key) {
   var buf="";
   if (key=="core") {
     buf=this.getCore();
-  } else if (key=="bashrc") {
-    buf=this.getBashrc();
   } else if (key=="fcnlist") {
     buf=this.getFcnlist();
   } else {
