@@ -1,5 +1,5 @@
 # vim:filetype=sh
-function pg_terminate_backend() {
+pg_terminate_backend() {
   local procpid="$1"
   if [ -z "$procpid" ]; then
     echo "Usage: pg_terminate_backend procpid"

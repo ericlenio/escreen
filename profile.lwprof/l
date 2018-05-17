@@ -1,5 +1,5 @@
 # vim:filetype=sh
-function l() {
+l() {
   local os=$(uname -s)
   case $os in
     Darwin|FreeBSD|OpenBSD)

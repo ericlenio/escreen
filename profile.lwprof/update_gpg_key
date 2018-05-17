@@ -1,5 +1,5 @@
 # vim:filetype=sh
-function update_gpg_key() {
+update_gpg_key() {
   local apt_keyring=/etc/apt/trusted.gpg
   # the old key expired 04/28/2014
   local old_key="Lincware Repository"

@@ -1,5 +1,5 @@
 # vim:filetype=sh
-function git_remote_url() {
+git_remote_url() {
   git config --get remote.origin.url
 }
 export -f git_remote_url
