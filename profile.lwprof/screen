@@ -97,7 +97,7 @@ hardstatus ignore
 # escape "ESC ] 83 ; cmd ^G")
 #addacl :window: -rwx #?
 #aclchg :window: +w+x stuff,sleep
-bind / screen $ESH_EDITOR bin/passwords
+bind / screen $ESH_EDITOR $HOME/.passwords.gpg
 EOF
   cat >> $SCREENRC << EOF
 bind % source $printscreen_macro

@@ -4,17 +4,17 @@
 # calls _esh_i to init the session, to make sure the communication port is
 # functional
 _vime() {
-  local VIMINIT='map <c-v> :let @"=system("_esh_b zGetCb")<cr>:if col("$")-col(".")==1<bar>call feedkeys("p")<bar>else<bar>call feedkeys("P")<bar>endif<bar>redraw<bar>echon "Pasted " len(@") " characters"<cr>|vnoremap <C-c> y:call system("cp2cb",@")<cr>:echon "Copied " len(@") " characters"<cr>|colorscheme elflord|syntax enable|set cursorline noswapfile number hlsearch incsearch sw=2 ignorecase wrap nocompatible ruler ai showmatch modeline modelines=5 nobackup nowritebackup textwidth=0 expandtab formatoptions=croql wildignore=*.class path=.,,**|autocmd Filetype java setlocal omnifunc=javacomplete#Complete'
+  local VIMRC=$ESH_TMP/$LOGNAME.editor.vimrc
+  _vimrc $VIMRC || return $?
   eval "$(_esh_e)"
   printf '#!/usr/bin/env bash
 %s
-export VIMINIT=%s
 ESH_PORT=%s _esh_i %s ESH_PORT </dev/null
-exec vim "$@"' \
+exec vim -S %s "$@"' \
   "$(_bash_init $ESH_STY)" \
-  "'$VIMINIT'" \
   $ESH_PORT \
   $ESH_STY \
+  $VIMRC \
   > $ESH_EDITOR || return $?
   chmod 700 $ESH_EDITOR || {
     echo "ERROR: could not chmod $ESH_EDITOR: $?"
