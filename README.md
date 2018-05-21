@@ -188,8 +188,10 @@ and then via **gpg-agent** (note: there are plenty of resources on how to set
 up gpg-agent, so I'm not describing that here) decrypts it and loads it into
 the vim buffer; a similar reverse process happens when saving the buffer.  The
 password file is by default in `$ESH_HOME/private/$USER-passwords.gpg`.  As a
-further convenience, the default profile GNU screen profile maps `C-a /`
-(control-A and then a forward slash) to edit the password file instantly.
+further convenience, the default profile for GNU screen maps `C-a /` (control-A
+and then a forward slash) to edit the password file instantly. Since the
+password file is stored in github (encrypted, of course) it means it gets
+backed up. (The gnupg private key is backed up by a different mechanism.)
 
 ## Other core bash functions
 
