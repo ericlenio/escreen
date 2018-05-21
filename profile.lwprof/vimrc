@@ -1,6 +1,8 @@
-let f="$ESH_HOME/core/gpg.vimrc"
+let f=$ESH_HOME."/core/gpg.vimrc"
 if filereadable(f)
-  source f
+  exe 'source '.f
+  " vim 7.x seems to require re-loading the buffer, thus edit command here
+  edit
 endif
 map <c-v> :let @"=system("_esh_b zGetCb")<cr>:if col("$")-col(".")==1<bar>call feedkeys("p")<bar>else<bar>call feedkeys("P")<bar>endif<bar>redraw<bar>echon "Pasted " len(@") " characters"<cr>
 vnoremap <C-c> y:call system("cp2cb",@")<cr>:echon "Copied " len(@") " characters"<cr>
