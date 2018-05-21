@@ -19,14 +19,13 @@ session), and similarly download files from a ssh session.
 
 The main idea is that escreen launches a back end server (written in nodejs)
 which serves up files/data/resources to your shell sessions (either local, or
-ssh'd to some other system). A random port is chosen for the server so that
-multiple escreen invocations are completely isolated.
+ssh'd to some other system).
 
 # Requirements
 
 * Support for running on Linux, FreeBSD and Mac OS X
 * Assumes you use bash as your main shell
-* When started, escreen will automatically launch a nodejs server to serve up all of your profile preferences/settings. So you will have to have nodejs installed (recommend 0.10.35 or later).
+* When started, escreen will automatically launch a nodejs server to serve up all of your profile preferences/settings. So you will have to have nodejs installed (0.10.35 or later).
 * Depends on some basic Unix programs like gzip, grep, cut
 * Also must have perl and openssl
 * Useful to have vim
@@ -179,6 +178,18 @@ GNU screen windows. To use:
 Since copying text actually copies to your system clipboard, you can also paste
 the text you selected into some other application via your desktop OS's regular
 way of pasting.
+
+## Personal password file
+
+I wanted to have the ability to have a personal password file which is
+encrypted with gnupg, and be able to quickly edit/change this file with
+transparent encryption: when vim opens the file, it auto-detects the encryption
+and then via **gpg-agent** (note: there are plenty of resources on how to set
+up gpg-agent, so I'm not describing that here) decrypts it and loads it into
+the vim buffer; a similar reverse process happens when saving the buffer.  The
+password file is by default in `$ESH_HOME/private/$USER-passwords.gpg`.  As a
+further convenience, the default profile GNU screen profile maps `C-a /`
+(control-A and then a forward slash) to edit the password file instantly.
 
 ## Other core bash functions
 
