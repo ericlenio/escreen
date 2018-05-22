@@ -30,7 +30,7 @@ EscreenController.prototype.init=function() {
   this.oneTimeAuthTokens=[];
   this.handlers=[];
   this.forwardEvent={};
-  this.escreenRcFile=util.format("%s/.escreenrc",process.env.HOME);
+  //this.escreenRcFile=util.format("%s/.escreenrc",process.env.HOME);
 
   this.registerHandler("hello",function(controller,socket) {
     socket.end("HELLO\n");
@@ -142,12 +142,16 @@ EscreenController.prototype.init=function() {
 
   this.registerOtherHandlers();
 
-  if (fs.existsSync(this.escreenRcFile)) {
-    eval(fs.readFileSync(this.escreenRcFile).toString());
-  } else {
-    console.log( "Please create " + this.escreenRcFile + ", with MY_PASSWORD value." );
-    process.exit(1);
-  }
+  return new Promise(function(resolve) {
+    var escreenrc='';
+    process.stdin.on('data',function(buf) {
+      escreenrc+=buf.toString();
+    });
+    process.stdin.on('end',function(buf) {
+      eval(escreenrc);
+      resolve();
+    });
+  });
 }
 
 EscreenController.prototype.expireOneTimeAuthToken=function(at) {

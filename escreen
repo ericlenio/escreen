@@ -199,7 +199,18 @@ ESH_PORT=5213
 export ESH_LOGFILE=$ESH_TMP/$USER.esh.log.$ESH_PORT
 touch $ESH_LOGFILE
 chmod 600 $ESH_LOGFILE
-ESH_PORT=$ESH_PORT node $ESH_HOME/EscreenRunServer.js $ESH_PROFILE $ESH_PORT >$ESH_LOGFILE 2>&1 </dev/null &
+{
+  # try for encrypted .escreenrc first, fall back to unencrypted
+  if [ -e $HOME/.escreenrc.gpg ]; then
+    gpg -d $HOME/.escreenrc.gpg
+  elif [ -e $HOME/.escreenrc ]; then
+    cat $HOME/.escreenrc
+  else
+    printf "global.MY_PASSWORD='%s';\n" "$(openssl rand -base64 14)" > $HOME/.escreenrc
+    chmod 600 $HOME/.escreenrc
+    cat $HOME/.escreenrc
+  fi
+} | ESH_PORT=$ESH_PORT node $ESH_HOME/EscreenRunServer.js $ESH_PROFILE $ESH_PORT >$ESH_LOGFILE 2>&1 &
 export ESH_NODE_PID=$!
 
 while ! nc -z localhost $ESH_PORT; do

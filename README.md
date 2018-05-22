@@ -39,7 +39,7 @@ called `profile.lwprof`.
 
 **Step 2: set up your rcfile.** The rcfile is `$HOME/.escreenrc`. This is sourced
 by escreen at init time by the nodejs server. It may contain any valid
-Javascript commands, but in particular you should make a unique password for
+nodejs commands, but in particular you should make a unique password for
 yourself like so:
 
     global.MY_PASSWORD = "2sCuk5iVuRXrGmmUjLfwFj8fZSsoldML";
@@ -48,6 +48,10 @@ You need not be too concerned about this password, nor is it particularly a
 problem if you lose it.  Worst case is you make a new password and all cached
 files will have to be re-cached (which will happen automatically).  Still, keep
 the file secured: `chmod 600 $HOME/.escreenrc`.
+
+For better security, and if **gpg-agent** is set up on your system, encrypt
+your .escreenrc and name it `$HOME/.escreenrc.gpg` and that will be used
+instead.
 
 **Step 3: start escreen.** Run the following to start a new session, which will
 load all your preferences and create stub functions. It launches GNU screen
