@@ -36,6 +36,14 @@ EscreenController.prototype.init=function() {
     socket.end("HELLO\n");
   });
 
+  this.registerHandler("ESH_PW_FILE",function(controller,socket) {
+    socket.end(
+      // look for value first from .escreenrc, else fall back to default
+      global.ESH_PW_FILE ||
+      util.format("%s/private/%s-passwords.gpg",process.env.ESH_HOME,process.env.ESH_USER)
+    );
+  });
+
   // forward certain handers to another escreen session
   this.registerHandler("forwardEscreen",function(controller,socket,forward_ESH_PORT,forward_ESH_AT,forward_ESH_NC_base64) {
     controller.forward_ESH_PORT=forward_ESH_PORT;

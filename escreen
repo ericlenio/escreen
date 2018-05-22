@@ -150,7 +150,6 @@ escreen_branch=$(cd $ESH_HOME && git rev-parse --abbrev-ref HEAD)
 export ESH_TMP
 [ ! -d $ESH_TMP ] && mkdir $ESH_TMP && chmod 1777 $ESH_TMP
 export ESH_USER=$USER
-export ESH_PW_FILE=$ESH_HOME/private/$ESH_USER-passwords.gpg
 
 # shell init script here
 _esh_i() {
@@ -214,6 +213,7 @@ ESH_STY=0000
 rm -f $(_esh_e -f)
 _esh_i $ESH_STY ESH_PORT
 ESH_SCREEN_EXEC=1
+export ESH_PW_FILE="$(_esh_b ESH_PW_FILE)"
 
 #
 # possible future use of perl code to send and execute commands to a tty
