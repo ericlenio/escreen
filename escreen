@@ -184,8 +184,6 @@ _esh_i() {
   #   fc
   _vime
 }
-export _esh_i
-
 
 ESH_CORE=$ESH_HOME/core
 [ "$1" ] && ESH_PROFILE="$1" || ESH_PROFILE=$ESH_HOME/profile.lwprof
