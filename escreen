@@ -160,9 +160,6 @@ _esh_i() {
   # ... actually, write it out if it does not exist
   [ ! -f $f ] && {
     _esh_e "$@"
-    # if initializing a new ssh session, set up job to delete the ESH_STY file
-    # when the shell exits
-    #[[ $ESH_STY =~ ssh- ]] && nohup sh -c "while kill -0 $$; do sleep 5; done; f=$(_esh_e -f); rm -f \$f" </dev/null >/dev/null 2>&1 &
     nohup sh -c "while kill -0 $$; do sleep 5; done; f=$(_esh_e -f); rm -f \$f" </dev/null >/dev/null 2>&1 &
   }
   ESH_NC="nc -q -1"
@@ -195,4 +192,4 @@ ESH_CORE=$ESH_HOME/core
 # given shell between various combinations of screen, sudo, and ssh
 export ESH_STY=0000
 
-node $ESH_HOME/EscreenRunServer.js $ESH_PROFILE
+exec node $ESH_HOME/EscreenRunServer.js $ESH_PROFILE

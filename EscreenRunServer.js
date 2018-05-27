@@ -1,6 +1,4 @@
 var child_process=require('child_process');
-//var daemon=require('daemon');
-var fs=require('fs');
 var util=require('util');
 
 var EscreenController=require(util.format('%s/EscreenController.js',process.env.ESH_HOME));
