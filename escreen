@@ -185,40 +185,23 @@ _esh_i() {
   _vime
 }
 
+export -f _esh_i
+
 ESH_CORE=$ESH_HOME/core
 [ "$1" ] && ESH_PROFILE="$1" || ESH_PROFILE=$ESH_HOME/profile.lwprof
-#ESH_PORT=$(node $ESH_HOME/GetFreePort.js)
-ESH_PORT=5213
-[ -z "$ESH_PORT" ] && {
-  echo "ERROR: could not get free port."
-  exit 1
-}
 
-export ESH_LOGFILE=$ESH_TMP/$USER.esh.log.$ESH_PORT
-touch $ESH_LOGFILE
-chmod 600 $ESH_LOGFILE
-{
-  # try for encrypted .escreenrc first, fall back to unencrypted
-  if [ -e $HOME/.escreenrc.gpg ]; then
-    gpg -d $HOME/.escreenrc.gpg
-  elif [ -e $HOME/.escreenrc ]; then
-    cat $HOME/.escreenrc
-  else
-    printf "global.MY_PASSWORD='%s';\n" "$(openssl rand -base64 14)" > $HOME/.escreenrc
-    chmod 600 $HOME/.escreenrc
-    cat $HOME/.escreenrc
-  fi
-} | ESH_PORT=$ESH_PORT node $ESH_HOME/EscreenRunServer.js $ESH_PROFILE $ESH_PORT >$ESH_LOGFILE 2>&1 &
-export ESH_NODE_PID=$!
+# ESH_STY is conceptually tied to screen's STY variable ... it gets used as a
+# unique ID to properly track the communications port (ESH_PORT) to use in a
+# given shell between various combinations of screen, sudo, and ssh
+export ESH_STY=0000
 
-while ! nc -z localhost $ESH_PORT; do
-  sleep 0.1
-done
+#export ESH_LOGFILE=$ESH_TMP/$USER.esh.log.$ESH_PORT
+#touch $ESH_LOGFILE
+#chmod 600 $ESH_LOGFILE
+node $ESH_HOME/EscreenRunServer.js $ESH_PROFILE
+exit
 
-# ESH_STY is loosely tied to screen's STY variable ... it gets used as a unique
-# ID to properly track the communications port (ESH_PORT) to use in a given
-# shell between various combinations of screen, sudo, and ssh
-ESH_STY=0000
+
 rm -f $(_esh_e -f)
 _esh_i $ESH_STY ESH_PORT
 ESH_SCREEN_EXEC=1

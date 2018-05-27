@@ -142,16 +142,7 @@ EscreenController.prototype.init=function() {
 
   this.registerOtherHandlers();
 
-  return new Promise(function(resolve) {
-    var escreenrc='';
-    process.stdin.on('data',function(buf) {
-      escreenrc+=buf.toString();
-    });
-    process.stdin.on('end',function(buf) {
-      eval(escreenrc);
-      resolve();
-    });
-  });
+  return Promise.resolve();
 }
 
 EscreenController.prototype.expireOneTimeAuthToken=function(at) {
