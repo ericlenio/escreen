@@ -195,34 +195,4 @@ ESH_CORE=$ESH_HOME/core
 # given shell between various combinations of screen, sudo, and ssh
 export ESH_STY=0000
 
-#export ESH_LOGFILE=$ESH_TMP/$USER.esh.log.$ESH_PORT
-#touch $ESH_LOGFILE
-#chmod 600 $ESH_LOGFILE
 node $ESH_HOME/EscreenRunServer.js $ESH_PROFILE
-exit
-
-
-rm -f $(_esh_e -f)
-_esh_i $ESH_STY ESH_PORT
-ESH_SCREEN_EXEC=1
-export ESH_PW_FILE="$(_esh_b ESH_PW_FILE)"
-
-#
-# possible future use of perl code to send and execute commands to a tty
-# (similar to linux's writevt):
-#
-# require "sys/ioctl.ph";
-# ioctl(STDIN, &TIOCSTI, $_) for split "", join " ", @ARGV;
-#
-
-initfile=$(mktemp -t escreen.XXX)
-echo "rm $initfile" > $initfile
-
-cat <<"EOF" >> $initfile
-env screen -S $STY -X monitor off
-env screen -S $STY -X screen
-nohup sh -c "while kill -0 ${STY%%.*}; do sleep 5; done; kill $ESH_NODE_PID; sleep 6" </dev/null >/dev/null 2>&1 &
-exec tail -f $ESH_LOGFILE
-EOF
-
-screen sh -c ". $initfile"

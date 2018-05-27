@@ -33,9 +33,11 @@ EscreenServer.prototype.start=function() {
 EscreenServer.prototype.readEscreenrc=function() {
   var fs=require('fs');
   var util=require('util');
+  var child_process=require('child_process');
+
   var escreenrc=util.format("%s/.escreenrc.gpg",process.env.HOME);
   if (fs.existsSync(escreenrc)) {
-    var p=require('child_process').spawn('gpg',['-d',escreenrc],{stdio:[null,'pipe','inherit']});
+    var p=child_process.spawn('gpg',['-d',escreenrc],{stdio:['ignore','pipe','inherit']});
     var s='';
     p.stdout.on('data',function(buf) {
       s+=buf.toString();
@@ -47,5 +49,15 @@ EscreenServer.prototype.readEscreenrc=function() {
       });
     });
   }
-  return Promise.resolve();
+
+  escreenrc=util.format("%s/.escreenrc",process.env.HOME);
+  if (fs.existsSync(escreenrc)) {
+    fs.readFile(escreenrc,'utf8',function(err,data) {
+      return new Promise(function(resolve) {
+        eval(data);
+      });
+    });
+  }
+
+  throw "Could not read $HOME/.escreenrc.gpg or $HOME/.escreenrc";
 };

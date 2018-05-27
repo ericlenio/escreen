@@ -1,5 +1,6 @@
-//var daemon=require('daemon');
 var child_process=require('child_process');
+//var daemon=require('daemon');
+var fs=require('fs');
 var util=require('util');
 
 var EscreenController=require(util.format('%s/EscreenController.js',process.env.ESH_HOME));
@@ -14,14 +15,11 @@ controller.init().then(function() {
     shellServer.on('listening',function() {
       var args=[
         "-c",
-        "_esh_i $ESH_STY ESH_PORT; screen",
+        "_esh_i $ESH_STY ESH_PORT; ESH_SCREEN_EXEC=1 screen",
       ];
       process.env.ESH_PORT=shellServer.address().port;
       var p=child_process.spawn("bash",args,{
         stdio:['inherit','inherit','inherit'],
-        //env:{
-          //ESH_STY:"0000",
-        //},
       });
       p.on('exit',function(code) {
         console.log("FINISH:"+code+":"+new Date());
@@ -30,9 +28,3 @@ controller.init().then(function() {
     });
   });
 });
-
-//daemon({
-  //cwd:'/tmp',
-  //stdout:process.stdout,
-  //stderr:process.stderr,
-//});

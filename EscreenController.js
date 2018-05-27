@@ -11,6 +11,7 @@ var OsProgEnum = Object.freeze({
   OPEN : { linux : ["xdg-open"], darwin : ["open"] },
 });
 
+
 function EscreenController(profileDir) {
   this.profileDir=profileDir;
 }
@@ -26,123 +27,133 @@ EscreenController.prototype.getOsProgram=function(progtype) {
 };
 
 EscreenController.prototype.init=function() {
-  this.authToken=process.env.ESH_AT;
-  this.oneTimeAuthTokens=[];
-  this.handlers=[];
-  this.forwardEvent={};
-  //this.escreenRcFile=util.format("%s/.escreenrc",process.env.HOME);
+  var self=this;
+  return new Promise(function(resolve) {
+    self.authToken=process.env.ESH_AT;
+    self.oneTimeAuthTokens=[];
+    self.handlers=[];
+    self.forwardEvent={};
+    //self.escreenRcFile=util.format("%s/.escreenrc",process.env.HOME);
 
-  this.registerHandler("hello",function(controller,socket) {
-    socket.end("HELLO\n");
-  });
-
-  this.registerHandler("ESH_PW_FILE",function(controller,socket) {
-    socket.end(
-      // look for value first from .escreenrc, else fall back to default
-      global.ESH_PW_FILE ||
-      util.format("%s/private/%s-passwords.gpg",process.env.ESH_HOME,process.env.ESH_USER)
-    );
-  });
-
-  // forward certain handers to another escreen session
-  this.registerHandler("forwardEscreen",function(controller,socket,forward_ESH_PORT,forward_ESH_AT,forward_ESH_NC_base64) {
-    controller.forward_ESH_PORT=forward_ESH_PORT;
-    controller.forward_ESH_AT=forward_ESH_AT;
-    controller.forward_ESH_NC=new Buffer( forward_ESH_NC_base64, 'base64' ).toString();
-    socket.end();
-  });
-
-  this.registerHandler("unforwardEscreen",function(controller,socket) {
-    controller.forward_ESH_PORT=null;
-    controller.forward_ESH_AT=null;
-    socket.end();
-  });
-
-  // one time auth token - UNUSED
-  this.registerHandler("otat",function(controller,socket) {
-    var at=controller.generateAuthToken();
-    controller.oneTimeAuthTokens.push(at);
-    setTimeout(function() {
-      controller.expireOneTimeAuthToken(at);
-    },60000);
-    socket.end(at);
-  });
-
-  this.registerHandler("fpw",function(controller,socket,key) {
-    var pw="";
-    if (key=="cbf") {
-      // optimization: return 3 passwords for core, bashrc, and fcnlist
-      // 05/17/2018: actually just for core and fcnlist, bashrc is bundled in
-      // to core now
-      pw=util.format("p0=%s p1=%s",
-        controller.computePassword(controller.getSource("core")),
-        controller.computePassword(controller.getSource("fcnlist"))
-        );
-    } else {
-      pw=controller.computePassword(controller.getSource(key));
-    }
-    socket.end(pw);
-  });
-
-  // upload function to client
-  this.registerHandler("zup",function(controller,socket,key) {
-    var buf=controller.getSource(key);
-    var z=controller.getZlib();
-    z.pipe(socket);
-    z.end(buf);
-  });
-
-  // receive clipboard data from client, and store inside clipboard
-  this.registerHandler("setCb",function(controller,socket) {
-    var z=zlib.Gunzip();
-    var xselBuf="";
-    var maxXselBuf=255;
-    var clipboardBytes=0;
-    var cp_prog=controller.getOsProgram(OsProgEnum.COPY);
-
-    var platform=os.platform();
-    var p=child_process.spawn(cp_prog[0], cp_prog.slice(1), {stdio:['pipe',null,null]});
-    var clipitExit=false;
-    //var pt=new (require('stream').PassThrough);
-    p.on('exit',function(rc,signal) {
-      clipitExit=true;
-      console.log("copied %s bytes to clipboard, rc=%s, signal=%s",clipboardBytes,rc,signal);
-      if (platform=="linux" && clipboardBytes<=maxXselBuf) {
-        // if small enough buffer, place into X Windows primary selection too for
-        // convenience
-        var p2 = child_process.spawn("xsel", ["-i","-p"], {stdio:['pipe',process.stdout,process.stderr]});
-        p2.stdin.end(xselBuf);
-      }
+    self.registerHandler("hello",function(controller,socket) {
+      socket.end("HELLO\n");
     });
-    socket.setTimeout(1500,function() {
-      console.log("*** socket timeout, %s bytes read, force closing now",clipboardBytes);
-      socket.end();
-      if (!clipitExit) {
-        p.kill();
-      }
+
+    self.registerHandler("ESH_PW_FILE",function(controller,socket) {
+      socket.end(
+        // look for value first from .escreenrc, else fall back to default
+        global.ESH_PW_FILE ||
+        util.format("%s/private/%s-passwords.gpg",process.env.ESH_HOME,process.env.ESH_USER)
+      );
     });
-    socket.on("end", function() {
+
+    // forward certain handers to another escreen session
+    self.registerHandler("forwardEscreen",function(controller,socket,forward_ESH_PORT,forward_ESH_AT,forward_ESH_NC_base64) {
+      controller.forward_ESH_PORT=forward_ESH_PORT;
+      controller.forward_ESH_AT=forward_ESH_AT;
+      controller.forward_ESH_NC=new Buffer( forward_ESH_NC_base64, 'base64' ).toString();
       socket.end();
     });
-    z.on("data", function(chunk) {
-      clipboardBytes+=chunk.length;
-      if (xselBuf.length<=maxXselBuf) xselBuf+=new String(chunk);
+
+    self.registerHandler("unforwardEscreen",function(controller,socket) {
+      controller.forward_ESH_PORT=null;
+      controller.forward_ESH_AT=null;
+      socket.end();
     });
-    socket.pipe(z).pipe(p.stdin);
-  },true);
 
-  // send clipboard data to client
-  this.registerHandler("zGetCb",function(controller,socket,key) {
-    var paste_prog=controller.getOsProgram(OsProgEnum.PASTE);
-    var p=child_process.spawn(paste_prog[0], paste_prog.slice(1),
-      {stdio:['ignore','pipe',process.stderr]});
-    var z=controller.getZlib();
-    p.stdout.pipe(z).pipe(socket);
-  },true);
+    // one time auth token - UNUSED
+    self.registerHandler("otat",function(controller,socket) {
+      var at=controller.generateAuthToken();
+      controller.oneTimeAuthTokens.push(at);
+      setTimeout(function() {
+        controller.expireOneTimeAuthToken(at);
+      },60000);
+      socket.end(at);
+    });
 
-  this.registerOtherHandlers();
+    self.registerHandler("fpw",function(controller,socket,key) {
+      var pw="";
+      if (key=="cbf") {
+        // optimization: return 3 passwords for core, bashrc, and fcnlist
+        // 05/17/2018: actually just for core and fcnlist, bashrc is bundled in
+        // to core now
+        pw=util.format("p0=%s p1=%s",
+          controller.computePassword(controller.getSource("core")),
+          controller.computePassword(controller.getSource("fcnlist"))
+          );
+      } else {
+        pw=controller.computePassword(controller.getSource(key));
+      }
+      socket.end(pw);
+    });
 
-  return Promise.resolve();
+    // upload function to client
+    self.registerHandler("zup",function(controller,socket,key) {
+      var buf=controller.getSource(key);
+      var z=controller.getZlib();
+      z.pipe(socket);
+      z.end(buf);
+    });
+
+    // receive clipboard data from client, and store inside clipboard
+    self.registerHandler("setCb",function(controller,socket) {
+      var z=zlib.Gunzip();
+      var xselBuf="";
+      var maxXselBuf=255;
+      var clipboardBytes=0;
+      var cp_prog=controller.getOsProgram(OsProgEnum.COPY);
+
+      var platform=os.platform();
+      var p=child_process.spawn(cp_prog[0], cp_prog.slice(1), {stdio:['pipe',null,null]});
+      var clipitExit=false;
+      //var pt=new (require('stream').PassThrough);
+      p.on('exit',function(rc,signal) {
+        clipitExit=true;
+        self.log("copied %s bytes to clipboard, rc=%s, signal=%s",clipboardBytes,rc,signal);
+        if (platform=="linux" && clipboardBytes<=maxXselBuf) {
+          // if small enough buffer, place into X Windows primary selection too for
+          // convenience
+          var p2 = child_process.spawn("xsel", ["-i","-p"], {stdio:['pipe',process.stdout,process.stderr]});
+          p2.stdin.end(xselBuf);
+        }
+      });
+      socket.setTimeout(1500,function() {
+        self.log("*** socket timeout, %s bytes read, force closing now",clipboardBytes);
+        socket.end();
+        if (!clipitExit) {
+          p.kill();
+        }
+      });
+      socket.on("end", function() {
+        socket.end();
+      });
+      z.on("data", function(chunk) {
+        clipboardBytes+=chunk.length;
+        if (xselBuf.length<=maxXselBuf) xselBuf+=new String(chunk);
+      });
+      socket.pipe(z).pipe(p.stdin);
+    },true);
+
+    // send clipboard data to client
+    self.registerHandler("zGetCb",function(controller,socket,key) {
+      var paste_prog=controller.getOsProgram(OsProgEnum.PASTE);
+      var p=child_process.spawn(paste_prog[0], paste_prog.slice(1),
+        {stdio:['ignore','pipe',process.stderr]});
+      var z=controller.getZlib();
+      p.stdout.pipe(z).pipe(socket);
+    },true);
+
+    var logfile=util.format("%s/%s.log",process.env.ESH_TMP,process.env.USER);
+    var stream=fs.createWriteStream(logfile);
+    stream.on('open',function(fd) {
+      self.log=function(msg) {
+        stream.write(msg,'utf8');
+        stream.write("\n",'utf8');
+      };
+      self.registerOtherHandlers();
+      resolve();
+    });
+  });
 }
 
 EscreenController.prototype.expireOneTimeAuthToken=function(at) {
@@ -308,7 +319,7 @@ EscreenController.prototype.registerOtherHandlers=function() {
         var f=util.format("%s/%s",dirs[i],ls[j]);
         var l=require(f);
         l(this);
-        console.log("registered " + f);
+        this.log("registered " + f);
       }
     }
   }
@@ -322,7 +333,7 @@ EscreenController.prototype.registerHandler=function(evtId,handler,forwardEvent)
 EscreenController.prototype.handleRequest=function(socket) {
   var chunk=socket.read();
   if (chunk==null) {
-    console.log("WARNING: null chunk");
+    this.log("WARNING: null chunk");
     return;
   }
   var hdr=[];
@@ -332,7 +343,7 @@ EscreenController.prototype.handleRequest=function(socket) {
       if (i<chunk.length-1) {
         var xtra=chunk.slice(i+1);
         var res=socket.unshift(xtra);
-        console.log("unshift %s bytes",xtra.length);
+        this.log("unshift %s bytes",xtra.length);
       }
       hdr=new String(chunk.slice(0,i)).split(" ");
       break;
@@ -344,20 +355,20 @@ EscreenController.prototype.handleRequest=function(socket) {
   if (this.oneTimeAuthTokens.indexOf(hdr[0])>=0) {
     this.expireOneTimeAuthToken(hdr[0]);
   } else if (hdr[0]!=this.authToken) {
-    console.log("ERROR: unmatched auth token: %s (expected %s): %s",hdr[0],this.authToken,hdr[1]);
+    this.log("ERROR: unmatched auth token: %s (expected %s): %s",hdr[0],this.authToken,hdr[1]);
     setTimeout( function() { socket.end("bad auth token"); }, 3000 );
     return;
   }
   var evtId = hdr[1];
   hdr.splice(0,2);
-  console.log(evtId+":"+hdr);
+  this.log(evtId+":"+hdr);
   hdr.unshift(this,socket);
   if (this.forwardEvent[evtId] && this.forward_ESH_AT) {
     hdr.unshift(evtId);
     try {
       this.forwardRequest.apply(null,hdr);
     } catch (err) {
-      console.log("EXCEPTION in forwardRequest:"+err);
+      this.log("EXCEPTION in forwardRequest:"+err);
     }
   } else {
     try {
@@ -365,26 +376,26 @@ EscreenController.prototype.handleRequest=function(socket) {
       //esh.handlers[evt.evtId](evt,hdr);
       this.handlers[evtId].apply(null,hdr);
     } catch (err) {
-      console.log("EXCEPTION in handler:"+err);
+      this.log("EXCEPTION in handler:"+err);
     }
   }
 };
 
 // forward request from a nested escreen to its parent escreen
 EscreenController.prototype.forwardRequest=function(evtId,controller,socket) {
-  console.log("forwardRequest:%s",evtId);
+  this.log("forwardRequest:%s",evtId);
   var sock2=net.createConnection({port:controller.forward_ESH_PORT});
   var hdr=controller.forward_ESH_AT+" "+evtId;
   for (var i=3;i<arguments.length;i++) {
     hdr+=" "+arguments[i];
   }
-  console.log("forwardRequest:hdr:%s",hdr);
+  this.log("forwardRequest:hdr:%s",hdr);
   sock2.on('connect', function(){
     sock2.write(hdr+"\n");
     socket.pipe(sock2);
     sock2.pipe(socket);
   });
   sock2.on('error', function(e){
-    console.log("ERROR in forwardRequest: %s",e);
+    this.log("ERROR in forwardRequest: %s",e);
   });
 };
