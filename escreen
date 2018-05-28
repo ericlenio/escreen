@@ -192,4 +192,4 @@ ESH_CORE=$ESH_HOME/core
 # given shell between various combinations of screen, sudo, and ssh
 export ESH_STY=0000
 
-exec node $ESH_HOME/EscreenRunServer.js $ESH_PROFILE
+exec node $ESH_HOME/main.js $ESH_PROFILE

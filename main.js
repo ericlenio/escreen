@@ -13,7 +13,7 @@ controller.init().then(function() {
     shellServer.on('listening',function() {
       var args=[
         "-c",
-        "_esh_i $ESH_STY ESH_PORT; ESH_SCREEN_EXEC=1 screen",
+        "_esh_i $ESH_STY ESH_PORT; ESH_PW_FILE=$(_esh_b ESH_PW_FILE) ESH_SCREEN_EXEC=1 screen",
       ];
       process.env.ESH_PORT=shellServer.address().port;
       var p=child_process.spawn("bash",args,{

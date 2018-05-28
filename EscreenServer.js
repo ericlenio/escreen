@@ -30,6 +30,11 @@ EscreenServer.prototype.start=function() {
   });
 };
 
+/**
+ * Read and eval the .escreenrc file. First try to read $HOME/.escreenrc.gpg
+ * (encrypted version), if that doesn't exist then fall back to plain
+ * $HOME/.escreenrc.
+ */
 EscreenServer.prototype.readEscreenrc=function() {
   var fs=require('fs');
   var util=require('util');
