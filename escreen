@@ -144,7 +144,7 @@ export -f _esh_l
 
 # ESH_AT is a simple security access token
 export ESH_AT=$(openssl rand 3 -hex)
-export ESH_HOME=$(dirname $(perl -MCwd=abs_path -le 'print abs_path readlink(shift);' $0))
+export ESH_HOME=$(dirname $(perl -MCwd -e 'print Cwd::abs_path shift' $0))
 escreen_branch=$(cd $ESH_HOME && git rev-parse --abbrev-ref HEAD)
 [ -z "$ESH_TMP" ] && ESH_TMP=/tmp/esh-$escreen_branch
 export ESH_TMP
