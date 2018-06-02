@@ -1,10 +1,10 @@
 # vim:filetype=sh
 tomcatlog() {
-  local opts="23ecx" flag=$1 op opt
+  local opts="23ecx" flag=$1 op opt tcuser=$(cd /etc/default && ls tomcat*)
   # if ssh-ing to remote system with odd/custom tomcat setup: create
   # /etc/escreen.sshrc and set ESH_TOMCATLOG and ESH_TOMCATLOGUSER
-  local logfile=${ESH_TOMCATLOG:-/var/log/tomcat7/catalina.out}
-  local tomcat_user=${ESH_TOMCATLOGUSER:-tomcat7}
+  local logfile=${ESH_TOMCATLOG:-/var/log/$tcuser/catalina.out}
+  local tomcat_user=${ESH_TOMCATLOGUSER:-$tcuser}
   while getopts $opts opt; do
     case "$opt" in
       2) # for LincDoc 2.x
