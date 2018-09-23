@@ -153,6 +153,8 @@ export ESH_USER=$USER
 
 # shell init script here
 _esh_i() {
+  local i=$HOME/.escreen_profile
+  [ -f $i ] && . $i
   local t=$ESH_TMP u=$ESH_USER f=$(_esh_e -f)
   [ ! -d $t ] && mkdir $t && chmod 1777 $t
   # only write out ESH_STY file if we are NOT in a sudo session
@@ -160,7 +162,7 @@ _esh_i() {
   # ... actually, write it out if it does not exist
   [ ! -f $f ] && {
     _esh_e "$@"
-    nohup sh -c "while kill -0 $$; do sleep 5; done; f=$(_esh_e -f); rm -f \$f" </dev/null >/dev/null 2>&1 &
+    nohup sh -c "while kill -0 $$; do sleep 5; done; f=$(_esh_e -f); rm -f \$f*" </dev/null >/dev/null 2>&1 &
   }
   ESH_NC="nc -q -1"
   # test if -q is supported with nc, due to 

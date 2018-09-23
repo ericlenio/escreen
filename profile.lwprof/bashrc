@@ -1,5 +1,6 @@
-export ESH_EDITOR=$ESH_TMP/$USER.editor
-export INPUTRC=$ESH_TMP/$USER.inputrc
+base=$(_esh_e -f)
+export ESH_EDITOR=$base-editor
+export INPUTRC=$base-inputrc
 echo "set mark-symlinked-directories on" > $INPUTRC
 export FCEDIT=$ESH_EDITOR \
   VISUAL=$ESH_EDITOR \
@@ -9,10 +10,11 @@ export FCEDIT=$ESH_EDITOR \
   PAGER=less \
   LESS="-siR"
 add_to_path() {
-  [ -d "$1" ] && [[ ":$PATH:" != *":$1:"* ]] && PATH="$1:$PATH"
+  while [ $# -gt 0 ]; do
+    [ -d "$1" ] && [[ ":$PATH:" != *":$1:"* ]] && PATH="$1:$PATH"
+    shift
+  done
 }
-export -f add_to_path
-add_to_path /usr/local/bin
-add_to_path $HOME/bin
+add_to_path /usr/local/bin $HOME/bin
 # true here so _esh_l does not echo this file
 true
