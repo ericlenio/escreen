@@ -37,10 +37,10 @@ ssh'd to some other system).
 or using an existing profile. My personal profile is the only profile so far,
 called `profile.lwprof`.
 
-**Step 2: set up your rcfile.** The rcfile is `$HOME/.escreenrc`. This is sourced
-by escreen at init time by the nodejs server. It may contain any valid
-nodejs commands, but in particular you should make a unique password for
-yourself like so:
+**Step 2: set up your initialization files.** The first initialization file is
+`$HOME/.escreenrc`. This is sourced by escreen at init time by the nodejs
+server. It may contain any valid nodejs commands, but in particular you should
+make a unique password for yourself like so:
 
     global.MY_PASSWORD = "2sCuk5iVuRXrGmmUjLfwFj8fZSsoldML";
 
@@ -53,10 +53,14 @@ For better security, and if **gpg-agent** is set up on your system, encrypt
 your .escreenrc and name it `$HOME/.escreenrc.gpg` and that will be used
 instead.
 
+An optional 2nd initialization file `$HOME/.escreen_profile` can be used,
+similar in principle to bash's `.bash_profile`, and may contain bash commands.
+Use this for example to override the default value for `ESH_TMP` to store
+temporary escreen files in an alternate location.
+
 **Step 3: start escreen.** Run the following to start a new session, which will
 load all your preferences and create stub functions. It launches GNU screen
-with two windows: 1st window is a just a log file for escreen, 2nd window is a
-fresh shell to work in.
+with a fresh shell to work in.
 
     # run with default profile
     escreen
