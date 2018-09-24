@@ -4,9 +4,12 @@
 # calls _esh_i to init the session, to make sure the communication port is
 # functional
 _vime() {
-  local VIMRC=$ESH_TMP/$LOGNAME.editor.vimrc
+  local VIMRC=$ESH_TMP/$LOGNAME.vimrc
   _vimrc $VIMRC || return $?
   eval "$(_esh_e)"
+
+  export ESH_EDITOR=$(_esh_e -f)-$LOGNAME-editor
+  export FCEDIT=$ESH_EDITOR VISUAL=$ESH_EDITOR EDITOR=$ESH_EDITOR
   printf '#!/usr/bin/env bash
 %s
 ESH_PORT=%s _esh_i %s ESH_PORT </dev/null
