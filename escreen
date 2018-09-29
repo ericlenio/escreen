@@ -196,6 +196,6 @@ ESH_CORE=$ESH_HOME/core
 # ESH_STY is conceptually tied to screen's STY variable ... it gets used as a
 # unique ID to properly track the communications port (ESH_PORT) to use in a
 # given shell between various combinations of screen, sudo, and ssh
-export ESH_STY=0000
+export ESH_STY=$$
 
 exec node $ESH_HOME/main.js $ESH_PROFILE

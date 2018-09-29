@@ -10,11 +10,9 @@ _vime() {
   export FCEDIT=$ESH_EDITOR VISUAL=$ESH_EDITOR EDITOR=$ESH_EDITOR
   printf '#!/usr/bin/env bash
 %s
-eval $(_esh_e)
-_esh_i %s ESH_PORT </dev/null
+_esh_i </dev/null
 exec vim -S %s "$@"' \
-  "$(_bash_init $ESH_STY)" \
-  $ESH_STY \
+  "$(declare -f _esh_e _esh_b _esh_l _esh_i)" \
   $VIMRC \
   > $ESH_EDITOR || return $?
   chmod 700 $ESH_EDITOR || {
