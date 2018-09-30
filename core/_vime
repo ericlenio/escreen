@@ -5,17 +5,16 @@
 # functional
 _vime() {
   local VIMRC=$ESH_TMP/$ESH_USER.vimrc
-  _vimrc $VIMRC || return $?
   export ESH_EDITOR=$ESH_TMP/$ESH_USER-vim
   export FCEDIT=$ESH_EDITOR VISUAL=$ESH_EDITOR EDITOR=$ESH_EDITOR
-  printf '#!/usr/bin/env bash
-%s
-_esh_i </dev/null
-exec vim -S %s "$@"' \
-  "$(declare -f _esh_e _esh_b _esh_l _esh_i)" \
-  $VIMRC \
-  > $ESH_EDITOR || return $?
-  chmod 755 $ESH_EDITOR || {
-    echo "ERROR: could not chmod $ESH_EDITOR: $?"
+  [ -w $ESH_EDITOR ] && {
+    _vimrc $VIMRC || return $?
+    printf '#!/usr/bin/env bash\n%s\n_esh_i </dev/null\nexec vim -S %s "$@"' \
+      "$(declare -f _esh_e _esh_b _esh_l _esh_i)" \
+      $VIMRC \
+      > $ESH_EDITOR || return $?
+    chmod 755 $ESH_EDITOR || {
+      echo "ERROR: could not chmod $ESH_EDITOR: $?"
+    }
   }
 }

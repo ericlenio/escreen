@@ -1,4 +1,4 @@
 # vim:filetype=sh
 vim() {
-  SHELL=$ESH_SHELL $ESH_EDITOR "$@"
+  $ESH_EDITOR "$@"
 }

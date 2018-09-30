@@ -20,7 +20,6 @@ controller.init().then(function() {
         stdio:['inherit','inherit','inherit'],
       });
       p.on('exit',function(code) {
-        console.log("FINISH:"+code+":"+new Date());
         process.exit(code);
       });
     });
