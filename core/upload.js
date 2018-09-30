@@ -12,7 +12,7 @@ module.exports=function(controller) {
         //cwd:"/tmp",
         stdio:['pipe','pipe',null]
       });
-    console.log("sshd started: %s",p.pid)
+    //console.log("sshd started: %s",p.pid)
     socket.pipe(p.stdin);
     //socket.on('data', function(data){
       //p.stdin.write(data);
@@ -20,7 +20,7 @@ module.exports=function(controller) {
     p.stdout.pipe(socket);
     //p.stderr.pipe(socket);
     p.on('exit',function(rc,signal) {
-      console.log("sshd exit, rc=%s, signal=%s",rc,signal);
+      //console.log("sshd exit, rc=%s, signal=%s",rc,signal);
       socket.end();
     });
   },true);
@@ -38,10 +38,10 @@ module.exports=function(controller) {
 
 
   controller.registerHandler("setUploadFilename",function(controller,socket,token,uploadFileBase64) {
-    var upload_file=new Buffer( uploadFileBase64, 'base64' ).toString();
+    var upload_file=Buffer.from( uploadFileBase64, 'base64' ).toString();
     upload_file=upload_file.substr(0,1)=="/" ?
       upload_file : process.env.HOME + "/" + upload_file;
-    console.log("setUploadFilename:%s",upload_file);
+    //console.log("setUploadFilename:%s",upload_file);
     var stat=fs.existsSync(upload_file) ? fs.statSync(upload_file) : null;
     var mode=Number( (stat ? stat.mode : 0) & 07777).toString(8);
     var size=Number(stat ? stat.size : 0);
@@ -70,7 +70,7 @@ module.exports=function(controller) {
     var upFile=CACHE[token].filename;
     if ( typeof upFile=="string" && upFile.length>0 ) {
       if (fs.existsSync(upFile)) {
-        console.log("getUploadFile: upload %s now",upFile);
+        //console.log("getUploadFile: upload %s now",upFile);
         var fsstream=fs.createReadStream(upFile);
         var crypto=require('crypto');
         var h=crypto.createHash('md5');
@@ -80,11 +80,9 @@ module.exports=function(controller) {
         });
         fsstream.pipe(socket);
         return;
-      } else {
-        console.log("getUploadFile: request to upload non-existent file %s",upFile);
       }
     } else {
-      console.log("getUploadFile: request to upload file, but CACHE has no value for token %s",token);
+      console.error("getUploadFile: request to upload file, but CACHE has no value for token %s",token);
     }
     socket.end();
   },true);
@@ -96,7 +94,7 @@ module.exports=function(controller) {
       socket.end(md5);
       return;
     }
-    console.log("WARNING: getUploadFileHash: \"%s\" does not exist",CACHE[token].filename);
+    console.warn("WARNING: getUploadFileHash: \"%s\" does not exist",CACHE[token].filename);
     socket.end();
   },true);
 

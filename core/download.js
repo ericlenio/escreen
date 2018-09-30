@@ -4,8 +4,8 @@ module.exports=function(controller) {
     var fs=require('fs');
     var crypto=require('crypto');
     var h=crypto.createHash('md5');
-    var tmpfile="/tmp/" + new Buffer(base64filename,'base64').toString();
-    console.log("downloading to "+tmpfile+", expected size is "+filesize);
+    var tmpfile="/tmp/" + Buffer.from(base64filename,'base64').toString();
+    //console.log("downloading to "+tmpfile+", expected size is "+filesize);
     var bytes=0;
     var fsstream=fs.createWriteStream(tmpfile,{mode:0600});
     var finish_up=function() {
