@@ -269,7 +269,7 @@ EscreenController.prototype.getCore=function() {
   s+=this.getBashrc();
   s+="_vimrc() {\n";
   s+="local f=$1\n";
-  s+="[ -w $f ] && {\n";
+  s+="[ ! -f $f -o -w $f ] && {\n";
   s+="cat << 'EOF' > $f\n";
   s+=this.getVimrc();
   s+="EOF\n";
