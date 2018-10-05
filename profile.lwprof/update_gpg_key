@@ -13,8 +13,13 @@ update_gpg_key() {
       # delete old gpg key that expired on 04/28/2014
       gpg --no-default-keyring --keyring $apt_keyring --yes --batch --delete-key "$old_key"
     }
-    echo "$new_key_base64" | gpg --no-default-keyring --keyring $apt_lincware_key_file --import
-    chmod 644 $apt_lincware_key_file
+    if [ -d \$(dirname $apt_lincware_key_file) ]; then
+      echo "$new_key_base64" | gpg --no-default-keyring --keyring $apt_lincware_key_file --import
+      chmod 644 $apt_lincware_key_file
+    else
+      # ubuntu hardy
+      echo "$new_key_base64" | gpg --output - --dearmor | gpg --no-default-keyring --keyring $apt_keyring --import
+    fi
     aptfile=/etc/apt/sources.list.d/lincware.list
     if [ ! -f \$aptfile ]; then
       echo "deb http://apt.lincware.com/ubuntu three core" > \$aptfile
