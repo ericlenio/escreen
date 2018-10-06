@@ -61,6 +61,9 @@ ssh() {
   local h=$cmdline_ssh_host
   [ "$SSH_STY_LBL" ] && h=$SSH_STY_LBL
   printf "\033k$h\033\134"
+  # restore screen window title when this function is interrupted, or just
+  # returns normally
+  trap 'printf "\033k${HOSTNAME}\033\134"' INT RETURN
 
   eval $(_esh_e)
   # if anything left in the command line (and ssh option -t is not set), then
@@ -121,7 +124,6 @@ EOF1
     env ssh "${ssh_opts[@]}"
     sshrc=$?
   fi
-  printf "\033k${HOSTNAME}\033\134"
   return $sshrc
 }
 export -f ssh
