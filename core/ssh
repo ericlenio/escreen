@@ -57,11 +57,11 @@ ssh() {
   if [[ $sshV =~ OpenSSH_([0-9]+)\.([0-9]+) ]]; then
     ssh_major=${BASH_REMATCH[1]} ssh_minor=${BASH_REMATCH[2]}
   fi
-  #[ "$STY" ] && {
-    local h=$cmdline_ssh_host
-    [ "$SSH_STY_LBL" ] && h=$SSH_STY_LBL
-    printf "\033k$h\033\134"
-  #}
+
+  local h=$cmdline_ssh_host
+  [ "$SSH_STY_LBL" ] && h=$SSH_STY_LBL
+  printf "\033k$h\033\134"
+
   eval $(_esh_e)
   # if anything left in the command line (and ssh option -t is not set), then
   # we just do straight through call to ssh.
@@ -121,7 +121,6 @@ EOF1
     env ssh "${ssh_opts[@]}"
     sshrc=$?
   fi
-  #[ "$STY" ] && printf "\033k${HOSTNAME}\033\134"
   printf "\033k${HOSTNAME}\033\134"
   return $sshrc
 }
