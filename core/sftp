@@ -1,0 +1,5 @@
+# vim:filetype=sh
+sftp() {
+  eval $(_esh_e)
+  env sftp "$@"
+}
