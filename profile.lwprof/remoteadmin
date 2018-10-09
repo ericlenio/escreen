@@ -92,10 +92,17 @@ remoteadmin() {
   local hostnames=($(get_vm_data hostname)) choice=0
   local n=$((${#hostnames[@]}-1))
   if [ $n -gt 1 ]; then
-    echo "Pick:"
-    for i in $(seq 0 $n); do
-      printf "%s. %s\n" $i ${hostnames[$i]}
-    done
+    local choice_list=$(
+      echo "Pick:"
+      for i in $(seq 0 $n); do
+        printf "%s. %s\n" $i ${hostnames[$i]}
+      done
+    )
+    if [ $(($n+2)) -gt $LINES ]; then
+      less <<<"$choice_list"
+    else
+      echo "$choice_list"
+    fi
     read -p "choose 0-$n: " choice
     if [ -z "$choice" ] || ! grep -q -w -- "$choice" <<<${!hostnames[@]}; then
       echo "invalid choice"
