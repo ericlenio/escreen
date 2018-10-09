@@ -1,0 +1,12 @@
+# vim:filetype=sh
+#
+# pw retrieves a password from $ESH_PW_FILE based on the given key; limitation:
+# password cannot contain a colon because that is assumed to be the delimiter
+# here
+pw() {
+  local pwkey="$1" delim=":"
+  [ -z "$pwkey" ] && return 1
+  local pwline=$(gpg -qd "$ESH_PW_FILE" | grep -- "$pwkey$delim" | head -1)
+  [ -z "$pwline" ] && return 1
+  [[ "$pwline" =~ ([^$delim]+)$ ]] && echo "${BASH_REMATCH[1]}" || return 1
+}
