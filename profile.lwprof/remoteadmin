@@ -51,32 +51,63 @@ remoteadmin() {
     fi
   }
 
-  local cmdfile=/tmp/remoteadmin.$USER
-  ssh -q -A -t remoteadmin@remoteadmin.lincware.com show_activity_log2 $filter $USER | (tee $cmdfile)
-  local ssh_op ssh_port http_port hostname
-  eval $(grep ^ssh_op= $cmdfile)
-  rm -f $cmdfile
-  # At this point, ssh_op, ssh_port, http_port, and hostname should all be set
+  eval $(_esh_e)
 
-  case $ssh_op in
-    1)
-      extra_params="$(get_extra_ssh_params $hostname)"
-      if [ -n "$extra_params" ]; then
-        echo "Passing extra params to ssh: $extra_params"
-      fi
-      #ssh -t -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oProxyCommand="/usr/bin/ssh -q -e none -A -T remoteadmin@remoteadmin.lincware.com remoteadmin_port=$ssh_port" $extra_params lincdoc@remoteadmin.lincware.com
-      SSH_STY_LBL=$hostname ssh -t -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -p $ssh_port $extra_params lincdoc@remoteadmin.lincware.com
-      ;;
-    2)
-      sftp -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oProxyCommand="/usr/bin/ssh -q -A -T remoteadmin@remoteadmin.lincware.com remoteadmin_port=$ssh_port" lincdoc@remoteadmin.lincware.com
-      ;;
-    3)
-      #ldsupport_password=$(get_RA_attr ldsupport_password)
-      exec=(ssh -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oProxyCommand="/usr/bin/ssh -q -A -T remoteadmin@remoteadmin.lincware.com remoteadmin_port=$ssh_port" $extra_params lincdoc@remoteadmin.lincware.com sudo -u postgres psql -tAc "\"select config from ld_admin.ld_config_map where key = 'ldsupport-crypt-pw'\"" lincdoc )
-      ldsupport_password=$("${exec[@]}")
-      echo ldsupport_password=%xx%
-      echo
-      decrypt_ldsupport_pw $ldsupport_password
-      ;;
-  esac
+  if [ -z "$RA_USER" ]; then
+    read -p "What is your remoteadmin username? " RA_USER
+    [ -z "$RA_USER" ] && return 1
+    read -p "Confirm: username is \"$RA_USER\" (y/n, default is y)?" yesno
+    [ "$yesno" -a "$yesno" != y ] && return
+    _esh_e $ESH_STY RA_USER "$RA_USER"
+  fi
+
+  local pwkey="LincWare LDAP:$RA_USER"
+  local pw=$(pw "$pwkey")
+  [ -z "$pw" ] && {
+    echo "Could not retrieve password for \"$RA_USER\" to launch remoteadmin" >&2
+    return 1
+  }
+  local vmjson auth=$(printf "%s:%s" "$RA_USER" "$pw" | base64)
+  local auth_hdr=$(printf "Authorization: Basic %s" $auth)
+  local endpoint=https://remoteadmin-dev.lincware.com/get-vms
+  vmjson=$(curl -S -s -f -H "$auth_hdr" $endpoint)
+  local rc=$?
+  if [ $rc -gt 0 ]; then
+    echo "Failed to read $endpoint"
+    return 1
+  fi
+
+  local matching_indices=$(jq -r -c "[.[] | .hostname | test(\".*$filter.*\";\"i\")] | indices(true)" <<<$vmjson)
+  if [ "$matching_indices" = "[]" ]; then
+    echo "no matches for filter: $filter"
+    return 1
+  fi
+  local vmjson_filtered=$(jq -c "[.$matching_indices]" <<<$vmjson)
+
+  get_vm_data() {
+    local key=$1
+    jq -r -c ".[] | .$key" <<<$vmjson_filtered
+  }
+
+  local hostnames=($(get_vm_data hostname)) choice=0
+  local n=$((${#hostnames[@]}-1))
+  if [ $n -gt 1 ]; then
+    echo "Pick:"
+    for i in $(seq 0 $n); do
+      printf "%s. %s\n" $i ${hostnames[$i]}
+    done
+    read -p "choose 0-$n: " choice
+    if [ -z "$choice" ] || ! grep -q -w -- "$choice" <<<${!hostnames[@]}; then
+      echo "invalid choice"
+      return 1
+    fi
+  fi
+  local ssh_ports=($(get_vm_data sshPort))
+  local ssh_port=${ssh_ports[$choice]}
+  local hostname=${hostnames[$choice]}
+  local extra_params="$(get_extra_ssh_params $hostname)"
+  if [ -n "$extra_params" ]; then
+    echo "Passing extra params to ssh: $extra_params"
+  fi
+  SSH_STY_LBL=$hostname ssh -t -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -p $ssh_port $extra_params lincdoc@remoteadmin.lincware.com
 }
