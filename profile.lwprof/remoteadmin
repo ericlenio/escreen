@@ -76,8 +76,19 @@ remoteadmin() {
     echo "Failed to read $endpoint"
     return 1
   fi
-
-  local matching_indices=$(jq -r -c "[.[] | .hostname | test(\".*$filter.*\";\"i\")] | indices(true)" <<<$vmjson)
+  #local matching_indices=$(jq -c "[.[] | .hostname | test(\".*$filter.*\";\"i\")] | indices(true)" <<<$vmjson)
+  local matching_indices=$(node - "$vmjson" "$filter" << 'EOF'
+var vms=JSON.parse(process.argv[2]);
+var filter=new RegExp(process.argv[3],"i");
+var matching=[];
+vms.map(function(vm,idx) {
+  if (vm.hostname.search(filter)>=0) {
+    matching.push(idx);
+  }
+});
+console.log(JSON.stringify(matching));
+EOF
+)
   if [ "$matching_indices" = "[]" ]; then
     echo "no matches for filter: $filter"
     return 1
