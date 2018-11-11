@@ -67,7 +67,7 @@ remoteadmin() {
     echo "Could not retrieve password for \"$RA_USER\" to launch remoteadmin" >&2
     return 1
   }
-  local vmjson auth=$(printf "%s:%s" "$RA_USER" "$pw" | base64)
+  local vmjson auth=$(printf "%s:%s" "$RA_USER" "$pw" | openssl enc -a -A)
   local auth_hdr=$(printf "Authorization: Basic %s" $auth)
   local endpoint=https://remoteadmin-dev.lincware.com/get-vms
   vmjson=$(curl -S -s -f -H "$auth_hdr" $endpoint)
