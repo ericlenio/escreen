@@ -6,8 +6,8 @@ var zlib=require('zlib');
 var os=require('os');
 var child_process=require('child_process');
 var OsProgEnum = Object.freeze({
-  COPY : { linux : ["clipit"], darwin : ["pbcopy"], openbsd: ["xsel","-i"] },
-  PASTE : { linux : ["clipit","-c"], darwin : ["pbpaste"], openbsd: ["xsel","-o"] },
+  COPY : { linux : ["clipit"], darwin : ["pbcopy"], openbsd: ["xclip","-i","-selection","clipboard"] },
+  PASTE : { linux : ["clipit","-c"], darwin : ["pbpaste"], openbsd: ["xclip","-o"] },
   OPEN : { linux : ["xdg-open"], darwin : ["open"], openbsd: ["xdg-open"] },
 });
 
@@ -104,7 +104,7 @@ EscreenController.prototype.init=function() {
       var cp_prog=controller.getOsProgram(OsProgEnum.COPY);
 
       var platform=os.platform();
-      var p=child_process.spawn(cp_prog[0], cp_prog.slice(1), {stdio:['pipe',null,null]});
+      var p=child_process.spawn(cp_prog[0], cp_prog.slice(1), {stdio:['pipe',null,process.stderr]});
       var clipitExit=false;
       //var pt=new (require('stream').PassThrough);
       p.on('exit',function(rc,signal) {
