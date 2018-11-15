@@ -7,7 +7,7 @@ var os=require('os');
 var child_process=require('child_process');
 var OsProgEnum = Object.freeze({
   COPY : { linux : ["clipit"], darwin : ["pbcopy"], openbsd: ["xclip","-i","-selection","clipboard"] },
-  PASTE : { linux : ["clipit","-c"], darwin : ["pbpaste"], openbsd: ["xclip","-o"] },
+  PASTE : { linux : ["clipit","-c"], darwin : ["pbpaste"], openbsd: ["xclip","-o","-selection","clipboard"] },
   OPEN : { linux : ["xdg-open"], darwin : ["open"], openbsd: ["xdg-open"] },
 });
 
