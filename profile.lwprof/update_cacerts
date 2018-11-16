@@ -79,7 +79,7 @@ EOF
   num_certs=$(get_num_certs "$cert_source")
   echo "detected $num_certs cert(s)"
   local did_one=0
-  for i in $(seq 1 $num_certs); do
+  for ((i=1; i<=$num_certs; i++)); do
     cert=$(get_cert "$cert_source" $i)
     alias=$(get_cert_cn "$cert")
     echo "cert #$i alias: $alias"

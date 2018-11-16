@@ -105,7 +105,7 @@ EOF
   if [ $n -gt 1 ]; then
     local choice_list=$(
       echo "Pick:"
-      for i in $(seq 0 $n); do
+      for ((i=1; i<=$n; i++)); do
         printf "%s. %s\n" $i ${hostnames[$i]}
       done
     )
