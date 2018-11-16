@@ -7,10 +7,10 @@ module.exports=function(controller) {
   controller.registerHandler("sshd",function(controller,socket) {
     //socket.cork();
     var child_process=require('child_process');
-    var p=child_process.spawn("/usr/bin/sudo",["/usr/sbin/sshd","-i"],
+    var p=child_process.spawn("sudo",["/usr/sbin/sshd","-i"],
       {
         //cwd:"/tmp",
-        stdio:['pipe','pipe',null]
+        stdio:['pipe','pipe',process.stderr]
       });
     //console.log("sshd started: %s",p.pid)
     socket.pipe(p.stdin);
