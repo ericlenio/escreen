@@ -34,9 +34,16 @@ fi
 #
 # get/set the main communications port, and other environment variables
 #
-# if 0 args: cat out current variables from file
+# if 0 args: cat out current file
 #
-# if 1 arg: copy variables from old file to new file
+# if 1 arg:
+#   arg is -f: echo the name of file
+#
+#   arg is a plus sign followed by a variable name: append this variable to the
+#   file (as a new "declare" statement)
+#
+#   arg is any other value: arg is assumed to be a new ESH_STY value to be used
+#   in the new file name, and we copy variables from old file to new file
 #
 # if 2+ args:
 # 1st arg: $ESH_STY value
@@ -59,6 +66,13 @@ _esh_e() {
         -f)
           F $ESH_STY
           ;;
+        +*)
+          # strip leading plus sign, we should be left with a variable name
+          n=${1#+}
+          eval v=\$$n
+          # append var name and value to the file
+          echo "declare $n='$v'" >> $(F $ESH_STY)
+          ;;
         *)
           cat $(F $ESH_STY) > $f
           echo wrote $f: $(cat $f) 1>&2
@@ -72,7 +86,7 @@ _esh_e() {
           n=$1
           shift
           eval v=\$$n
-          echo "declare $n='$v'">>$f
+          echo "declare $n='$v'" >> $f
         done
         echo wrote $f: $(cat $f) 1>&2
       }

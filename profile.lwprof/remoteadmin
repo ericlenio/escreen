@@ -56,9 +56,9 @@ remoteadmin() {
   if [ -z "$RA_USER" ]; then
     read -p "What is your remoteadmin username? " RA_USER
     [ -z "$RA_USER" ] && return 1
-    read -p "Confirm: username is \"$RA_USER\" (y/n, default is y)?" yesno
+    read -p "Confirm: username is \"$RA_USER\" (y/n, default is y)? " yesno
     [ "$yesno" -a "$yesno" != y ] && return
-    _esh_e $ESH_STY RA_USER "$RA_USER"
+    _esh_e +RA_USER
   fi
 
   local pwkey="LincWare LDAP:$RA_USER"
