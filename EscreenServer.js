@@ -12,7 +12,8 @@ EscreenServer.prototype.start=function() {
       {allowHalfOpen:true},
       function(socket) {
         //console.log("Connection from " + socket.remoteAddress + " at " + new Date() );
-        socket.setNoDelay(true);
+        // "setsockopt TCP_NODELAY: Invalid argument"
+        //socket.setNoDelay(true);
         // Do readable here since on slow connection we may need to push data back
         // into the buffer, especially with setCb. Once a "data" event is listened
         // for it puts the stream into flow mode, and then unshift would not work.
