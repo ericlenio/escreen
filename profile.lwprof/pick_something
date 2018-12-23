@@ -1,0 +1,41 @@
+# vim:filetype=sh
+#
+# pick 1 line from a list
+#
+# example usage: 
+#
+#   file=$(pick_something "Pick a file:" "$(find $logdir -type f | sort)")
+#   [ -f "$file" ] && lwsa_view_file "$file"
+#
+# return code: >0 a problem occurred; <0 user specifically did not choose anything
+#
+pick_something() {
+  local tty=$(tty) intro_label="$1" pick_list="$2" i=1 l
+  local -a pick_array
+  IFS=$'\n' pick_array=($pick_list)
+  local indexes=${!pick_array[@]}
+  local n=$((${#pick_array[@]}-1))
+  pick_list=$(
+    echo "$intro_label"
+    for ((i=1; i<=$n; i++)); do
+      l=${pick_array[$i]}
+      printf "%s. %s\n" $(($i+1)) "$l"
+    done
+  )
+  LINES=$(tput lines)
+  if [ $((${#pick_array[@]}-2)) -gt $LINES ]; then
+    less <<< "$pick_list" >$tty
+  else
+    echo "$pick_list" >$tty
+  fi
+  read -p "Enter choice: " choice
+  [ -z "$choice" ] && return 1
+  ! [[ "$choice" =~ ^[0-9]+$ ]] && return 1
+  choice=$(($choice-1))
+  if echo $indexes | grep -q -w -- "$choice"; then
+    echo "${pick_array[$choice]}"
+  else
+    return -1
+  fi
+}
+export -f pick_something
