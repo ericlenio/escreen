@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -e
 set -o pipefail
-port=8888
+port=2543
 siriusxmurl=https://raw.githubusercontent.com/andrew0/SiriusXM/master/sxm.py
 siriusxmuser=eric@lincware.com
 
