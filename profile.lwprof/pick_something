@@ -1,41 +1,55 @@
 # vim:filetype=sh
 #
-# pick 1 line from a list
+# pick 1 line from a list. positional parameters:
+#
+#   intro_label: the label to display before presenting the list
+#
+#   pick_list: a multiline string with the choices to be given to user
+#
+#   use_idx: if 1, this script outputs the index number of the user's choice,
+#   else we output the chosen line from pick_list
 #
 # example usage: 
 #
 #   file=$(pick_something "Pick a file:" "$(find $logdir -type f | sort)")
 #   [ -f "$file" ] && lwsa_view_file "$file"
 #
-# return code: >0 a problem occurred; <0 user specifically did not choose anything
+# the user selected item from the original list is echoed to stdout
+#
+# return code: 0 user picked a valid entry from the list; 1 user did not choose
+# anything; 2 user gave some other bogus choice
 #
 pick_something() {
-  local tty=$(tty) intro_label="$1" pick_list="$2" i=1 l
+  local tty=$(tty) intro_label="$1" pick_list="$2" use_idx="$3" i l c
   local -a pick_array
-  IFS=$'\n' pick_array=($pick_list)
+  local IFS=$'\n' pick_array=($pick_list)
   local indexes=${!pick_array[@]}
-  local n=$((${#pick_array[@]}-1))
+  local n=$((${#pick_array[@]}))
   pick_list=$(
     echo "$intro_label"
-    for ((i=1; i<=$n; i++)); do
+    for ((i=0; i<$n; i++)); do
       l=${pick_array[$i]}
       printf "%s. %s\n" $(($i+1)) "$l"
     done
   )
-  LINES=$(tput lines)
-  if [ $((${#pick_array[@]}-2)) -gt $LINES ]; then
+  l=$(tput lines)
+  if [ $((${#pick_array[@]}-2)) -gt $l ]; then
     less <<< "$pick_list" >$tty
   else
     echo "$pick_list" >$tty
   fi
-  read -p "Enter choice: " choice
-  [ -z "$choice" ] && return 1
-  ! [[ "$choice" =~ ^[0-9]+$ ]] && return 1
-  choice=$(($choice-1))
-  if echo $indexes | grep -q -w -- "$choice"; then
-    echo "${pick_array[$choice]}"
+  read -p "Enter choice: " c
+  [ -z "$c" ] && return 1
+  ! [[ "$c" =~ ^[0-9]+$ ]] && return 2
+  c=$(($c-1))
+  if echo $indexes | grep -q -w -- "$c"; then
+    if [ "$use_idx" = 1 ]; then
+      echo $c
+    else
+      echo "${pick_array[$c]}"
+    fi
   else
-    return -1
+    return 2
   fi
 }
 export -f pick_something

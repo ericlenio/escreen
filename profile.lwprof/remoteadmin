@@ -104,21 +104,14 @@ EOF
   local n=$((${#hostnames[@]}-1))
   if [ $n -gt 1 ]; then
     local choice_list=$(
-      echo "Pick:"
-      for ((i=1; i<=$n; i++)); do
-        printf "%s. %s\n" $i ${hostnames[$i]}
+      for ((i=0; i<=$n; i++)); do
+        printf "%s\n" ${hostnames[$i]}
       done
     )
-    if [ $(($n+2)) -gt $LINES ]; then
-      less <<<"$choice_list"
-    else
-      echo "$choice_list"
-    fi
-    read -p "choose 0-$n: " choice
-    if [ -z "$choice" ] || ! grep -q -w -- "$choice" <<<${!hostnames[@]}; then
+    choice=$(pick_something "Pick:" "$choice_list" 1) || {
       echo "invalid choice"
       return 1
-    fi
+    }
   fi
   local ssh_ports=($(get_vm_data sshPort))
   local ssh_port=${ssh_ports[$choice]}
@@ -127,5 +120,6 @@ EOF
   if [ -n "$extra_params" ]; then
     echo "Passing extra params to ssh: $extra_params"
   fi
+echo SSH_STY_LBL=$hostname ssh -t -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -p $ssh_port $extra_params lincdoc@remoteadmin.lincware.com >$(tty)
   SSH_STY_LBL=$hostname ssh -t -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -p $ssh_port $extra_params lincdoc@remoteadmin.lincware.com
 }
