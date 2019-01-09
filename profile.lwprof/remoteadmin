@@ -120,6 +120,5 @@ EOF
   if [ -n "$extra_params" ]; then
     echo "Passing extra params to ssh: $extra_params"
   fi
-echo SSH_STY_LBL=$hostname ssh -t -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -p $ssh_port $extra_params lincdoc@remoteadmin.lincware.com >$(tty)
   SSH_STY_LBL=$hostname ssh -t -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -p $ssh_port $extra_params lincdoc@remoteadmin.lincware.com
 }
