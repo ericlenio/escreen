@@ -24,7 +24,7 @@ pick_something() {
   local -a pick_array
   local IFS=$'\n' pick_array=($pick_list)
   local indexes=${!pick_array[@]}
-  local n=$((${#pick_array[@]}))
+  local n=${#pick_array[@]}
   pick_list=$(
     echo "$intro_label"
     for ((i=0; i<$n; i++)); do
