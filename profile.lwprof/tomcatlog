@@ -1,6 +1,6 @@
 # vim:filetype=sh
 tomcatlog() {
-  local opts="23ecx" flag=$1 op opt tcuser=$(cd /etc/default && ls tomcat*)
+  local opts="23ecx" flag=$1 op opt tcuser=$(grep -w tomcat. /etc/passwd | tail -1 | cut -d: -f1)
   # if ssh-ing to remote system with odd/custom tomcat setup: create
   # /etc/escreen.sshrc and set ESH_TOMCATLOG and ESH_TOMCATLOGUSER
   local logfile=${ESH_TOMCATLOG:-/var/log/$tcuser/catalina.out}
