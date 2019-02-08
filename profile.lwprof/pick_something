@@ -21,8 +21,9 @@
 #
 pick_something() {
   local tty=$(tty) intro_label="$1" pick_list="$2" use_idx="$3" i l c
-  local -a pick_array
-  local IFS=$'\n' pick_array=($pick_list)
+  local -a pick_array ifs_orig=$IFS
+  IFS=$'\n' pick_array=($pick_list)
+  IFS=$ifs_orig
   local indexes=${!pick_array[@]}
   local n=${#pick_array[@]}
   pick_list=$(
