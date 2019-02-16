@@ -117,7 +117,7 @@ EscreenController.prototype.init=function() {
           p2.stdin.end(xselBuf);
         }
       });
-      socket.setTimeout(1500,function() {
+      socket.setTimeout(5000,function() {
         self.log("*** socket timeout, %s bytes read, force closing now",clipboardBytes);
         socket.end();
         if (!clipitExit) {
@@ -130,6 +130,9 @@ EscreenController.prototype.init=function() {
       z.on("data", function(chunk) {
         clipboardBytes+=chunk.length;
         if (xselBuf.length<=maxXselBuf) xselBuf+=new String(chunk);
+      });
+      z.on("error", function(e) {
+        self.log("zlib error in setCb: %s",e);
       });
       socket.pipe(z).pipe(p.stdin);
     },true);
