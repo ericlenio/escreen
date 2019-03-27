@@ -52,7 +52,7 @@ screen() {
   [ "$bashA" ] && bashE="$bashE $bashA"
   # Set up a little macro so that ^a% will dump the current screen to a file,
   # then edit it in vim.
-  local hardcopy_file=$ESH_TMP/$USER.screenrc.hardcopy
+  local hardcopy_file=$ESH_TMP/$USER.screenrc.hardcopy caption="%{= kw}%-w%{= BW}%n%t%{-}%+w %-= @%H %{= Y}%l%{-} %m/%d %c"
   touch $hardcopy_file
   chmod 600 $hardcopy_file
 ##
@@ -65,6 +65,7 @@ SHELL=$(which bash)
   # we are in the first window of the screen session, init some things
   #
   # setting SHELL in freebsd does not seem to work
+  printf "\\033k:\\033\\134"
   env screen -S $STY -X eval \
     "setenv SHELL $SHELL" \
     "setenv ESH_STY $STY" \
@@ -77,7 +78,7 @@ SHELL=$(which bash)
     "hardstatus ignore" \
     "bind %% eval \\"hardcopy_append off\\" \\"hardcopy %s\\" \\"screen $ESH_EDITOR %s\\"" \
     "shelltitle \\"\\$ |:\\"" \
-    "caption always \\"%%{= kw}%%-w%%{= BW}%%n%%t%%{-}%%+w %%-= @%%H %%{= Y}%%l%%{-} %%m/%%d %%c\\""
+    "caption always \\"%s\\""
   export ESH_SHELL=%s
   env screen -S $STY -X setenv ESH_SHELL $ESH_SHELL
   _esh_e $STY
@@ -91,7 +92,7 @@ SHELL=$(which bash)
 trap "eval \$(_esh_e)" DEBUG
 %s
 [ $# -eq 0 -o "$1" = "-c" ] && exec $SHELL --norc --noprofile "$@"
-"$@"' $bashE $hardcopy_file $hardcopy_file $shell "$(declare -p PS1)" > $shell
+"$@"' $bashE $hardcopy_file $hardcopy_file "$caption" $shell "$(declare -p PS1)" > $shell
 ##
 ## END of big printf command
 ##
