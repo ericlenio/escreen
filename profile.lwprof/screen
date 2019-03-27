@@ -91,7 +91,7 @@ SHELL=$(which bash)
 trap "eval \$(_esh_e)" DEBUG
 %s
 [ $# -eq 0 -o "$1" = "-c" ] && exec $SHELL --norc --noprofile "$@"
-"$@"' $bashE $shell $hardcopy_file $hardcopy_file "$(declare -p PS1)" > $shell
+"$@"' $bashE $hardcopy_file $hardcopy_file $shell "$(declare -p PS1)" > $shell
 ##
 ## END of big printf command
 ##
