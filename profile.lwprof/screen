@@ -50,17 +50,19 @@ screen() {
   chmod 755 $shell
   local bashE=$(which bash) bashA="$(bash --help|grep -- --import-functions)"
   [ "$bashA" ] && bashE="$bashE $bashA"
-  # Set up a little macro so that ^a% will dump the current screen to a file,
-  # then edit it in vim.
-  local hardcopy_file=$ESH_TMP/$USER.screenrc.hardcopy caption="%{= kw}%-w%{= BW}%n%t%{-}%+w %-= @%H %{= Y}%l%{-} %m/%d %c"
-  touch $hardcopy_file
-  chmod 600 $hardcopy_file
-##
-## START of big printf command
-##
-  printf '#!%s
+  local caption="%{= kw}%-w%{= BW}%n%t%{-}%+w %-= @%H %{= Y}%l%{-} %m/%d %c"
+  local printf_template=$(cat << 'EOF'
+%s%s
 # Force SHELL back to normal (freebsd workaround)
 SHELL=$(which bash)
+if [ "$1" = hardcopy ]; then
+  hc=$(mktemp)
+  m=$(mktemp)
+  echo "hardcopy $hc" > $m
+  echo "screen sh -c '$ESH_EDITOR $hc; rm $hc'" >> $m
+  env screen -S $STY -X source $m
+  exit
+fi
 [ "$STY" -a "$STY" != "$ESH_STY" ] && {
   # we are in the first window of the screen session, init some things
   #
@@ -74,9 +76,9 @@ SHELL=$(which bash)
     "vbell on" \
     "vbell_msg DING" \
     "defmonitor on" \
-    "msgwait 1" \
+    "msgwait 3" \
     "hardstatus ignore" \
-    "bind %% eval \\"hardcopy_append off\\" \\"hardcopy %s\\" \\"screen $ESH_EDITOR %s\\"" \
+    'bind %% exec $SHELL hardcopy' \
     "shelltitle \\"\\$ |:\\"" \
     "caption always \\"%s\\""
   export ESH_SHELL=%s
@@ -92,10 +94,10 @@ SHELL=$(which bash)
 trap "eval \$(_esh_e)" DEBUG
 %s
 [ $# -eq 0 -o "$1" = "-c" ] && exec $SHELL --norc --noprofile "$@"
-"$@"' $bashE $hardcopy_file $hardcopy_file "$caption" $shell "$(declare -p PS1)" > $shell
-##
-## END of big printf command
-##
+"$@"
+EOF
+)
+printf "$printf_template" '#!' $bashE "$caption" $shell "$(declare -p PS1)" > $shell
 
 
   local exec c esc=^Ee
