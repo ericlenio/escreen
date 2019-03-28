@@ -78,7 +78,7 @@ fi
     "defmonitor on" \
     "msgwait 3" \
     "hardstatus ignore" \
-    'bind %% exec $SHELL hardcopy' \
+    "bind %% exec $0 hardcopy" \
     "shelltitle \\"\\$ |:\\"" \
     "caption always \\"%s\\""
   export ESH_SHELL=%s
