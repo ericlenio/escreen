@@ -1,39 +1,25 @@
 # vim:filetype=sh
 screen() {
   # make copy of original function args
-  local args=("$@")
-  # NOTE: cannot set OPTS in 1 line, it strips the return value from the subshell
-  local OPTS
+  local args=("$@") opt
   # Note: escreen sends "--", that is why we skip it here
   if [ "$1" != -- ]; then
     for opt in "$@"; do
       case $opt in
         -r)
-          local curr_sty=${STY:-some_value} choice i=0 sty
-          local screen_stys=($(env screen -ls | grep -v $curr_sty | perl -n -e 's{^\s*(\d+\.\S+).*}{$1} && print'))
-          if [ ${#screen_stys} = 0 ]; then
+          local curr_sty=${STY:-some_value} pick_sty
+          local stys=$(env screen -ls | grep -v $curr_sty | perl -n -e 's{^\s*(\d+\.\S+).*}{$1} && print')
+          if [ -z "$stys" ]; then
             echo "No screen sessions detected."
             return 1
           fi
-          printf "Resume which screen session?\n"
-          IFS='\n' env screen -ls | grep -v $curr_sty | perl -n -e 's{^\s*(\d+\..*)}{$1} && print' | while read l; do
-            printf "%s. %s\n" $i "$l"
-            i=$(($i+1))
-          done
-          read -p "Enter choice: " choice
-          # http://unix.stackexchange.com/questions/249907/screen-fails-with-writemessage-bad-file-descriptor
-          if echo ${!screen_stys[@]} | grep -q -w -- "$choice"; then
-            sty=${screen_stys[$choice]}
-            eval $(_esh_e)
-            _esh_e $sty ESH_PORT SSH_AUTH_SOCK ESH_AT
-            #local pid=$(echo $sty | cut -d. -f1)
-            #read -p "Press return to continue"
-            env screen -d -r $sty
+          if ! pick_sty=$(pick_something "Resume which session?" "$stys"); then
             return $?
-          else
-            echo "Invalid choice."
-            return 1
           fi
+          eval $(_esh_e)
+          _esh_e $pick_sty ESH_PORT SSH_AUTH_SOCK ESH_AT
+          env screen -d -r $pick_sty
+          return $?
           ;;
         -d|-D|-R|-RR|-ls|-list|-Q|-v|-x|-X)
           env screen "$@"
@@ -99,7 +85,7 @@ trap "eval \$(_esh_e)" DEBUG
 EOF
 )
   printf "$printf_template" '#!' $bashE "$caption" $shell "$(declare -p PS1)" > $shell
-  local exec c esc=^Ee
+  local exec esc=^Ee
 
   if [ "$ESH_SCREEN_EXEC" = 1 ]; then
     esc=^Aa
