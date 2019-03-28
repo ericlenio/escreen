@@ -61,6 +61,7 @@ if [ "$1" = hardcopy ]; then
   echo "hardcopy $hc" > $m
   echo "screen sh -c '$ESH_EDITOR $hc; rm $hc'" >> $m
   env screen -S $STY -X source $m
+  rm $m
   exit
 fi
 [ "$STY" -a "$STY" != "$ESH_STY" ] && {
@@ -97,9 +98,7 @@ trap "eval \$(_esh_e)" DEBUG
 "$@"
 EOF
 )
-printf "$printf_template" '#!' $bashE "$caption" $shell "$(declare -p PS1)" > $shell
-
-
+  printf "$printf_template" '#!' $bashE "$caption" $shell "$(declare -p PS1)" > $shell
   local exec c esc=^Ee
 
   if [ "$ESH_SCREEN_EXEC" = 1 ]; then
