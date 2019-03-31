@@ -1,5 +1,6 @@
 let f=$ESH_HOME."/core/gpg.vimrc"
-if filereadable(f)
+" note: @% is the current file
+if filereadable(f) && @% != ""
   exe 'source '.f
   " vim 7.x seems to require re-loading the buffer, thus edit command here
   edit
@@ -10,3 +11,6 @@ colorscheme elflord
 syntax enable
 set cursorline noswapfile number hlsearch incsearch sw=2 ignorecase wrap nocompatible ruler ai nocindent indentexpr= showmatch modeline modelines=5 nobackup nowritebackup textwidth=0 expandtab formatoptions=croql wildmenu wildignore=*.class path=.,,** nojoinspaces scrolloff=0
 filetype indent off
+if exists("my_find")
+  call feedkeys(":find ".my_find."\<tab>","t")
+endif

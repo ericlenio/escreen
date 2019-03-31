@@ -1,0 +1,5 @@
+# vim:filetype=sh
+# opens vim in "find" mode, see vimrc
+vf() {
+  v --cmd ":let my_find='$1'"
+}

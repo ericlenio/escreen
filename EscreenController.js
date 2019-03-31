@@ -222,7 +222,8 @@ EscreenController.prototype.getVimrc=function() {
   var f=util.format("%s/vimrc",this.getProfileDir());
   var s="";
   if (fs.existsSync(f)) {
-    s=fs.readFileSync(f);
+    // read file and remove vimrc comments
+    s=String(fs.readFileSync(f)).replace(/\r?\n\s*".*$/gm,"");
   }
   return s;
 };
