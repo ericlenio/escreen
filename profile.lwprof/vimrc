@@ -6,14 +6,19 @@ if filereadable(f) && @% != ""
   edit
 endif
 map <c-v> :let @"=system("_esh_b zGetCb")<cr>:if col("$")-col(".")==1<bar>call feedkeys("p")<bar>else<bar>call feedkeys("P")<bar>endif<bar>redraw<bar>echon "Pasted " len(@") " characters"<cr>
+function Cp2cp()
+  " copies the contents of the unnamed register to OS clipboard
+  call system("cp2cb",@")
+  echon "Copied " len(@") " characters"
+endfunction
 " vnoremap: "v" visual mode, "nore" no recurse, "map" map
 " here we remap control-c to copy the current visual selection to the OS clipboard
-vnoremap <c-c> y:call system("cp2cb",@")<cr>:echon "Copied " len(@") " characters"<cr>
+vnoremap <c-c> y:call Cp2cp()<cr>
 if @% =~ "passwords.gpg$"
   " when editing the passwords file, remap * to copy the current work to OS clipboard
   " use the expand() function to highlight the current word (cword)
-  " nmap: "n" normal mode
-  nmap <buffer> * :let @/=expand("<cword>")<cr>hevb<c-c>
+  " nmap: "n" means we are mapping a key in vim's normal mode
+  nmap <buffer> * :let @/=expand("<cword>")<cr>:let @"=@/<cr>:call Cp2cp()<cr>
 endif
 colorscheme elflord
 syntax enable
