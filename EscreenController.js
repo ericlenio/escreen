@@ -273,12 +273,10 @@ EscreenController.prototype.getCore=function() {
   s+=this.getBashrc();
   s+="_vimrc() {\n";
   s+="local f=$1\n";
-  s+="[ ! -f $f -o -w $f ] && {\n";
   s+="cat << 'EOF' > $f\n";
   s+=this.getVimrc();
   s+="EOF\n";
   s+="chmod 644 $f || { echo \"ERROR: _vimrc: could not chmod on $f\" >&2; return 1; }\n";
-  s+="}\n";
   s+="}\n";
   return s;
 };

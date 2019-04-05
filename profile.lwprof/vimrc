@@ -15,7 +15,7 @@ endfunction
 " here we remap control-c to copy the current visual selection to the OS clipboard
 vnoremap <c-c> y:call Cp2cp()<cr>
 if @% =~ "passwords.gpg$"
-  " when editing the passwords file, remap * to copy the current work to OS clipboard
+  " when editing the passwords file, remap * to copy the current word to OS clipboard
   " use the expand() function to highlight the current word (cword)
   " nmap: "n" means we are mapping a key in vim's normal mode
   nmap <buffer> * :let @/=expand("<cword>")<cr>:let @"=@/<cr>:call Cp2cp()<cr>
@@ -24,6 +24,7 @@ colorscheme elflord
 syntax enable
 set cursorline noswapfile number hlsearch incsearch sw=2 ignorecase wrap nocompatible ruler ai nocindent indentexpr= showmatch modeline modelines=5 nobackup nowritebackup textwidth=0 expandtab formatoptions=croql wildmenu wildignore=*.class path=.,,** nojoinspaces scrolloff=0
 filetype indent off
+nnoremap K :execute " grep -srnw --binary-files=without-match --exclude-dir=.git --exclude-dir=node_modules --exclude-dir=.svn . -e " . expand("<cword>") . " " <bar> cwindow<CR>
 if exists("my_find")
   call feedkeys(":find ".my_find."\<tab>","t")
 endif

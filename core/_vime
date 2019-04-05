@@ -1,20 +1,22 @@
 # vim:filetype=sh
-# _vime: generate wrapped vim executable
+# _vime: generate wrapped vim executable at shell initialization time
 #
 # calls _esh_i to init the session, to make sure the communication port is
 # functional
 _vime() {
+  local VIMRC=$ESH_TMP/$ESH_USER.vimrc
+  set -e
+  _vimrc $VIMRC
   export ESH_EDITOR=$ESH_TMP/$ESH_USER-vim
   export FCEDIT=$ESH_EDITOR VISUAL=$ESH_EDITOR EDITOR=$ESH_EDITOR
   [ ! -f $ESH_EDITOR -o -w $ESH_EDITOR ] && {
-    local VIMRC=$ESH_TMP/$ESH_USER.vimrc
-    _vimrc $VIMRC || return $?
     printf '#!/usr/bin/env bash\n%s\n_esh_i </dev/null\nexec vim -S %s "$@"' \
       "$(declare -f _esh_e _esh_b _esh_l _esh_i)" \
       $VIMRC \
-      > $ESH_EDITOR || return $?
+      > $ESH_EDITOR
     chmod 755 $ESH_EDITOR || {
-      echo "ERROR: could not chmod $ESH_EDITOR: $?"
+      echo "ERROR: could not chmod $ESH_EDITOR: $?" >&2
+      return 1
     }
   }
 }
