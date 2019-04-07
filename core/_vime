@@ -4,19 +4,20 @@
 # calls _esh_i to init the session, to make sure the communication port is
 # functional
 _vime() {
-  set -e
   local e=$ESH_TMP/$ESH_USER-vim
   export ESH_EDITOR=$e FCEDIT=$e VISUAL=$e EDITOR=$e
   [ ! -f $e -o -w $e ] && {
-    printf '#!/usr/bin/env bash
+    local p=$(cat <<'EOF'
+#!/usr/bin/env bash
 %s
 _esh_i </dev/null
-export MYVIMRC=$(mktemp)
-_vimrc > $MYVIMRC
-export VIMINIT="source \$MYVIMRC|call delete(\$MYVIMRC)"
-exec vim "$@"' \
-      "$(declare -f _esh_e _esh_b _esh_l _esh_i _vimrc)" \
-      > $e
+t=$(mktemp)
+_vimrc > $t
+echo "call delete('$t')" >> $t
+exec vim -S $t "$@"
+EOF
+)
+    printf "$p" "$(declare -f _esh_e _esh_b _esh_l _esh_i _vimrc)" > $e
     chmod 755 $e || {
       echo "ERROR: could not chmod $e: $?" >&2
       return 1
