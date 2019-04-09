@@ -22,9 +22,14 @@ if @% =~ "passwords.gpg$"
 endif
 colorscheme elflord
 syntax enable
-set cursorline noswapfile number hlsearch incsearch sw=2 ignorecase wrap nocompatible ruler ai nocindent indentexpr= showmatch modeline modelines=5 nobackup nowritebackup textwidth=0 expandtab formatoptions=croql wildmenu wildignore=*.class path=.,,** nojoinspaces scrolloff=0
+set cursorline noswapfile number hlsearch incsearch sw=2 ignorecase wrap nocompatible 
+set ruler ai nocindent indentexpr= showmatch modeline modelines=5 nobackup nowritebackup textwidth=0
+set expandtab formatoptions=croql nojoinspaces scrolloff=0
+set wildmenu wildignore=*.o,*.class,*.jar,*.png,*.pdf,**node_modules/**,build/**,.git/**,.svn/**,dist/**,tmp/** path=.,,**
 filetype indent off
-nnoremap K :execute " grep -srnw --binary-files=without-match --exclude-dir=.git --exclude-dir=node_modules --exclude-dir=.svn . -e " . expand("<cword>") . " " <bar> cwindow<CR>
+"nnoremap K :execute " grep -srnw --binary-files=without-match --exclude-dir=.git --exclude-dir=node_modules --exclude-dir=.svn . -e " . expand("<cword>") . " " <bar> cwindow<CR>
+" note: vimgrep respects wildignore
+nnoremap K :let @/=expand("<cword>")<bar>exe "vimgrep /" . @/ . "/g **" <bar> cwindow<CR>
 if exists("my_find")
   call feedkeys(":find ".my_find."\<tab>","t")
 endif
