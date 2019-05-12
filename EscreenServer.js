@@ -1,3 +1,6 @@
+var fs=require('fs');
+var HOUSEKEEPING_TIMER_INTERVAL=86400000;
+
 function EscreenServer(port,controller) {
   this.port=port;
   this.controller=controller;
@@ -6,6 +9,8 @@ module.exports=EscreenServer;
 
 EscreenServer.prototype.start=function() {
   var self=this;
+  
+  this.startHousekeepingTimer();
 
   return this.readEscreenrc().then(function() {
     var server=require('net').createServer(
@@ -66,4 +71,26 @@ EscreenServer.prototype.readEscreenrc=function() {
   }
 
   throw "Could not read $HOME/.escreenrc.gpg or $HOME/.escreenrc";
+};
+
+/**
+ * this timer does a simple read on all files in /tmp/esh so that on Macos at
+ * least the files do not get deleted
+ * (https://superuser.com/questions/187071/in-macos-how-often-is-tmp-deleted)
+ */
+EscreenServer.prototype.startHousekeepingTimer=function() {
+  var self=this;
+  var dir=process.env.ESH_TMP;
+  setInterval(function() {
+    fs.readdir(dir,function(e,files) {
+      if (e) {
+        console.error("housekeeping timer: "+e);
+        return;
+      }
+      files.forEach(function(f) {
+        f=dir+"/"+f;
+        var stats=fs.statSync(f);
+      });
+    });
+  },HOUSEKEEPING_TIMER_INTERVAL);
 };
