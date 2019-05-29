@@ -19,6 +19,7 @@ update_gpg_key() {
     #echo "$new_key_base64" | gpg --output - --dearmor | gpg --no-default-keyring --keyring $apt_lincware_key_file --import
     echo "$new_key_base64" > $apt_lincware_key_file
     chmod 644 $apt_lincware_key_file
+    gpg --dearmor $apt_lincware_key_file
   else
     # ubuntu hardy
     echo "$new_key_base64" | gpg --output - --dearmor | gpg --no-default-keyring --keyring $apt_keyring --import
