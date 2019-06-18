@@ -27,7 +27,7 @@ EscreenServer.prototype.start=function() {
         });
       });
 
-    server.listen(Number(self.port),"localhost",null,function(e) {
+    server.listen(Number(self.port),"127.0.0.1",null,function(e) {
       var port = server.address().port;
       console.log("START esh server listening on: " + port);
     });

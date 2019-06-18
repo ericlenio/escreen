@@ -109,7 +109,7 @@ ssh() {
     # you get weird timeout issues, so going back to old way
     #
     ssh_opts+=(
-      -t -oServerAliveInterval=90 -oExitOnForwardFailure=yes -R$rem_port:localhost:$ESH_PORT $ssh_user_host
+      -t -oServerAliveInterval=90 -oExitOnForwardFailure=yes -R$rem_port:127.0.0.1:$ESH_PORT $ssh_user_host
 'exec sh << "EOF1"
 b=`which bash`
 [ ! "$b" ] && exec $SHELL -l 0<>$SSH_TTY

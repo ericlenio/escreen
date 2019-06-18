@@ -113,12 +113,10 @@ _esh_b() {
   eval $(_esh_e)
   {
     echo $ESH_AT "$*"
-    # must unbuffer output for large file downloads ... "sed -u" not
-    # compatible with OSX though
-    #[ ! -t 0 ] && sed -u ''
-    [ ! -t 0 ] && perl -pe 'BEGIN{$|=1}'
+    #[ ! -t 0 ] && { [ "$(which perl)" ] && perl -pe 'BEGIN{$|=1}' || cat; }
+    [ ! -t 0 ] && cat
   } | \
-  $ESH_NC localhost $ESH_PORT | {
+  $ESH_NC 127.0.0.1 $ESH_PORT | {
     [ ${1:0:1} = z ] && gzip -d -c || cat
   }
 }
@@ -186,7 +184,7 @@ _esh_i() {
   # test if -q is supported with nc, due to 
   # https://bugs.launchpad.net/ubuntu/+source/netcat-openbsd/+bug/544935
   # we need it on newer ubuntu systems
-  [ "$(nc -q -1 -z localhost 1 2>&1)" ] && ESH_NC="nc"
+  [ "$(nc -q -1 -z 127.0.0.1 1 2>&1)" ] && ESH_NC="nc"
   # p0, p1, p2 are set by fpw call
   local $(_esh_b fpw cbf)
   _esh_l $t/$u.core $p0

@@ -7,14 +7,15 @@ module.exports=function(controller) {
     var tmpfile="/tmp/" + Buffer.from(base64filename,'base64').toString();
     //console.log("downloading to "+tmpfile+", expected size is "+filesize);
     var bytes=0;
-    var fsstream=fs.createWriteStream(tmpfile,{mode:0600});
-    var finish_up=function() {
+    var fsstream=fs.createWriteStream(tmpfile,{mode:0644});
+    var finish_up=function(e) {
       fsstream.end();
       var md5=h.digest('hex').toLowerCase();
       var msg = bytes + " received, MD5 check " +
-        ( md5==expected_md5 ? "SUCCEEDED" : "FAILED" ) + "\n";
+        ( md5==expected_md5 ? "SUCCEEDED" : "FAILED"+(e ? " ("+e+")" : "")) + "\n";
       socket.end(msg);
     }
+    socket.on('error',finish_up);
     if (gzipped==1) {
       var z=require('zlib').Gunzip();
       socket.pipe(z).pipe(fsstream);
@@ -26,6 +27,7 @@ module.exports=function(controller) {
           finish_up();
         }
       });
+      z.on('error',finish_up);
     } else {
       socket.pipe(fsstream);
       socket.on('data',function(chunk) {
