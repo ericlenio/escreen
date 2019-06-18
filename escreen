@@ -180,11 +180,12 @@ _esh_i() {
     _esh_e "$@"
     nohup sh -c "while kill -0 $$; do sleep 5; done; f=$(_esh_e -f); rm -f \$f*" </dev/null >/dev/null 2>&1 &
   }
-  ESH_NC="nc -q -1"
+  #ESH_NC="nc -q -1"
+  ESH_NC="nc"
   # test if -q is supported with nc, due to 
   # https://bugs.launchpad.net/ubuntu/+source/netcat-openbsd/+bug/544935
   # we need it on newer ubuntu systems
-  [ "$(nc -q -1 -z 127.0.0.1 1 2>&1)" ] && ESH_NC="nc"
+  #[ "$(nc -q -1 -z 127.0.0.1 1 2>&1)" ] && ESH_NC="nc"
   # p0, p1, p2 are set by fpw call
   local $(_esh_b fpw cbf)
   _esh_l $t/$u.core $p0

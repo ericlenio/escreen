@@ -24,7 +24,7 @@ echo esh_port0:$esh_port0 esh_at0:$esh_at0 sshuser:$sshuser
   local setmode=0
   # only set the mode if file did not previously exist (locally)
   [ ! -f "$upload_file" ] && setmode=1
-  echo $ESH_AT getUploadFile $token | $ESH_NC 127.0.0.1 $ESH_PORT | perl -pe '
+  echo $ESH_AT getUploadFile $token | nc 127.0.0.1 $ESH_PORT | perl -pe '
 BEGIN {
   $n=0;
   $n2=0;

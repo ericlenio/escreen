@@ -1,6 +1,4 @@
 # vim:filetype=sh
-# cp2cb: use perl to remove the last \n on the last line (because vim's
-# writefile will always put an extra one).
 cp2cb() {
   local f="$1"
   if [ -t 0 ]; then
@@ -13,8 +11,12 @@ cp2cb() {
   fi
   # override ESH_NC to not use "-q -1": we want nc to close as soon as it has
   # read all of its stdin
-  local nc=${ESH_NC/-q -1/-q 0} local os=$(uname -s)
-  [ $os = FreeBSD -o $os = OpenBSD ] && nc="nc -N"
-  perl -pe 'chomp if eof' -- "$f" | gzip -9 -c | ESH_NC="$nc" _esh_b setCb
+  #local nc=${ESH_NC/-q -1/-q 0} local os=$(uname -s)
+  #[ $os = FreeBSD -o $os = OpenBSD ] && nc="nc -N"
+  #perl -pe 'chomp if eof' -- "$f" | gzip -9 -c | ESH_NC="$nc" _esh_b setCb
+
+  # this printf is to trim the final \n
+  local txt="$(eval cat \"$f\")"
+  printf %s "$txt" | gzip -9 -c | _esh_b setCb ${#txt}
 }
 export -f cp2cb

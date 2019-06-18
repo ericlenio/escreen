@@ -96,45 +96,42 @@ EscreenController.prototype.init=function() {
     });
 
     // receive clipboard data from client, and store inside clipboard
-    self.registerHandler("setCb",function(controller,socket) {
+    self.registerHandler("setCb",function(controller,socket,expectedLength) {
       var z=zlib.Gunzip();
       var xselBuf="";
       var maxXselBuf=255;
       var clipboardBytes=0;
-      var cp_prog=controller.getOsProgram(OsProgEnum.COPY);
 
       var platform=os.platform();
-      var p=child_process.spawn(cp_prog[0], cp_prog.slice(1), {stdio:['pipe',null,process.stderr]});
-      var clipitExit=false;
-      //var pt=new (require('stream').PassThrough);
-      p.on('exit',function(rc,signal) {
-        clipitExit=true;
-        self.log("copied %s bytes to clipboard, rc=%s, signal=%s",clipboardBytes,rc,signal);
-        if (platform=="linux" && clipboardBytes<=maxXselBuf) {
-          // if small enough buffer, place into X Windows primary selection too for
-          // convenience
-          var p2 = child_process.spawn("xsel", ["-i","-p"], {stdio:['pipe',process.stdout,process.stderr]});
-          p2.stdin.end(xselBuf);
-        }
-      });
-      socket.setTimeout(5000,function() {
-        self.log("*** socket timeout, %s bytes read, force closing now",clipboardBytes);
-        socket.end();
-        if (!clipitExit) {
-          p.kill();
-        }
-      });
-      socket.on("end", function() {
-        socket.end();
+      z.on("end", function() {
+        var cp_prog=controller.getOsProgram(OsProgEnum.COPY);
+        var p=child_process.spawn(cp_prog[0], cp_prog.slice(1), {stdio:['pipe','ignore',process.stderr]});
+        p.stdin.end(xselBuf);
+        p.on("error", function(e) {
+          socket.end(e);
+        });
+        p.on('exit',function(rc,signal) {
+          socket.end();
+          self.log(`copied ${clipboardBytes} bytes to clipboard, rc=${rc}, signal=${signal}`);
+          if (rc==0 && platform=="linux" && clipboardBytes<=maxXselBuf) {
+            // if small enough buffer, place into X Windows primary selection too for
+            // convenience
+            var p2 = child_process.spawn("xsel", ["-i","-p"], {stdio:['pipe',process.stdout,process.stderr]});
+            p2.stdin.end(xselBuf);
+          }
+        });
       });
       z.on("data", function(chunk) {
         clipboardBytes+=chunk.length;
-        if (xselBuf.length<=maxXselBuf) xselBuf+=new String(chunk);
+        xselBuf+=new String(chunk);
+        if (clipboardBytes==expectedLength) {
+          z.end();
+        }
       });
       z.on("error", function(e) {
-        self.log("zlib error in setCb: %s",e);
+        socket.end(e);
       });
-      socket.pipe(z).pipe(p.stdin);
+      socket.pipe(z);
     },true);
 
     // send clipboard data to client
