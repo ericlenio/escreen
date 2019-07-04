@@ -1,15 +1,27 @@
-var util=require('util');
-var fs=require('fs');
-var net=require('net');
-var crypto=require('crypto');
-var zlib=require('zlib');
-var os=require('os');
-var child_process=require('child_process');
-var OsProgEnum = Object.freeze({
-  COPY : { linux : ["clipit"], darwin : ["pbcopy"], openbsd: ["xclip","-i","-selection","clipboard"] },
-  PASTE : { linux : ["clipit","-c"], darwin : ["pbpaste"], openbsd: ["xclip","-o","-selection","clipboard"] },
-  OPEN : { linux : ["xdg-open"], darwin : ["open"], openbsd: ["xdg-open"] },
-});
+const util=require('util');
+const fs=require('fs');
+const net=require('net');
+const crypto=require('crypto');
+const zlib=require('zlib');
+const os=require('os');
+const child_process=require('child_process');
+const OsProgEnum={
+  COPY:{
+    linux:["clipit"],
+    darwin:["pbcopy"],
+    openbsd:["xclip","-i","-selection","clipboard"],
+  },
+  PASTE:{
+    linux:["clipit","-c"],
+    darwin:["pbpaste"],
+    openbsd:["xclip","-o","-selection","clipboard"],
+  },
+  OPEN:{
+    linux:["xdg-open"],
+    darwin:["open"],
+    openbsd:["xdg-open"],
+  },
+};
 
 
 function EscreenController(profileDir) {

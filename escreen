@@ -132,8 +132,8 @@ export -f _esh_b
 _esh_l() {
   local f=$1 c p o
   export p=$([ "$2" ] && echo $2 || echo $(_esh_b fpw ${f/*.}))
+  o="openssl enc -aes256 -pass env:p"
   # https://cryptosense.com/weak-key-derivation-in-openssl/
-  o="openssl enc -a -aes256 -pass env:p"
   # try to use the cached file first ...
   [ -f $f ] && 
     c="$($o -d -in $f 2>/dev/null)" &&

@@ -5,13 +5,13 @@
 _esh_gen_stub() {
   local funcfile=$1
   local funcname=${funcfile/*.}
-  if [ -z "$(declare -F $funcname)" ]; then
+  [ -z "$(declare -F $funcname)" ] && {
     local f="function $funcname() { "
     f+='_esh_bootstrap '$funcfile' "$@";'
     f+='}'
     eval $f
     export -f $funcname
-    unalias $funcname 2>/dev/null || true
-  fi
+    unalias $funcname 2>/dev/null
+  }
 }
 export -f _esh_gen_stub
