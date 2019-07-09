@@ -102,7 +102,7 @@ EOF
 
   local hostnames=($(get_vm_data hostname)) choice=0
   local n=$((${#hostnames[@]}-1))
-  if [ $n -gt 1 ]; then
+  if [ $n -ge 1 ]; then
     local choice_list=$(
       for ((i=0; i<=$n; i++)); do
         printf "%s\n" ${hostnames[$i]}
