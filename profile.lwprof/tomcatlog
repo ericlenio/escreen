@@ -30,7 +30,7 @@ tomcatlog() {
   elif [ "$op" = "exceptions" ]; then
     sudo -u $tomcat_user grep Exception $logfile
   else
-    sudo -E -H -u $tomcat_user multitail -f -c $logfile
+    sudo -E -H -u $tomcat_user tail -f $logfile
   fi
 }
 export -f tomcatlog
