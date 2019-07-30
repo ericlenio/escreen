@@ -342,6 +342,11 @@ EscreenController.prototype.registerHandler=function(evtId,handler,forwardEvent)
 };
 
 EscreenController.prototype.handleRequest=function(socket) {
+  var self=this;
+  socket.on("error",function(e) {
+    self.log(e);
+    console.error("handleRequest: "+e);
+  });
   var chunk=socket.read();
   if (chunk==null) {
     this.log("WARNING: null chunk");
