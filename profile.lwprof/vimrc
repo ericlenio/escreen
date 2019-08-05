@@ -5,22 +5,43 @@ if filereadable(f) && @% != ""
   " vim 7.x seems to require re-loading the buffer, thus edit command here
   edit
 endif
-map <c-v> :let @"=system("_esh_b zGetCb")<cr>:if col("$")-col(".")==1<bar>call feedkeys("p")<bar>else<bar>call feedkeys("P")<bar>endif<bar>redraw<bar>echon "Pasted " len(@") " characters"<cr>
-function Cp2cb()
+
+fu Mktmpdir()
+  " make sure the temp directory exists (for long running vim sessions,
+  " because a cron job might delete it) - any time we do a vim "system"
+  " command this function should be called first
+  let @a=fnamemodify(tempname(),":p:h")
+  if ! isdirectory(@a)
+    call mkdir(@a,"p",0700)
+  endif
+endf
+
+fu PasteCb()
+  " paste contents of OS clipboard
+  call Mktmpdir()
+  let @"=system("_esh_b zGetCb")
+  call feedkeys(col("$")-col(".")==1 ? "p" : "P")
+  redraw
+  echon "Pasted " len(@") " characters"
+endf
+map <c-v> :call PasteCb()<cr>
+
+fu Cp2cb()
   " copies the contents of the unnamed register to OS clipboard;
   " NOTE: the system command will write out to a temp file
-  " which is vim's tempname() function - a long running vim session
-  " may delete the directory that tempname() places files
+  " which is vim's tempname() function
   try
+    call Mktmpdir()
     call system("cp2cb",@")
     echon "Copied " len(@") " characters"
   catch /.*/
     echo v:exception
   endtry
-endfunction
+endf
 " vnoremap: "v" visual mode, "nore" no recurse, "map" map
 " here we remap control-c to copy the current visual selection to the OS clipboard
 vnoremap <c-c> y:call Cp2cb()<cr>
+
 if @% =~ "passwords.gpg$"
   " when editing the passwords file, remap * to copy the current word to OS clipboard
   " use the expand() function to highlight the current word (cword)
