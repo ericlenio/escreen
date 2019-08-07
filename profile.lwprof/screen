@@ -13,12 +13,15 @@ screen() {
             echo "No screen sessions detected."
             return 1
           fi
-          if ! pick_sty=$(pick_something "Resume which session?" "$stys"); then
+          if [ $(echo "$stys" | wc -l) = 1 ]; then
+            pick_sty="$stys"
+          elif ! pick_sty=$(pick_something "Resume which session?" "$stys"); then
             return $?
           fi
           eval $(_esh_e)
           _esh_e $pick_sty ESH_PORT SSH_AUTH_SOCK ESH_AT
-          env screen -d -r $pick_sty
+          # strip off "screen." prefix from $TERM to avoid "$TERM too long" issue
+          env TERM=${TERM#screen.} screen -d -r $pick_sty
           return $?
           ;;
         -d|-D|-R|-RR|-ls|-list|-Q|-v|-x|-X)
@@ -96,6 +99,7 @@ EOF
   #env SCREENRC=$SCREENRC screen -e$esc -s $shell bash $(bash --help|grep -- --import-functions) -c "source $initfile" "${args[@]}"
 
   # freebsd: screen seems to completely ignore the "-s" flag, so use SHELL
-  # environment var instead
-  $exec env SCREENRC=/dev/null SHELL=$shell screen -e$esc "${args[@]}"
+  # environment var instead; strip off "screen." prefix from $TERM to avoid
+  # "$TERM too long" issue
+  $exec env SCREENRC=/dev/null SHELL=$shell TERM=${TERM#screen.} screen -e$esc "${args[@]}"
 }
