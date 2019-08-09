@@ -159,11 +159,14 @@ EscreenController.prototype.init=function() {
     var stream=fs.createWriteStream(logfile);
     stream.on('open',function(fd) {
       self.log=function(msg) {
-        stream.write(msg,'utf8');
+        stream.write(String(msg),'utf8');
         stream.write("\n",'utf8');
       };
       self.registerOtherHandlers();
       resolve();
+    });
+    stream.on('error',function(e) {
+      console.error("escreen write stream: "+e);
     });
   });
 }
