@@ -123,13 +123,16 @@ EOF
   if [ -n "$extra_params" ]; then
     echo "Passing extra params to ssh: $extra_params"
   fi
-  #SSH_STY_LBL=$hostname ssh -t -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -p $ssh_port $extra_params lincdoc@remoteadmin.lincware.com
+
   chroot_dir=/var/remoteadmin-chroot/443
   ssh_config=/home/remoteadmin/ssh-files/ra-agent-ssh-config-$ssh_port
+  #cp_file=/home/remoteadmin/ssh-files/ra-agent-controlpath-$ssh_port
+
   #SSH_STY_LBL=$hostname ssh -t -oProxyCommand="env ssh ra.lincware.com sudo chroot -u remoteadmin $chroot_dir ssh -v -F $ssh_config %r@127.0.0.1" $extra_params lincdoc@ra.lincware.com
   #SSH_STY_LBL=$hostname ssh -t -oProxyCommand="env ssh ra.lincware.com sudo chroot -u remoteadmin $chroot_dir ssh -F $ssh_config -v %r@127.0.0.1 sudo sshd -i" $extra_params lincdoc@unknown
   #SSH_STY_LBL=$hostname ssh -t ra.lincware.com sudo chroot -u remoteadmin $chroot_dir ssh -F $ssh_config -v lincdoc@127.0.0.1
   #SSH_STY_LBL=$hostname ssh -vv -t -oProxyCommand="env ssh ra.lincware.com sudo chroot -u remoteadmin $chroot_dir ssh -F $ssh_config %r@127.0.0.1 sudo remoteadmin-lincdoc-sshd" $extra_params lincdoc@unknown
+  #SSH_STY_LBL=$hostname ssh -t -oProxyCommand="env ssh -A remoteadmin@ra.lincware.com ssh -F $ssh_config 127.0.0.1 bash -c \"':;. .remoteadmin-shell-functions && exec sudo sshd -i'\"" $extra_params lincdoc@unknown
+
   #SSH_STY_LBL=$hostname ssh -oProxyJump=remoteadmin@ra.lincware.com -p $ssh_port $extra_params lincdoc@127.0.0.1
-  SSH_STY_LBL=$hostname ssh -t -oProxyCommand="env ssh -A remoteadmin@ra.lincware.com ssh -F $ssh_config -v -l root 127.0.0.1 sshd -i" $extra_params lincdoc@unknown
 }
