@@ -34,7 +34,7 @@ remoteadmin() {
     assume_ssh=0
   fi
 
-  function get_extra_ssh_params() {
+  get_extra_ssh_params() {
     local hostname=$(echo $1 | tr "[:upper:]" "[:lower:]")
     local hostname2
     local line
@@ -69,35 +69,38 @@ remoteadmin() {
   }
   local vmjson auth=$(printf "%s:%s" "$RA_USER" "$pw" | openssl enc -a -A)
   local auth_hdr=$(printf "Authorization: Basic %s" $auth)
-  local endpoint=https://remoteadmin-dev.lincware.com/get-vms
-  vmjson=$(curl -S -s -f -H "$auth_hdr" $endpoint)
+  #local endpoint=https://remoteadmin-dev.lincware.com/get-vms
+  local endpoint=https://remoteadmin.private:3333/ra-get-agents
+  vmjson=$(curl -k -S -s -f -H "$auth_hdr" $endpoint)
   local rc=$?
   if [ $rc -gt 0 ]; then
     echo "Failed to read $endpoint"
     return 1
   fi
   #local matching_indices=$(jq -c "[.[] | .hostname | test(\".*$filter.*\";\"i\")] | indices(true)" <<<$vmjson)
-  local matching_indices=$(node - "$vmjson" "$filter" << 'EOF'
-var vms=JSON.parse(process.argv[2]);
+  local matching=$(node - "$vmjson" "$filter" << 'EOF'
+var agents=JSON.parse(process.argv[2]);
 var filter=new RegExp(process.argv[3],"i");
-var matching=[];
-vms.map(function(vm,idx) {
-  if (vm.hostname.search(filter)>=0) {
-    matching.push(idx);
+agents.map(function(agent,idx) {
+  if (agent.raHostname.search(filter)>=0) {
+    console.log("hostname=%s ip=%s ssh_port=%s",agent.raHostname,agent.remoteAddress,agent.raSshPort);
   }
 });
-console.log(JSON.stringify(matching));
 EOF
 )
-  if [ "$matching_indices" = "[]" ]; then
+
+  if [ ! "$matching" ]; then
     echo "no matches for filter: $filter"
     return 1
   fi
-  local vmjson_filtered=$(jq -c "[.$matching_indices]" <<<$vmjson)
 
   get_vm_data() {
     local key=$1
-    jq -r -c ".[] | .$key" <<<$vmjson_filtered
+    local l
+    while read l; do
+      eval "$l"
+      echo "${!key}"
+    done <<<"$matching"
   }
 
   local hostnames=($(get_vm_data hostname)) choice=0
@@ -113,12 +116,20 @@ EOF
       return 1
     }
   fi
-  local ssh_ports=($(get_vm_data sshPort))
+  local ssh_ports=($(get_vm_data ssh_port))
   local ssh_port=${ssh_ports[$choice]}
   local hostname=${hostnames[$choice]}
   local extra_params="$(get_extra_ssh_params $hostname)"
   if [ -n "$extra_params" ]; then
     echo "Passing extra params to ssh: $extra_params"
   fi
-  SSH_STY_LBL=$hostname ssh -t -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -p $ssh_port $extra_params lincdoc@remoteadmin.lincware.com
+  #SSH_STY_LBL=$hostname ssh -t -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -p $ssh_port $extra_params lincdoc@remoteadmin.lincware.com
+  chroot_dir=/var/remoteadmin-chroot/443
+  ssh_config=/home/remoteadmin/ssh-files/ra-agent-ssh-config-$ssh_port
+  #SSH_STY_LBL=$hostname ssh -t -oProxyCommand="env ssh ra.lincware.com sudo chroot -u remoteadmin $chroot_dir ssh -v -F $ssh_config %r@127.0.0.1" $extra_params lincdoc@ra.lincware.com
+  #SSH_STY_LBL=$hostname ssh -t -oProxyCommand="env ssh ra.lincware.com sudo chroot -u remoteadmin $chroot_dir ssh -F $ssh_config -v %r@127.0.0.1 sudo sshd -i" $extra_params lincdoc@unknown
+  #SSH_STY_LBL=$hostname ssh -t ra.lincware.com sudo chroot -u remoteadmin $chroot_dir ssh -F $ssh_config -v lincdoc@127.0.0.1
+  #SSH_STY_LBL=$hostname ssh -vv -t -oProxyCommand="env ssh ra.lincware.com sudo chroot -u remoteadmin $chroot_dir ssh -F $ssh_config %r@127.0.0.1 sudo remoteadmin-lincdoc-sshd" $extra_params lincdoc@unknown
+  #SSH_STY_LBL=$hostname ssh -oProxyJump=remoteadmin@ra.lincware.com -p $ssh_port $extra_params lincdoc@127.0.0.1
+  SSH_STY_LBL=$hostname ssh -t -oProxyCommand="env ssh -A remoteadmin@ra.lincware.com ssh -F $ssh_config -v -l root 127.0.0.1 sshd -i" $extra_params lincdoc@unknown
 }
