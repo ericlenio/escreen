@@ -134,5 +134,5 @@ EOF
   #SSH_STY_LBL=$hostname ssh -vv -t -oProxyCommand="env ssh ra.lincware.com sudo chroot -u remoteadmin $chroot_dir ssh -F $ssh_config %r@127.0.0.1 sudo remoteadmin-lincdoc-sshd" $extra_params lincdoc@unknown
   #SSH_STY_LBL=$hostname ssh -t -oProxyCommand="env ssh -A remoteadmin@ra.lincware.com ssh -F $ssh_config 127.0.0.1 bash -c \"':;. .remoteadmin-shell-functions && exec sudo sshd -i'\"" $extra_params lincdoc@unknown
 
-  #SSH_STY_LBL=$hostname ssh -oProxyJump=remoteadmin@ra.lincware.com -p $ssh_port $extra_params lincdoc@127.0.0.1
+  SSH_STY_LBL=$hostname ssh -oProxyJump=remoteadmin@ra.lincware.com -p $ssh_port $extra_params lincdoc@127.0.0.1
 }
