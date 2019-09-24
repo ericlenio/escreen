@@ -108,18 +108,23 @@ ssh() {
     # freebsd, openbsd, et al, and also when dealing with slower connections
     # you get weird timeout issues, so going back to old way
     #
-    ssh_opts+=(
-      -t -oServerAliveInterval=90 -oExitOnForwardFailure=yes -R$rem_port:127.0.0.1:$ESH_PORT $ssh_user_host
-'exec sh << "EOF1"
-b=`which bash`
-[ ! "$b" ] && exec $SHELL -l 0<>$SSH_TTY
-exec $b << "EOF2"
+    alias comp="gzip -9 -c | openssl enc -a -A"
+    local c1 c0=$(echo ':
 sshrc=/etc/escreen.sshrc
 [ -f $sshrc ] && . $sshrc
-eval "$(echo '$(_bash_init $ssh_user_host-$(pwgen 6) $rem_port | gzip -9 -c | openssl enc -a -A)' | openssl enc -a -d -A | gzip -d -c)" 0<>$SSH_TTY
-EOF2
-EOF1
-')
+'"$(_bash_init $ssh_user_host-$(pwgen 6) $rem_port)"'
+' | comp)
+
+    c1=$(echo ':
+b=`which bash`
+[ ! "$b" ] && exec $SHELL -l
+exec $b -c "$(echo '$c0' | openssl enc -d -a -A | gzip -d -c)"
+' | comp)
+
+    ssh_opts+=(
+      -t -oServerAliveInterval=30 -oExitOnForwardFailure=yes -R$rem_port:127.0.0.1:$ESH_PORT $ssh_user_host
+      sh -c '"$(echo '$c1' | openssl enc -d -a -A | gzip -d -c)"'
+    )
     env ssh "${ssh_opts[@]}"
     sshrc=$?
   fi
