@@ -1,21 +1,18 @@
 # vim:filetype=sh
 #
-# Good test:
-# ssh localhost -t -A -oPermitLocalCommand=yes -oLocalCommand="bash -c 'date && pwd'" uname
+# ssh wrapper script
 #
 ssh() {
-  if [ ! -t 0 -o ! -t 1 ]; then
+  [ ! -t 0 -o ! -t 1 ] && {
     # in a pipeline
     env ssh "$@"
     return $?
-  fi
-  # openssh introduced multiplexing in 3.9
-  # ControlMaster=auto introduced in 4.2
-  # ControlPersist introduced in 5.6
-  # must use unique cp_prefix that enables us to parse out the ssh port from
-  # the control master socket
-  local last_arg=${@:$#}
-  [ -z "$last_arg" ] && { echo "no arguments to ssh?"; return; }
+  }
+  local i last_arg=${@:$#} \
+    ssh_legal_opts="1246ab:c:e:fgi:kl:m:no:p:qstvxACD:E:F:GI:J:KL:MNO:PQ:R:S:TVw:W:XYy" \
+    OPTS arg1 h ssh_user_host cmdline_ssh_host sshrc rem_port c0 c1
+  local -a ssh_opts
+  [ -z "$last_arg" ] && { echo "no arguments to ssh?"; return 1; }
   # Need to determine now if we are just running a plain shell in the remote
   # host, or some other command. For the former case, we set up a
   # ControlMaster; for the latter, no ControlMaster is necessary and we just
@@ -32,18 +29,14 @@ ssh() {
   #   Match exec "bash -c 'echo orighost=%n'"
   # but that statement cannot work on a command line, only inside
   # ~/.ssh/config, so not really a viable option.
-  local ssh_legal_opts="1246ab:c:e:fgi:kl:m:no:p:qstvxACD:E:F:I:KL:MNO:PQ:R:S:TVw:W:XYy" \
-    OPTS origArgs=("$@") force_tty=0 uname=$(uname) arg1
-  local -a ssh_opts
   OPTIND=1
   while builtin getopts $ssh_legal_opts arg1; do
-    [ "$arg1" = -t ] && force_tty=1
     ssh_opts+=("-$arg1")
     [ "$OPTARG" ] && ssh_opts+=("$OPTARG")
   done
   # after this "for" loop we know the ssh host is left in $1 (assuming an ssh
   # host was provided on the command line, which is most of the time)
-  for (( i=1; i<$OPTIND; i++ )); do shift; done
+  for ((i=1;i<$OPTIND;i++)); do shift; done
   if [ $# = 0 ]; then
     # Might have done -V, allow to continue
     env ssh "${ssh_opts[@]}"
@@ -51,14 +44,10 @@ ssh() {
   fi
   # should now have user@ssh_host left in function arguments, or just plain
   # ssh_host
-  local ssh_user_host="$1" sshV=$(env ssh -V 2>&1) sshrc ssh_major ssh_minor
-  local cmdline_ssh_host=${ssh_user_host##*@}
+  ssh_user_host="$1"
   shift
-  if [[ $sshV =~ OpenSSH_([0-9]+)\.([0-9]+) ]]; then
-    ssh_major=${BASH_REMATCH[1]} ssh_minor=${BASH_REMATCH[2]}
-  fi
-
-  local h=$cmdline_ssh_host
+  cmdline_ssh_host=${ssh_user_host##*@}
+  h=$cmdline_ssh_host
   [ "$SSH_STY_LBL" ] && h=$SSH_STY_LBL
   printf "\033k$h\033\134"
   # restore screen window title when this function is interrupted, or just
@@ -67,9 +56,8 @@ ssh() {
   eval $(_esh_e)
   # if anything left in the command line (and ssh option -t is not set), then
   # we just do straight through call to ssh.
-  if [ $# -gt 0 -a $force_tty = 0 ]; then
-    env ssh "${origArgs[@]}"
-    sshrc=$?
+  if [ $# -gt 0 ]; then
+    ssh_opts+=($ssh_user_host "$@")
   else
     #
     # We need an open port on the remote host. Pick a random port and hope it
@@ -90,7 +78,7 @@ ssh() {
     # the port: this leads to terminal IO issues when stuffing the ssh escape
     # command into the terminal driver.
     #
-    local rem_port=$(( $RANDOM % 1000 + 56100 ))
+    rem_port=$(( $RANDOM % 1000 + 56100 ))
     #
     # Assumption: /bin/sh exists on remote system. We use it to check for
     # /bin/bash, and if that exists set up prefered bash shell settings.
@@ -109,7 +97,7 @@ ssh() {
     # you get weird timeout issues, so going back to old way
     #
     alias comp="gzip -9 -c | openssl enc -a -A"
-    local c1 c0=$(echo ':
+    c0=$(echo ':
 sshrc=/etc/escreen.sshrc
 [ -f $sshrc ] && . $sshrc
 '"$(_bash_init $ssh_user_host-$(pwgen 6) $rem_port)"'
@@ -125,9 +113,7 @@ exec $b -c "$(echo '$c0' | openssl enc -d -a -A | gzip -d -c)"
       -t -oServerAliveInterval=30 -oExitOnForwardFailure=yes -R$rem_port:127.0.0.1:$ESH_PORT $ssh_user_host
       sh -c '"$(echo '$c1' | openssl enc -d -a -A | gzip -d -c)"'
     )
-    env ssh "${ssh_opts[@]}"
-    sshrc=$?
   fi
-  return $sshrc
+  env ssh "${ssh_opts[@]}"
 }
 export -f ssh
