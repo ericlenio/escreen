@@ -17,11 +17,18 @@
 #trap "rm -f $stdout $cmds; echo $stdout was deleted" EXIT INT
 
 remoteadmin() {
-  local exec ssh_params assume_ssh
+  local exec ssh_params assume_ssh opts="d" opt endpoint_base=https://remoteadmin.private:3333
   declare -a exec
   declare -a ssh_params
   local ssh_params_file=$HOME/.remoteadmin/ssh_options
-
+  while getopts $opts opt; do
+    case $opt in
+      d) endpoint_base=https://remoteadmin.private:3001
+        echo "NOTE: using dev endpoint base: $endpoint_base"
+        shift
+        ;;
+    esac
+  done
   local filter="$1"
   shift
   if [ -z "$filter" ]; then
@@ -69,8 +76,7 @@ remoteadmin() {
   }
   local vmjson auth=$(printf "%s:%s" "$RA_USER" "$pw" | openssl enc -a -A)
   local auth_hdr=$(printf "Authorization: Basic %s" $auth)
-  #local endpoint=https://remoteadmin-dev.lincware.com/get-vms
-  local endpoint=https://remoteadmin.private:3333/ra-get-agents
+  local endpoint=$endpoint_base/ra-get-agents
   vmjson=$(curl -k -S -s -f -H "$auth_hdr" $endpoint)
   local rc=$?
   if [ $rc -gt 0 ]; then
@@ -97,10 +103,10 @@ EOF
   get_vm_data() {
     local key=$1
     local l
-    while read l; do
+    echo "$matching" | while read l; do
       eval "$l"
       echo "${!key}"
-    done <<<"$matching"
+    done
   }
 
   local hostnames=($(get_vm_data hostname)) choice=0
@@ -117,8 +123,10 @@ EOF
     }
   fi
   local ssh_ports=($(get_vm_data ssh_port))
+  local ips=($(get_vm_data ip))
   local ssh_port=${ssh_ports[$choice]}
   local hostname=${hostnames[$choice]}
+  local ip=${ips[$choice]}
   local extra_params="$(get_extra_ssh_params $hostname)"
   if [ -n "$extra_params" ]; then
     echo "Passing extra params to ssh: $extra_params"
@@ -134,5 +142,17 @@ EOF
   #SSH_STY_LBL=$hostname ssh -vv -t -oProxyCommand="env ssh ra.lincware.com sudo chroot -u remoteadmin $chroot_dir ssh -F $ssh_config %r@127.0.0.1 sudo remoteadmin-lincdoc-sshd" $extra_params lincdoc@unknown
   #SSH_STY_LBL=$hostname ssh -t -oProxyCommand="env ssh -A remoteadmin@ra.lincware.com ssh -F $ssh_config 127.0.0.1 bash -c \"':;. .remoteadmin-shell-functions && exec sudo sshd -i'\"" $extra_params lincdoc@unknown
 
-  SSH_STY_LBL=$hostname ssh -oProxyJump=remoteadmin@ra.lincware.com -p $ssh_port $extra_params lincdoc@127.0.0.1
+
+  #SSH_STY_LBL=$hostname ssh -oProxyJump=remoteadmin@ra.lincware.com -p $ssh_port $extra_params lincdoc@127.0.0.1
+
+  endpoint=$endpoint_base/ra-get-ssh-session-args/$hostname/$ip
+  ssh_args=(ssh -t)
+  for arg in $(curl -s -k -S -H "$auth_hdr" $endpoint); do
+    ssh_args+=("$(echo $arg | openssl enc -d -a -A)")
+  done
+  ssh_args+=(exec bash)
+
+  echo "${ssh_args[@]}"
+  s=$(echo "${ssh_args[@]}" | openssl enc -a -A)
+  SSH_STY_LBL=$hostname ssh -t -p 2999 remoteadmin@ra.lincware.com '$(echo '$s' | openssl enc -d -A -a)'
 }
