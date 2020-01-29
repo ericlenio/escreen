@@ -1,4 +1,4 @@
 # vim:filetype=sh
 crontab() {
-  env SHELL=$ESH_SHELL EDITOR=$ESH_EDITOR crontab "$@"
+  env EDITOR=$ESH_EDITOR crontab "$@"
 }
