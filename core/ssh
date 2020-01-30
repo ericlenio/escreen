@@ -31,6 +31,12 @@ ssh() {
   # ~/.ssh/config, so not really a viable option.
   OPTIND=1
   while builtin getopts $ssh_legal_opts arg1; do
+    case $arg1 in
+      f|N|M)
+        env ssh "$@"
+        return $?
+        ;;
+    esac
     ssh_opts+=("-$arg1")
     [ "$OPTARG" ] && ssh_opts+=("$OPTARG")
   done
