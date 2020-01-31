@@ -102,18 +102,17 @@ ssh() {
     # freebsd, openbsd, et al, and also when dealing with slower connections
     # you get weird timeout issues, so going back to old way
     #
-    alias comp="gzip -9 -c | openssl enc -a -A"
     c0=$(echo ':
 sshrc=/etc/escreen.sshrc
 [ -f $sshrc ] && . $sshrc
 '"$(_bash_init $ssh_user_host-$(pwgen 6) $rem_port)"'
-' | comp)
+' | gzip -9c | openssl enc -a -A)
 
     c1=$(echo ':
 b=`which bash`
 [ ! "$b" ] && exec $SHELL -l
 exec $b -c "$(echo '$c0' | openssl enc -d -a -A | gzip -d -c)"
-' | comp)
+' | gzip -9c | openssl enc -a -A)
 
     ssh_opts+=(
       -t -oServerAliveInterval=30 -oExitOnForwardFailure=yes -R$rem_port:127.0.0.1:$ESH_PORT $ssh_user_host
