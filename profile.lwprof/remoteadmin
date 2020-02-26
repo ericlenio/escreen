@@ -13,33 +13,38 @@
 # X. So do not use any obscure syntax or 3rd party tools which may not exist in
 # some environments, e.g., Mac OS X's bash does not support associative arrays.
 #
+# Set these environment variables as necessary (defaults in parens)
+# RA_SERVER_BASE_URL (https://remoteadmin.private:3333)
+# RA_SSH_USER (lincdoc)
+# RA_USER ($LOGNAME)
+#
 #exec > >(tee >(grep ^: >$cmds) | grep -v ^:)
 #trap "rm -f $stdout $cmds; echo $stdout was deleted" EXIT INT
 
 remoteadmin() {
-  local exec ssh_params assume_ssh opts="d" opt endpoint_base=https://remoteadmin.private:3333
+  local exec ssh_params opts="e:u:j:" opt RA_SERVER_BASE_URL=${RA_SERVER_BASE_URL:-https://remoteadmin.private:3333} RA_SSH_USER=${RA_SSH_USER:-lincdoc} OPTIND=1
   declare -a exec
   declare -a ssh_params
-  local ssh_params_file=$HOME/.remoteadmin/ssh_options
-  while getopts $opts opt; do
-    case $opt in
-      d) endpoint_base=https://remoteadmin.private:3001
-        echo "NOTE: using dev endpoint base: $endpoint_base"
-        shift
-        ;;
-    esac
-  done
-  local filter="$1"
-  shift
+  local ssh_params_file=$HOME/.remoteadmin/ssh_options filter RA_SSH_PROXY_JUMP_HOST
+  #while getopts $opts opt; do
+  #  case $opt in
+  #    e) RA_SERVER_BASE_URL=$OPTARG
+  #      echo "NOTE: using endpoint base: $RA_SERVER_BASE_URL" >/dev/tty
+  #      ;;
+  #    u) RA_USER_OVERRIDE=$OPTARG
+  #      echo "NOTE: using RA_USER: $RA_USER_OVERRIDE" >/dev/tty
+  #      ;;
+  #  esac
+  #done
+  filter=${!OPTIND}
   if [ -z "$filter" ]; then
     filter="."
   fi
-
-  if [ ${#@} -gt 0 ]; then
-    assume_ssh=1
-  else
-    assume_ssh=0
+  if ! [[ $RA_SERVER_BASE_URL =~ ://([-\.[:alnum:]]+) ]]; then
+    echo "could not parse RA_SSH_PROXY_JUMP_HOST from endpoint: $RA_SERVER_BASE_URL" >&2
+    return 1
   fi
+  RA_SSH_PROXY_JUMP_HOST=${BASH_REMATCH[1]}
 
   get_extra_ssh_params() {
     local hostname=$(echo $1 | tr "[:upper:]" "[:lower:]")
@@ -59,6 +64,9 @@ remoteadmin() {
   }
 
   eval $(_esh_e)
+  if [ "$RA_USER_OVERRIDE" ]; then
+    RA_USER=$RA_USER_OVERRIDE
+  fi
 
   if [ -z "$RA_USER" ]; then
     read -p "What is your remoteadmin username? " RA_USER
@@ -76,7 +84,7 @@ remoteadmin() {
   }
   local vmjson auth=$(printf "%s:%s" "$RA_USER" "$pw" | openssl enc -a -A)
   local auth_hdr=$(printf "Authorization: Basic %s" $auth)
-  local endpoint=$endpoint_base/ra-get-agents
+  local endpoint=$RA_SERVER_BASE_URL/ra-get-agents
   vmjson=$(curl -k -S -s -f -H "$auth_hdr" $endpoint)
   local rc=$?
   if [ $rc -gt 0 ]; then
@@ -89,7 +97,7 @@ var agents=JSON.parse(process.argv[2]);
 var filter=new RegExp(process.argv[3],"i");
 agents.map(function(agent,idx) {
   if (agent.raHostname.search(filter)>=0) {
-    console.log("hostname=%s ip=%s ssh_port=%s",agent.raHostname,agent.remoteAddress,agent.raSshPort);
+    console.log("hostname=%s ip=%s ssh_port=%s back_port=%s",agent.raHostname,agent.remoteAddress,agent.raSshPort,agent.raBackPort);
   }
 });
 EOF
@@ -126,14 +134,16 @@ EOF
   local ips=($(get_vm_data ip))
   local ssh_port=${ssh_ports[$choice]}
   local hostname=${hostnames[$choice]}
+  local back_ports=($(get_vm_data back_port))
+  local back_port=${back_ports[$choice]}
   local ip=${ips[$choice]}
   local extra_params="$(get_extra_ssh_params $hostname)"
   if [ -n "$extra_params" ]; then
     echo "Passing extra params to ssh: $extra_params"
   fi
 
-  chroot_dir=/var/remoteadmin-chroot/443
-  ssh_config=/home/remoteadmin/ssh-files/ra-agent-ssh-config-$ssh_port
+  #chroot_dir=/var/remoteadmin-chroot/443
+  #ssh_config=/home/remoteadmin/ssh-files/ra-agent-ssh-config-$ssh_port
   #cp_file=/home/remoteadmin/ssh-files/ra-agent-controlpath-$ssh_port
 
   #SSH_STY_LBL=$hostname ssh -t -oProxyCommand="env ssh ra.lincware.com sudo chroot -u remoteadmin $chroot_dir ssh -v -F $ssh_config %r@127.0.0.1" $extra_params lincdoc@ra.lincware.com
@@ -143,10 +153,28 @@ EOF
   #SSH_STY_LBL=$hostname ssh -t -oProxyCommand="env ssh -A remoteadmin@ra.lincware.com ssh -F $ssh_config 127.0.0.1 bash -c \"':;. .remoteadmin-shell-functions && exec sudo sshd -i'\"" $extra_params lincdoc@unknown
 
 
-  SSH_STY_LBL=$hostname ssh -oProxyJump=remoteadmin@ra.lincware.com -p $ssh_port $extra_params lincdoc@127.0.0.1
-  return
+  my_init() {
+    local a=() c=() i
+    if c=($(curl -f -s -H "$1" http://127.0.0.1:$2/ra-get-ssh-session-args/$3/$4)); then
+      for ((i=0;i<${#c[@]};i++)); do
+        a+=("$(echo ${c[$i]} | openssl enc -d -a -A)")
+      done
+      a=(exec bash --norc --noprofile -c "${a[@]:7}" exec bash --norc --noprofile)
+      eval "${a[@]}"
+    fi
+  }
 
-  endpoint=$endpoint_base/ra-get-ssh-session-args/$hostname/$ip
+  # create ESH_BASH_INIT (picked up by _bash_init) with bound parameters to my_init
+  eval "ESH_BASH_INIT() { $(declare -f my_init); my_init '$auth_hdr' $back_port $hostname $ip; }"
+
+  SSH_STY_LBL=$hostname ssh -t -oProxyJump=remoteadmin@$RA_SSH_PROXY_JUMP_HOST -p $ssh_port $extra_params $RA_SSH_USER@127.0.0.1
+  return $?
+
+
+
+
+
+  endpoint=$RA_SERVER_BASE_URL/ra-get-ssh-session-args/$hostname/$ip
   ssh_args=(ssh -t)
   for arg in $(curl -s -k -S -H "$auth_hdr" $endpoint); do
     ssh_args+=("$(echo $arg | openssl enc -d -a -A)")
