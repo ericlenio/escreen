@@ -1,7 +1,7 @@
 const child_process=require('child_process');
 const util=require('util');
 const pty=require('node-pty');
-const fs=require('fs');
+//const fs=require('fs');
 
 const EscreenController=require(util.format('%s/EscreenController.js',process.env.ESH_HOME));
 const EscreenServer=require(util.format('%s/EscreenServer.js',process.env.ESH_HOME));
@@ -49,8 +49,9 @@ with the older Node streams interface.
 */
 //const { O_RDWR, O_NOCTTY } = fs.constants;
 //var fd=fs.openSync('/dev/tty',O_RDWR+O_NOCTTY);
+const ENCODING='utf8';
 process.stdin.setRawMode(true);
-process.stdin.setEncoding('utf8');
+process.stdin.setEncoding(ENCODING);
 
 controller.init().then(function() {
   server.start().then(function(shellServer) {
@@ -67,6 +68,7 @@ controller.init().then(function() {
         //cwd:process.env.HOME,
         //env:process.env,
       });
+      p.setEncoding(ENCODING);
       p.on('data',function(buf) {
         process.stdout.write(buf);
       });

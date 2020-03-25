@@ -21,6 +21,8 @@
     "url": "https://github.com/ericlenio/escreen/issues"
   },
   "homepage": "https://github.com/ericlenio/escreen#readme",
-  "dependencies": {
+  "dependencies": {},
+  "devDependencies": {
+    "node-pty": "^0.9.0"
   }
 }
