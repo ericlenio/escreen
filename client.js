@@ -1,4 +1,4 @@
-var TerminalClient=require('./TerminalClient');
+const TerminalClient=require('./TerminalClient');
 
 const client=new TerminalClient();
 client.init();

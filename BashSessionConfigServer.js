@@ -28,32 +28,39 @@ const E_HOUSEKEEPING_TIMER_INTERVAL=86400000;
 const ENCODING='utf8';
 
 class BashSessionConfigServer extends net.Server {
+  constructor() {
+    super({allowHalfOpen:true});
+  }
 
-  init() {
+  init(profileDir) {
     var self=this;
+    this.profileDir=profileDir;
+//fix me
+this.authToken="xxxxxx";
+
     this.listen(E_PORT,'127.0.0.1',function() {
       console.log("BashSessionConfigServer is listening on port: "+E_PORT);
     });
 
-    this.on('connection',function(req,socket,head) {
-      socket.on("readable",function() {
+    this.on('connection',function(socket) {
+      socket.once("readable",function() {
         self.handleLegacyRequest(socket);
       });
     });
     this.on('error',this.onError);
 
-    this.legacyHandlers=[];
+    this.legacyHandlers={};
     this.registerLegacyHanders();
   }
 
   handleLegacyRequest(socket) {
     var self=this;
     socket.on("error",function(e) {
-      console.error("handleLegacyRequest: "+e);
+      console.error("handleLegacyRequest socket error: "+e);
     });
     var chunk=socket.read();
     if (chunk==null) {
-      //console.warn("handleLegacyRequest: null chunk");
+      console.warn("handleLegacyRequest: null chunk");
       return socket.end();
     }
     var hdr=[];
@@ -72,7 +79,7 @@ class BashSessionConfigServer extends net.Server {
     if (hdr.length==0) {
       hdr=new String(chunk).trim().split(" ");
     }
-if (!'fixme' && hdr[0]!=this.authToken) {
+    if (hdr[0]!=this.authToken) {
       console.error("unmatched auth token: %s (expected %s): %s",hdr[0],this.authToken,hdr[1]);
       setTimeout( function() { socket.end("bad auth token"); }, 3000 );
       return;
@@ -86,6 +93,7 @@ if (!'fixme' && hdr[0]!=this.authToken) {
       this.legacyHandlers[evtId].apply(this,hdr);
     } catch(e) {
       console.error("EXCEPTION in handler:"+e);
+      socket.end();
     }
   }
 
@@ -124,10 +132,13 @@ if (!'fixme' && hdr[0]!=this.authToken) {
       socket.end(pw);
     });
 
-    // upload function to client
+    // upload something to client, compressed
     self.registerHandler("zup",function(socket,key) {
       var buf=this.getSource(key);
       var z=this.getZlib();
+      z.on('error',function(e) {
+        console.error("zup error with key \""+key+"\":"+e);
+      });
       z.pipe(socket);
       z.end(buf);
     });
@@ -323,14 +334,13 @@ if (!'fixme' && hdr[0]!=this.authToken) {
 
   computePassword(s) {
     // MY_PASSWORD should be defined in esh.escreenRcFile
+    if (typeof(global.MY_PASSWORD)=='undefined') {
+      console.error("please set global.MY_PASSWORD");
+    }
     var hash=this.computeHash( global.MY_PASSWORD + s );
     var n=6;
     var pw=hash.substr(hash.length-n,n);
     return pw;
-  }
-
-  generateAuthToken() {
-    return crypto.randomBytes(3).toString('hex');
   }
 
   getZlib() {
@@ -408,6 +418,9 @@ if (!'fixme' && hdr[0]!=this.authToken) {
     this.legacyHandlers[evtId]=handler.bind(this);
     //this.forwardEvent[evtId]=forwardEvent;
   }
+
 }
+
+BashSessionConfigServer.E_BASH_SESS_CFG_SERVER_PORT=E_PORT;
 
 module.exports=BashSessionConfigServer;

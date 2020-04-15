@@ -1,22 +1,23 @@
+const crypto=require('crypto');
 const http=require('http');
 const pty=require('node-pty');
+const BashSessionConfigServer=require("./BashSessionConfigServer");
 
-const E_PORT=2020;
+const E_TERMINAL_SERVER_PORT=2020;
 const ENCODING='utf8';
 
 class TerminalServer extends http.Server {
 
   init() {
     var self=this;
-    this.listen(E_PORT,'127.0.0.1',function() {
-      console.log("TerminalServer is listening on port: "+E_PORT);
+    this.listen(E_TERMINAL_SERVER_PORT,'127.0.0.1',function() {
+      console.log("TerminalServer is listening on port: "+E_TERMINAL_SERVER_PORT);
     });
 
     this.on('request',this.satisfyRoute);
     this.on('upgrade',this.onUpgrade);
     this.on('error',this.onError);
   }
-
 
   satisfyRoute(req,res) {
     switch(req.url) {
@@ -56,12 +57,17 @@ class TerminalServer extends http.Server {
     console.error("CAUGHT: "+e);
   }
 
+  generateAuthToken() {
+    return crypto.randomBytes(3).toString('hex');
+  }
+
   createTerminal() {
+    var authToken=this.generateAuthToken();
+authToken="xxxxxx";
     var args=[
       "-c",
-      "_esh_i $ESH_STY ESH_PORT; ESH_PW_FILE=$(_esh_b ESH_PW_FILE) ESH_SCREEN_EXEC=1 screen",
+      "source "+process.env.ESH_HOME+"/escreen; export ESH_AT="+authToken+" ESH_PORT="+BashSessionConfigServer.E_BASH_SESS_CFG_SERVER_PORT+"; set|grep ^ESH; _esh_i $ESH_STY ESH_PORT; ESH_PW_FILE=$(_esh_b ESH_PW_FILE) ESH_SCREEN_EXEC=1 exec bash --norc --noprofile",
     ];
-args=[];
 
     var term=pty.spawn("bash",args,{
       name:process.env.TERM,
@@ -71,9 +77,9 @@ args=[];
       rows:process.stdout.rows,
       //cwd:process.env.HOME,
       //env:process.env,
-      env:{
-        PS1:"escreen>",
-      },
+      //env:{
+        //PS1:"escreen>",
+      //},
     });
     term.setEncoding(ENCODING);
     //console.log("created pty: "+term._pty+":"+term.pid)

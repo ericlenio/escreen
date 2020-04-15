@@ -1,36 +1,3 @@
-#! /usr/bin/env bash
-set -e
-
-if [ "$1" = -r ]; then
-  if [ -z "$ESH_AT" ]; then
-    echo "Oops, you do not appear to already be in an escreen session, exiting."
-    exit 1
-  fi
-  curr_sty=${STY:-some_value}
-  screen_stys=($(env screen -ls | grep -v $curr_sty | perl -n -e 's{^\s*(\d+\.\S+).*}{$1} && print'))
-  if [ ${#screen_stys} = 0 ]; then
-    echo "No escreen sessions detected."
-    exit 1
-  fi
-  printf "Resume which escreen session?\n"
-  i=0
-  IFS='\n' env screen -ls | grep -v $curr_sty | perl -n -e 's{^\s*(\d+\..*)}{$1} && print' | while read l; do
-    printf "%s. %s\n" $i "$l"
-    i=$(($i+1))
-  done
-  read -p "Enter choice: " choice
-  if [ "$choice" -a ${screen_stys[$choice]+is_set} ]; then
-    sty=${screen_stys[$choice]}
-    env screen -S $sty -X screen bash -c "_esh_b forwardEscreen $ESH_PORT $ESH_AT $(echo -n $ESH_NC|openssl enc -A -base64)"
-    env screen -S $sty -X escape ^ee
-    env screen -d -r $sty
-    env screen -S $sty -X screen bash -c "_esh_b unforwardEscreen"
-    exit
-  else
-    echo "Invalid choice."
-    exit 1
-  fi
-fi
 #
 # get/set the main communications port, and other environment variables
 #
@@ -155,8 +122,8 @@ _esh_l() {
 export -f _esh_l
 
 # ESH_AT is a simple security access token
-export ESH_AT=$(openssl rand 3 -hex)
-export ESH_HOME=$(dirname $(perl -MCwd -e 'print Cwd::abs_path shift' $0))
+#export ESH_AT=$(openssl rand 3 -hex)
+#export ESH_HOME=$(dirname $(perl -MCwd -e 'print Cwd::abs_path shift' $0))
 [ -z "$ESH_TMP" ] && {
   escreen_branch=$(cd $ESH_HOME && git rev-parse --abbrev-ref HEAD)
   suffix=-$escreen_branch
@@ -192,7 +159,7 @@ _esh_i() {
   for f in $(_esh_l $t/$u.fcnlist $p1 1); do
     _esh_gen_stub $t/$u.f.$f
   done
-  export ESH_AT ESH_TMP ESH_STY ESH_NC SHELL=$(which bash)
+  export ESH_TMP ESH_STY ESH_NC SHELL=$(which bash)
   export -f _esh_e _esh_i _esh_b _esh_l
   # generate vim executable so it is ready for user, e.g. if escreen starts and
   # then immediately:
@@ -204,11 +171,9 @@ _esh_i() {
 export -f _esh_i
 
 ESH_CORE=$ESH_HOME/core
-[ "$1" ] && ESH_PROFILE="$1" || ESH_PROFILE=$ESH_HOME/profile.lwprof
+#[ "$1" ] && ESH_PROFILE="$1" || ESH_PROFILE=$ESH_HOME/profile.lwprof
 
 # ESH_STY is conceptually tied to screen's STY variable ... it gets used as a
 # unique ID to properly track the communications port (ESH_PORT) to use in a
 # given shell between various combinations of screen, sudo, and ssh
 export ESH_STY=$$
-
-exec node $ESH_HOME/main.js $ESH_PROFILE
