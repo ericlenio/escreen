@@ -29,7 +29,19 @@ const ENCODING='utf8';
 
 class BashSessionConfigServer extends net.Server {
   constructor() {
-    super({allowHalfOpen:true});
+    super({
+      // From node docs:
+      // "By default (allowHalfOpen is false) the socket will send a FIN packet
+      // back and destroy its file descriptor once it has written out its
+      // pending write queue. However, if allowHalfOpen is set to true, the
+      // socket will not automatically end() its writable side, allowing the
+      // user to write arbitrary amounts of data. The user must call end()
+      // explicitly to close the connection (i.e. sending a FIN packet back)."
+      //
+      // need allowHalfOpen=true for this server because by design a request
+      // from a client should remain open so it can receive a response.
+      allowHalfOpen:true,
+    });
   }
 
   init(profileDir) {

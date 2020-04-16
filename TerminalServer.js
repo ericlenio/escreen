@@ -66,7 +66,7 @@ class TerminalServer extends http.Server {
 authToken="xxxxxx";
     var args=[
       "-c",
-      "source "+process.env.ESH_HOME+"/escreen; export ESH_AT="+authToken+" ESH_PORT="+BashSessionConfigServer.E_BASH_SESS_CFG_SERVER_PORT+"; set|grep ^ESH; _esh_i $ESH_STY ESH_PORT; ESH_PW_FILE=$(_esh_b ESH_PW_FILE) ESH_SCREEN_EXEC=1 exec bash --norc --noprofile",
+      "source "+process.env.ESH_HOME+"/esh-init; export ESH_AT="+authToken+" ESH_PORT="+BashSessionConfigServer.E_BASH_SESS_CFG_SERVER_PORT+"; set|grep ^ESH; _esh_i $ESH_STY ESH_PORT; ESH_PW_FILE=$(_esh_b ESH_PW_FILE) exec bash --norc --noprofile",
     ];
 
     var term=pty.spawn("bash",args,{
