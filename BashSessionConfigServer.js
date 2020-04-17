@@ -50,8 +50,10 @@ class BashSessionConfigServer extends net.Server {
 // fix me
 this.authToken=process.env.ESH_AT;
 
-    this.listen(E_PORT,'127.0.0.1',function() {
-      console.log("BashSessionConfigServer is listening on port: "+E_PORT);
+    this.readEscreenrc().then(function() {
+      self.listen(E_PORT,'127.0.0.1',function() {
+        console.log("BashSessionConfigServer is listening on port: "+E_PORT);
+      });
     });
 
     this.on('connection',function(socket) {
@@ -179,6 +181,9 @@ this.authToken=process.env.ESH_AT;
             // if small enough buffer, place into X Windows primary selection too for
             // convenience
             var p2 = child_process.spawn("xsel", ["-i","-p"], {stdio:['pipe',process.stdout,process.stderr]});
+            p2.on("error", function(e) {
+              socket.end(e);
+            });
             p2.stdin.end(xselBuf);
           }
         });
@@ -201,6 +206,9 @@ this.authToken=process.env.ESH_AT;
       var paste_prog=self.getOsProgram(E_OS_PROG_ENUM.PASTE);
       var p=child_process.spawn(paste_prog[0], paste_prog.slice(1),
         {stdio:['ignore','pipe',process.stderr]});
+      p.on("error", function(e) {
+        socket.end(e);
+      });
       var z=this.getZlib();
       p.stdout.pipe(z).pipe(socket);
     },true);
@@ -217,6 +225,9 @@ this.authToken=process.env.ESH_AT;
     var escreenrc=util.format("%s/.escreenrc.gpg",process.env.HOME);
     if (fs.existsSync(escreenrc)) {
       var p=child_process.spawn('gpg',['-d',escreenrc],{stdio:['ignore','pipe','inherit']});
+      p.on("error", function(e) {
+        console.error("readEscreenrc: "+e);
+      });
       var s='';
       p.stdout.on('data',function(buf) {
         s+=buf.toString();
