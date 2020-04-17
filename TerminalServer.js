@@ -62,11 +62,10 @@ class TerminalServer extends http.Server {
   }
 
   createTerminal() {
-    var authToken=this.generateAuthToken();
-authToken="xxxxxx";
+    //var authToken=this.generateAuthToken();
     var args=[
       "-c",
-      "source "+process.env.ESH_HOME+"/esh-init; export ESH_AT="+authToken+" ESH_PORT="+BashSessionConfigServer.E_BASH_SESS_CFG_SERVER_PORT+"; set|grep ^ESH; _esh_i $ESH_STY ESH_PORT; ESH_PW_FILE=$(_esh_b ESH_PW_FILE) exec bash --norc --noprofile",
+      "source "+process.env.ESH_HOME+"/esh-init; set|grep ^ESH; _esh_i $ESH_STY ESH_PORT; ESH_PW_FILE=$(_esh_b ESH_PW_FILE) exec bash --norc --noprofile",
     ];
 
     var term=pty.spawn("bash",args,{
@@ -118,7 +117,7 @@ var raSessId='fix me';
       }
       if (grabTty.buffer.length>2000) {
         // something went wrong
-        console.error("unable to parse tty from session");
+        console.warn("unable to parse tty from session");
         term.removeListener('data',grabTty);
       }
     });

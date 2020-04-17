@@ -23,7 +23,7 @@ const E_OS_PROG_ENUM={
     openbsd:["xdg-open"],
   },
 };
-const E_PORT=2021;
+const E_PORT=process.env.ESH_PORT;
 const E_HOUSEKEEPING_TIMER_INTERVAL=86400000;
 const ENCODING='utf8';
 
@@ -47,8 +47,8 @@ class BashSessionConfigServer extends net.Server {
   init(profileDir) {
     var self=this;
     this.profileDir=profileDir;
-//fix me
-this.authToken="xxxxxx";
+// fix me
+this.authToken=process.env.ESH_AT;
 
     this.listen(E_PORT,'127.0.0.1',function() {
       console.log("BashSessionConfigServer is listening on port: "+E_PORT);
@@ -63,6 +63,7 @@ this.authToken="xxxxxx";
 
     this.legacyHandlers={};
     this.registerLegacyHanders();
+    this.registerOtherHandlers();
   }
 
   handleLegacyRequest(socket) {
@@ -70,6 +71,7 @@ this.authToken="xxxxxx";
     socket.on("error",function(e) {
       console.error("handleLegacyRequest socket error: "+e);
     });
+// fix me: write a loop to keep doing socket.read() until we capture a "\n" (EOL) character
     var chunk=socket.read();
     if (chunk==null) {
       console.warn("handleLegacyRequest: null chunk");
@@ -416,11 +418,10 @@ this.authToken="xxxxxx";
     for (var i in dirs) {
       var ls=fs.readdirSync(dirs[i]);
       for (var j=0; j<ls.length; j++) {
-        if (ls[j].search(".js$")>=0) {
+        if (/\.js$/.test(ls[j])) {
           var f=util.format("%s/%s",dirs[i],ls[j]);
-          var l=require(f);
-          l(this);
-          this.log("registered " + f);
+          require(f)(this);
+          console.log("registered "+f);
         }
       }
     }

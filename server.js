@@ -10,3 +10,7 @@ const bs=new BashSessionConfigServer();
 
 ts.init();
 bs.init(profileDir);
+
+Object.keys(process.env).sort().forEach(function(key) {
+    console.log(key+"="+process.env[key]);
+});
