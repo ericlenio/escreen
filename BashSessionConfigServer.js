@@ -168,7 +168,7 @@ this.authToken=process.env.ESH_AT;
 
       var platform=os.platform();
       z.on("end", function() {
-        var cp_prog=this.getOsProgram(E_OS_PROG_ENUM.COPY);
+        var cp_prog=self.getOsProgram(E_OS_PROG_ENUM.COPY);
         var p=child_process.spawn(cp_prog[0], cp_prog.slice(1), {stdio:['pipe','ignore',process.stderr]});
         p.stdin.end(xselBuf);
         p.on("error", function(e) {
@@ -176,12 +176,13 @@ this.authToken=process.env.ESH_AT;
         });
         p.on('exit',function(rc,signal) {
           socket.end();
-          self.log(`copied ${clipboardBytes} bytes to clipboard, rc=${rc}, signal=${signal}`);
+          console.log(`copied ${clipboardBytes} bytes to clipboard, rc=${rc}, signal=${signal}`);
           if (rc==0 && platform=="linux" && clipboardBytes<=maxXselBuf) {
             // if small enough buffer, place into X Windows primary selection too for
             // convenience
-            var p2 = child_process.spawn("xsel", ["-i","-p"], {stdio:['pipe',process.stdout,process.stderr]});
+            var p2=child_process.spawn("xsel",["-i","-p"],{stdio:['pipe',process.stdout,process.stderr]});
             p2.on("error", function(e) {
+              console.error("setCb: xsel: "+e);
               socket.end(e);
             });
             p2.stdin.end(xselBuf);

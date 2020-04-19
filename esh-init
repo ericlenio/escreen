@@ -177,3 +177,39 @@ ESH_CORE=$ESH_HOME/core
 # unique ID to properly track the communications port (ESH_PORT) to use in a
 # given shell between various combinations of screen, sudo, and ssh
 export ESH_STY=$$
+
+
+
+
+
+_esh_y() {
+  local trigger="$1" data tty=/dev/tty
+  {
+    # if inside gnu screen, send Device Control String
+    [ "$STY" ] && printf "\x1bP"
+    # turn on invisibility
+    printf "\x1b[8m"
+    # trigger display of some item of data from node server
+    printf ":%s:%s" "$ESH_TERM_SESSION_ID" "$trigger"
+    # erase entire line
+    printf "\x1b[2K"
+    # if inside gnu screen, finish Device Control String
+    [ "$STY" ] && printf "\x1b\\"
+    # read data that was just injected into terminal
+    read data < $tty
+    # if inside gnu screen, send Device Control String
+    [ "$STY" ] && printf "\x1bP"
+    # move up 1 line
+    printf "\x1b[1F"
+    # move to column 1
+    printf "\x1b[1G"
+    # erase entire line
+    printf "\x1b[2K"
+    # restore visibility
+    printf "\x1b[0m"
+    # if inside gnu screen, finish Device Control String
+    [ "$STY" ] && printf "\x1b\\"
+  } > $tty
+  echo "$data"
+}
+export -f _esh_y

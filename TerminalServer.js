@@ -1,4 +1,5 @@
 const crypto=require('crypto');
+const fs=require('fs');
 const http=require('http');
 const pty=require('node-pty');
 const BashSessionConfigServer=require("./BashSessionConfigServer");
@@ -67,6 +68,8 @@ class TerminalServer extends http.Server {
       "-c",
       "source "+process.env.ESH_HOME+"/esh-init; set|grep ^ESH; _esh_i $ESH_STY ESH_PORT; ESH_PW_FILE=$(_esh_b ESH_PW_FILE) exec bash --norc --noprofile",
     ];
+var eshTermSessId='fix me';
+process.env.ESH_TERM_SESSION_ID=eshTermSessId;
 
     var term=pty.spawn("bash",args,{
       name:process.env.TERM,
@@ -76,15 +79,13 @@ class TerminalServer extends http.Server {
       rows:process.stdout.rows,
       //cwd:process.env.HOME,
       //env:process.env,
-      //env:{
-        //PS1:"escreen>",
-      //},
     });
     term.setEncoding(ENCODING);
     //console.log("created pty: "+term._pty+":"+term.pid)
 
     term.ttyBuffer="";
     term.TTY_PATTERNS={
+      hello:"HELLO",
       _ra_get_ldap_pw:"xxxxxx",
       _ra_term_pid:term.pid,
       //_ra_root_ssh_priv_key:self.config.RA_REMOTE_ROOT_ALLOWED_USERS.indexOf(raUser.username)>=0
@@ -93,14 +94,13 @@ class TerminalServer extends http.Server {
     };
     var MAX_BUF_LENGTH=100;
     var XTERM_INVIS="\x1b\\[8m";
-var raSessId='fix me';
     term.TTY_REGEX=new RegExp(
       XTERM_INVIS+
       // most of the time we expect the pattern to immediately follow
       // XTERM_INVIS, but this next ".*?" will handle the situation when
       // bash "set -x" is in effect
       ".*?"+
-      ":"+raSessId+":("+Object.keys(term.TTY_PATTERNS).join("|")+")","gs");
+      ":"+eshTermSessId+":("+Object.keys(term.TTY_PATTERNS).join("|")+")","gs");
 
     //
     // little handler to snag the TTY from the just launched session
@@ -122,7 +122,9 @@ var raSessId='fix me';
       }
     });
 
+//var fd=fs.openSync("/tmp/l","w");
     term.on('data',function(buf) {
+//fs.write(fd,buf,function() {});
       term.ttyBuffer+=buf;
       term.ttyBuffer=term.ttyBuffer.replace(term.TTY_REGEX,function(match,marker) {
         term.write(term.TTY_PATTERNS[marker]+"\r");
