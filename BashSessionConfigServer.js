@@ -197,6 +197,7 @@ this.authToken=process.env.ESH_AT;
         }
       });
       z.on("error", function(e) {
+        console.error("setCb: z: "+e);
         socket.end(e);
       });
       socket.pipe(z);

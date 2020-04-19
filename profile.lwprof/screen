@@ -19,7 +19,7 @@ screen() {
             return $?
           fi
           eval $(_esh_e)
-          _esh_e $pick_sty ESH_PORT SSH_AUTH_SOCK ESH_AT
+          _esh_e $pick_sty ESH_PORT SSH_AUTH_SOCK ESH_AT ESH_TERM_SESSION_ID
           # strip off "screen." prefix from $TERM to avoid "$TERM too long" issue
           env TERM=${TERM#screen.} screen -d -r $pick_sty
           return $?

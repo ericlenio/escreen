@@ -64,12 +64,11 @@ class TerminalServer extends http.Server {
 
   createTerminal() {
     //var authToken=this.generateAuthToken();
+    var eshTermSessId=this.generateAuthToken();
     var args=[
       "-c",
-      "source "+process.env.ESH_HOME+"/esh-init; set|grep ^ESH; _esh_i $ESH_STY ESH_PORT; ESH_PW_FILE=$(_esh_b ESH_PW_FILE) exec bash --norc --noprofile",
+      "export ESH_TERM_SESSION_ID="+eshTermSessId+"; source "+process.env.ESH_HOME+"/esh-init; set|grep ^ESH; _esh_i $ESH_STY ESH_PORT; ESH_PW_FILE=$(_esh_b ESH_PW_FILE) exec bash --norc --noprofile",
     ];
-var eshTermSessId='fix me';
-process.env.ESH_TERM_SESSION_ID=eshTermSessId;
 
     var term=pty.spawn("bash",args,{
       name:process.env.TERM,

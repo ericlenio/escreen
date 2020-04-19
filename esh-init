@@ -185,6 +185,7 @@ export ESH_STY=$$
 _esh_y() {
   local trigger="$1" data tty=/dev/tty
   {
+    eval $(_esh_e)
     # if inside gnu screen, send Device Control String
     [ "$STY" ] && printf "\x1bP"
     # turn on invisibility
