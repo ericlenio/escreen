@@ -36,9 +36,8 @@ _esh_e() {
         +*)
           # strip leading plus sign, we should be left with a variable name
           n=${1#+}
-          eval v=\$$n
           # append var name and value to the file
-          echo "declare $n='$v'" >> $(F $ESH_STY)
+          declare -p $n >> $(F $ESH_STY)
           ;;
         *)
           cat $(F $ESH_STY) > $f
@@ -52,8 +51,7 @@ _esh_e() {
         while [ $# -gt 0 ]; do
           n=$1
           shift
-          eval v=\$$n
-          echo "declare $n='$v'" >> $f
+          eval "declare -p $n" >> $f
         done
         echo wrote $f: $(cat $f) 1>&2
       }
@@ -77,7 +75,7 @@ export -f _esh_e
 # older shells may not be able to do the /dev/tcp/host/port trick, this works
 # around that ... netcat will be needed though
 _esh_b() {
-  eval $(_esh_e)
+  eval "$(_esh_e)"
   {
     echo $ESH_AT "$*"
     #[ ! -t 0 ] && { [ "$(which perl)" ] && perl -pe 'BEGIN{$|=1}' || cat; }
@@ -185,7 +183,7 @@ export ESH_STY=$$
 _esh_y() {
   local trigger="$1" data tty=/dev/tty
   {
-    eval $(_esh_e)
+    eval "$(_esh_e)"
     # if inside gnu screen, send Device Control String
     [ "$STY" ] && printf "\x1bP"
     # turn on invisibility

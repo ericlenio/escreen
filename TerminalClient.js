@@ -2,7 +2,7 @@ const http=require('http');
 
 class TerminalClient {
   init() {
-    const reqUrl='http://127.0.0.1:2020/e-create-terminal';
+    const reqUrl='http://127.0.0.1:2020/e-create-terminal?term='+process.env.TERM;
     const opts={
       headers: {
         'Connection':'Upgrade',

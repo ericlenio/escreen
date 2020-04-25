@@ -8,7 +8,7 @@ screen() {
       case $opt in
         -r)
           local curr_sty=${STY:-some_value} pick_sty
-          local stys=$(env screen -ls | grep -v $curr_sty | perl -n -e 's{^\s*(\d+\.\S+).*}{$1} && print')
+          local stys=$(env screen -ls | grep -v $curr_sty | grep -vi attached | perl -n -e 's{^\s*(\d+\.\S+).*}{$1} && print')
           if [ -z "$stys" ]; then
             echo "No screen sessions detected."
             return 1
@@ -18,7 +18,7 @@ screen() {
           elif ! pick_sty=$(pick_something "Resume which session?" "$stys"); then
             return $?
           fi
-          eval $(_esh_e)
+          eval "$(_esh_e)"
           _esh_e $pick_sty ESH_PORT SSH_AUTH_SOCK ESH_AT ESH_TERM_SESSION_ID
           # strip off "screen." prefix from $TERM to avoid "$TERM too long" issue
           env TERM=${TERM#screen.} screen -d -r $pick_sty
@@ -77,7 +77,7 @@ screen() {
     # before any/all commands are run - useful for resuming screen sessions on
     # remote hosts; might want to utilize $BASH_COMMAND at some point to
     # conditionally call _esh_e
-    trap 'eval $(_esh_e)' DEBUG
+    trap 'eval "$(_esh_e)"' DEBUG
     [ $# -eq 0 -o "$1" = "-c" ] && exec $SHELL --norc --noprofile "$@"
     exec "$@"
   }

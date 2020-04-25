@@ -2,6 +2,7 @@ const crypto=require('crypto');
 const fs=require('fs');
 const http=require('http');
 const pty=require('node-pty');
+const Url=require('url');
 const BashSessionConfigServer=require("./BashSessionConfigServer");
 
 const E_TERMINAL_SERVER_PORT=2020;
@@ -32,7 +33,8 @@ class TerminalServer extends http.Server {
   }
 
   onUpgrade(req,socket,head) {
-    if (req.url!="/e-create-terminal") {
+    var url=Url.parse(req.url,true);
+    if (url.pathname!="/e-create-terminal") {
       return socket.end();
     }
     socket.write('HTTP/1.1 101 Web Socket Protocol Handshake\r\n'+
@@ -40,7 +42,7 @@ class TerminalServer extends http.Server {
       'Connection: Upgrade\r\n'+
       '\r\n');
     req.setTimeout(0);
-    var term=this.createTerminal();
+    var term=this.createTerminal(url.query.term);
     socket.on('data',function(msg) {
       term.write(msg);
     });
@@ -62,7 +64,7 @@ class TerminalServer extends http.Server {
     return crypto.randomBytes(3).toString('hex');
   }
 
-  createTerminal() {
+  createTerminal(term) {
     //var authToken=this.generateAuthToken();
     var eshTermSessId=this.generateAuthToken();
     var args=[
@@ -71,7 +73,8 @@ class TerminalServer extends http.Server {
     ];
 
     var term=pty.spawn("bash",args,{
-      name:process.env.TERM,
+      // note: node-pty will use "name" to set the terminal type
+      name:term,
       encoding:ENCODING,
       //handleFlowControl:true,
       cols:process.stdout.columns,

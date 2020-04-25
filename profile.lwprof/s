@@ -21,7 +21,7 @@ s() {
     return
   }
 
-  eval $(_esh_e)
+  eval "$(_esh_e)"
   #sudo -H -u $user env bash -s "$@" <<EOF
 #$(_bash_init $ESH_STY $(_esh_e -f) $#) <>/dev/tty
 #EOF
