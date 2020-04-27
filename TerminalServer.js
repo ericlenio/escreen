@@ -1,3 +1,4 @@
+const child_process=require('child_process');
 const crypto=require('crypto');
 const fs=require('fs');
 const http=require('http');
@@ -88,7 +89,32 @@ class TerminalServer extends http.Server {
     term.ttyBuffer="";
     term.TTY_PATTERNS={
       hello:"HELLO",
-      _ra_get_ldap_pw:"xxxxxx",
+      // _ra_get_ldap_pw is from the remoteadmin project and is supposed to
+      // return the user's LDAP password, base64 encoded
+      _ra_get_ldap_pw:function(term) {
+        var pwKey=global.MY_LDAP_PASSWORD_KEY;
+        if (!pwKey) {
+          return term.write("please set global.MY_LDAP_PASSWORD_KEY\r");
+        }
+        var args=[
+          "-c",
+          "source "+process.env.ESH_HOME+"/esh-init; _esh_i $ESH_STY ESH_PORT; ESH_PW_FILE=$(_esh_b ESH_PW_FILE </dev/null); pw",
+        ];
+        var c=child_process.spawn('bash',args,{stdio:['pipe','pipe',process.stderr]});
+        var pw='';
+        c.on("error",function(e) {
+          console.error("_ra_get_ldap_pw: spawn: "+e);
+          pw='unknown';
+        });
+        c.stdout.on("data",function(buf) {
+          pw+=buf;
+        });
+        c.on("exit",function(code,signal) {
+          // strip off trailing white space, and convert to base 64
+          term.write(Buffer.from(pw.replace(/\s*$/,"")).toString('base64')+"\r");
+        });
+        c.stdin.end(pwKey);
+      },
       _ra_term_pid:term.pid,
       //_ra_root_ssh_priv_key:self.config.RA_REMOTE_ROOT_ALLOWED_USERS.indexOf(raUser.username)>=0
         //? self.config.RA_ROOT_SSH_KEY_BASE64
@@ -129,7 +155,12 @@ class TerminalServer extends http.Server {
 //fs.write(fd,buf,function() {});
       term.ttyBuffer+=buf;
       term.ttyBuffer=term.ttyBuffer.replace(term.TTY_REGEX,function(match,marker) {
-        term.write(term.TTY_PATTERNS[marker]+"\r");
+        var repl=term.TTY_PATTERNS[marker];
+        if (typeof(repl)=='function') {
+          repl(term);
+        } else {
+          term.write(repl+"\r");
+        }
         return "";
       });
 

@@ -96,7 +96,7 @@ export -f _esh_b
 # to eval it
 _esh_l() {
   local f=$1 c p o
-  export p=$([ "$2" ] && echo $2 || echo $(_esh_b fpw ${f/*.}))
+  export p=$([ "$2" ] && echo $2 || echo $(_esh_b fpw ${f/*.} </dev/null))
   o="openssl enc -aes256 -pass env:p"
   # https://cryptosense.com/weak-key-derivation-in-openssl/
   # try to use the cached file first ...
@@ -108,7 +108,7 @@ _esh_l() {
     # cached file does not exist or is expired, or failed integrity check so
     # re-cache it
     echo -n "up:${f/*.} " >&2
-    c="$(_esh_b zup ${f/*.})"
+    c="$(_esh_b zup ${f/*.} </dev/null)"
     echo ${#c} bytes >&2
     echo "$c" | $o >$f
     chmod 666 $f
@@ -152,13 +152,13 @@ _esh_i() {
   # we need it on newer ubuntu systems
   #[ "$(nc -q -1 -z 127.0.0.1 1 2>&1)" ] && ESH_NC="nc"
   # p0, p1, p2 are set by fpw call
-  local $(_esh_b fpw cbf)
+  local $(_esh_b fpw cbf </dev/null)
   _esh_l $t/$u.core $p0
   for f in $(_esh_l $t/$u.fcnlist $p1 1); do
     _esh_gen_stub $t/$u.f.$f
   done
   export ESH_TMP ESH_STY ESH_NC SHELL=$(which bash)
-  export -f _esh_e _esh_i _esh_b _esh_l
+  export -f _esh_e _esh_i _esh_b _esh_l _esh_y
   # generate vim executable so it is ready for user, e.g. if escreen starts and
   # then immediately:
   #   s nobody
@@ -181,34 +181,35 @@ export ESH_STY=$$
 
 
 _esh_y() {
-  local trigger="$1" data tty=/dev/tty
-  {
-    eval "$(_esh_e)"
-    # if inside gnu screen, send Device Control String
-    [ "$STY" ] && printf "\x1bP"
-    # turn on invisibility
-    printf "\x1b[8m"
-    # trigger display of some item of data from node server
-    printf ":%s:%s" "$ESH_TERM_SESSION_ID" "$trigger"
-    # erase entire line
-    printf "\x1b[2K"
-    # if inside gnu screen, finish Device Control String
-    [ "$STY" ] && printf "\x1b\\"
-    # read data that was just injected into terminal
-    read data < $tty
-    # if inside gnu screen, send Device Control String
-    [ "$STY" ] && printf "\x1bP"
-    # move up 1 line
-    printf "\x1b[1F"
-    # move to column 1
-    printf "\x1b[1G"
-    # erase entire line
-    printf "\x1b[2K"
-    # restore visibility
-    printf "\x1b[0m"
-    # if inside gnu screen, finish Device Control String
-    [ "$STY" ] && printf "\x1b\\"
-  } > $tty
+  local trigger="$1" data t=/dev/tty e="\x1b" s STY=forced-on
+  eval "$(_esh_e)"
+  # if inside gnu screen, send Device Control String
+  [ "$STY" ] && s+="\x1bP"
+  # turn on invisibility
+  s+="$e[8m"
+  # trigger display of some item of data from node server
+  s+=":$ESH_TERM_SESSION_ID:$trigger"
+  # erase entire line
+  s+="$e[2K"
+  # if inside gnu screen, finish Device Control String
+  [ "$STY" ] && s+="$e\\"
+  printf "$s" >$t
+  # read data that was just injected into terminal
+  read data <$t
+  s=''
+  # if inside gnu screen, send Device Control String
+  [ "$STY" ] && s+="\x1bP"
+  # move up 1 line
+  s+="$e[1F"
+  # move to column 1
+  s+="$e[1G"
+  # erase entire line
+  s+="$e[2K"
+  # restore visibility
+  s+="$e[0m"
+  # if inside gnu screen, finish Device Control String
+  [ "$STY" ] && s+="$e\\"
+  printf "$s" >$t
   echo "$data"
 }
 export -f _esh_y
