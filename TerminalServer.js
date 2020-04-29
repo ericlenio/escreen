@@ -66,11 +66,10 @@ class TerminalServer extends http.Server {
   }
 
   createTerminal(term) {
-    //var authToken=this.generateAuthToken();
-    var eshTermSessId=this.generateAuthToken();
+    var self=this;
     var args=[
       "-c",
-      "export ESH_TERM_SESSION_ID="+eshTermSessId+"; source "+process.env.ESH_HOME+"/esh-init; set|grep ^ESH; _esh_i $ESH_STY ESH_PORT; ESH_PW_FILE=$(_esh_b ESH_PW_FILE) exec bash --norc --noprofile",
+      "source "+process.env.ESH_HOME+"/esh-init; set|grep ^ESH; _esh_i $ESH_STY ESH_PORT; ESH_PW_FILE=$(_esh_b ESH_PW_FILE) exec bash --norc --noprofile",
     ];
 
     var term=pty.spawn("bash",args,{
@@ -85,92 +84,23 @@ class TerminalServer extends http.Server {
     });
     term.setEncoding(ENCODING);
     //console.log("created pty: "+term._pty+":"+term.pid)
+    term.ttyRegex=new RegExp(
+      // match this ANSI sequence ...
+      "\x1b\\[8m"+
+      // allow for other escape codes possibly injected by gnu screen ...
+      ".{0,12}"+
+      // and match this string
+      ":(_ra_term_pid|_ra_get_ldap_pw|hello)"
+    );
 
-    term.ttyBuffer="";
-    term.TTY_PATTERNS={
-      hello:"HELLO",
-      // _ra_get_ldap_pw is from the remoteadmin project and is supposed to
-      // return the user's LDAP password, base64 encoded
-      _ra_get_ldap_pw:function(term) {
-        var pwKey=global.MY_LDAP_PASSWORD_KEY;
-        if (!pwKey) {
-          return term.write("please set global.MY_LDAP_PASSWORD_KEY\r");
-        }
-        var args=[
-          "-c",
-          "source "+process.env.ESH_HOME+"/esh-init; _esh_i $ESH_STY ESH_PORT; ESH_PW_FILE=$(_esh_b ESH_PW_FILE </dev/null); pw",
-        ];
-        var c=child_process.spawn('bash',args,{stdio:['pipe','pipe',process.stderr]});
-        var pw='';
-        c.on("error",function(e) {
-          console.error("_ra_get_ldap_pw: spawn: "+e);
-          pw='unknown';
-        });
-        c.stdout.on("data",function(buf) {
-          pw+=buf;
-        });
-        c.on("exit",function(code,signal) {
-          // strip off trailing white space, and convert to base 64
-          term.write(Buffer.from(pw.replace(/\s*$/,"")).toString('base64')+"\r");
-        });
-        c.stdin.end(pwKey);
-      },
-      _ra_term_pid:term.pid,
-      //_ra_root_ssh_priv_key:self.config.RA_REMOTE_ROOT_ALLOWED_USERS.indexOf(raUser.username)>=0
-        //? self.config.RA_ROOT_SSH_KEY_BASE64
-        //: 'unknown'
-    };
-    var MAX_BUF_LENGTH=100;
-    var XTERM_INVIS="\x1b\\[8m";
-    term.TTY_REGEX=new RegExp(
-      XTERM_INVIS+
-      // most of the time we expect the pattern to immediately follow
-      // XTERM_INVIS, but this next ".*?" will handle the situation when
-      // bash "set -x" is in effect
-      ".*?"+
-      ":"+eshTermSessId+":("+Object.keys(term.TTY_PATTERNS).join("|")+")","gs");
-
-    //
-    // little handler to snag the TTY from the just launched session
-    term.on('data',function grabTty(buf) {
-      if (!("buffer" in grabTty)) {
-        grabTty.buffer="";
-      }
-      grabTty.buffer+=buf;
-      var m=grabTty.buffer.match(/remoteadmin session TTY: (\S+)$/sm);
-      if (m) {
-        //raTerminal.raTty=m[1];
-        //agent.log("registered tty: "+raTerminal.raTty);
-        term.removeListener('data',grabTty);
-      }
-      if (grabTty.buffer.length>2000) {
-        // something went wrong
-        console.warn("unable to parse tty from session");
-        term.removeListener('data',grabTty);
-      }
-    });
-
-//var fd=fs.openSync("/tmp/l","w");
-    term.on('data',function(buf) {
-//fs.write(fd,buf,function() {});
-      term.ttyBuffer+=buf;
-      term.ttyBuffer=term.ttyBuffer.replace(term.TTY_REGEX,function(match,marker) {
-        var repl=term.TTY_PATTERNS[marker];
-        if (typeof(repl)=='function') {
-          repl(term);
-        } else {
-          term.write(repl+"\r");
-        }
-        return "";
-      });
-
-      if (term.ttyBuffer.length>MAX_BUF_LENGTH) {
-        term.ttyBuffer=term.ttyBuffer.substr(term.ttyBuffer.length-MAX_BUF_LENGTH);
-      }
-    });
-
+    term.ttyBuffer='';
+    //this.logSession(term);
     term.on('error',function(code) {
       console.error("escreen main.js caught:"+code);
+    });
+    term.on("data",this.resolveMarkers.bind(this,term));
+    term.on('exit',function() {
+      console.log("terminal exited:"+term.pid)
     });
     //process.stdout.on('resize',function() {
       //term.resize(process.stdout.columns,process.stdout.rows);
@@ -178,6 +108,75 @@ class TerminalServer extends http.Server {
     return term;
   }
 
+  logSession(term) {
+    var fd=fs.openSync("/tmp/l","w");
+    term.on("data",function(buf) {
+      fs.write(fd,buf,function() {});
+    });
+  }
+
+  resolveMarkers(term,buf) {
+    var self=this;
+    var MAX_BUF_LENGTH=100;
+    var delim=";";
+    term.ttyBuffer+=buf;
+    term.ttyBuffer=term.ttyBuffer.replace(term.ttyRegex,function(match,marker) {
+      switch(marker) {
+        case "hello":
+          term.write("HELLO"+delim);
+          break;
+        case "_ra_term_pid":
+          term.write(term.pid+delim);
+          break;
+        case "_ra_get_ldap_pw":
+          self._ra_get_ldap_pw().then(function(pw64) {
+            term.write(pw64+delim);
+          }).catch(function(e) {
+            console.error("_ra_get_ldap_pw: "+e);
+            term.write(Buffer.from("_ra_get_ldap_pw: password not available").toString("base64")+delim);
+          });
+          break;
+      }
+      return "";
+    });
+    if (term.ttyBuffer.length>MAX_BUF_LENGTH) {
+      term.ttyBuffer=term.ttyBuffer.substr(term.ttyBuffer.length-MAX_BUF_LENGTH);
+    }
+  }
+
+  /**
+   * this function acquires local user's LDAP password using the
+   * <code>pw</code> shell script
+   *
+   * @returns {Promise} promise resolves with the base64 encoded password
+   */
+  _ra_get_ldap_pw() {
+    return new Promise(function(resolve,reject) {
+      var pwKey=global.MY_LDAP_PASSWORD_KEY;
+      if (!pwKey) {
+        var msg="_ra_get_ldap_pw: please set global.MY_LDAP_PASSWORD_KEY";
+        reject(msg);
+      }
+      var args=[
+        "-c",
+        "source "+process.env.ESH_HOME+"/esh-init; _esh_i $ESH_STY ESH_PORT; ESH_PW_FILE=$(_esh_b ESH_PW_FILE </dev/null); pw",
+      ];
+      var c=child_process.spawn('bash',args,{stdio:['pipe','pipe',process.stderr]});
+      var pw='';
+      c.on("error",function(e) {
+        console.error("_ra_get_ldap_pw: spawn: "+e);
+        pw='unknown';
+      });
+      c.stdout.on("data",function(buf) {
+        pw+=buf;
+      });
+      c.on("exit",function(code,signal) {
+        // strip off trailing white space, and convert to base 64
+        resolve(Buffer.from(pw.replace(/\s*$/,"")).toString('base64'));
+      });
+      c.stdin.end(pwKey);
+    });
+  }
 }
 
 module.exports=TerminalServer;

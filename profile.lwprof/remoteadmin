@@ -158,7 +158,7 @@ EOF
     # RA_READ_PTY_FUNC is picked up by remoteadmin's _ra_read_pty function, we
     # want to override it with _esh_y
     export RA_READ_PTY_FUNC=_esh_y
-    if c=($(curl -f -s -H "$1" http://127.0.0.1:$2/ra-get-ssh-session-args/$3/$4?raSessId=$5)); then
+    if c=($(curl -f -s -H "$1" http://127.0.0.1:$2/ra-get-ssh-session-args/$3/$4)); then
       for ((i=0;i<${#c[@]};i++)); do
         a+=("$(echo ${c[$i]} | openssl enc -d -a -A)")
       done
@@ -169,7 +169,7 @@ EOF
   }
 
   # create ESH_BASH_INIT (picked up by _bash_init) with bound parameters to my_init
-  eval "ESH_BASH_INIT() { $(declare -f my_init); my_init '$auth_hdr' $back_port $hostname $ip $ESH_TERM_SESSION_ID; }"
+  eval "ESH_BASH_INIT() { $(declare -f my_init); my_init '$auth_hdr' $back_port $hostname $ip; }"
 
   SSH_STY_LBL=$hostname ssh -t -oProxyJump=remoteadmin@$RA_SSH_PROXY_JUMP_HOST -p $ssh_port $extra_params $RA_SSH_USER@127.0.0.1
 }

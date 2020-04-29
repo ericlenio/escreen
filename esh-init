@@ -176,40 +176,36 @@ ESH_CORE=$ESH_HOME/core
 # given shell between various combinations of screen, sudo, and ssh
 export ESH_STY=$$
 
-
-
-
-
 _esh_y() {
-  local trigger="$1" data t=/dev/tty e="\x1b" s STY=forced-on
-  eval "$(_esh_e)"
-  # if inside gnu screen, send Device Control String
-  [ "$STY" ] && s+="\x1bP"
-  # turn on invisibility
-  s+="$e[8m"
-  # trigger display of some item of data from node server
-  s+=":$ESH_TERM_SESSION_ID:$trigger"
-  # erase entire line
-  s+="$e[2K"
-  # if inside gnu screen, finish Device Control String
-  [ "$STY" ] && s+="$e\\"
-  printf "$s" >$t
-  # read data that was just injected into terminal
-  read data <$t
-  s=''
-  # if inside gnu screen, send Device Control String
-  [ "$STY" ] && s+="\x1bP"
-  # move up 1 line
-  s+="$e[1F"
-  # move to column 1
-  s+="$e[1G"
-  # erase entire line
-  s+="$e[2K"
-  # restore visibility
-  s+="$e[0m"
-  # if inside gnu screen, finish Device Control String
-  [ "$STY" ] && s+="$e\\"
-  printf "$s" >$t
-  echo "$data"
+  local v
+  ansi() {
+    {
+      # gnu screen start Device Control String
+      [ $1 = 1 ] && printf '\x1bP'
+      printf '\x1b[%s' "$2"
+      # gnu screen finish Device Control String
+      [ $1 = 1 ] && printf '\x1b\\'
+    } >/dev/tty
+  }
+  stty -echo
+  # save cursor position
+  ansi 0 's'
+  # this ANSI pattern matched at the server, and conceals text
+  ansi 1 '8m'
+  printf ':%s' "$1" >/dev/tty
+  # erase line
+  ansi 0 '2K'
+  # restore cursor position
+  ansi 0 'u'
+  read -d ';' v </dev/tty
+  # erase line
+  ansi 0 '2K'
+  # restore cursor position, again
+  ansi 0 'u'
+  # unconceal
+  ansi 1 '0m'
+  # echo back the value we just read to stdout
+  stty echo
+  echo "$v"
 }
 export -f _esh_y

@@ -10,7 +10,7 @@ _bash_init() {
   #   p is the communication port
   local ESH_STY=$1 p=$2
   #declare -p $(compgen -v ESH_)
-  declare -p ESH_AT ESH_TMP ESH_STY ESH_USER ESH_TERM_SESSION_ID
+  declare -p ESH_AT ESH_TMP ESH_STY ESH_USER
   declare -f _esh_e _esh_b _esh_l _esh_i _esh_y
   #[ $# = 1 ] && return
   printf 'ESH_PORT=%s _esh_i %s ESH_PORT </dev/null\n' $p $ESH_STY
