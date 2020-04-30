@@ -8,6 +8,15 @@ const BashSessionConfigServer=require("./BashSessionConfigServer");
 
 const E_TERMINAL_SERVER_PORT=2020;
 const ENCODING='utf8';
+const E_TERMINALS={};
+const E_TTY_REGEX=new RegExp(
+  // match this ANSI sequence ...
+  "\x1b\\[8m"+
+  // allow for other escape codes possibly injected by gnu screen ...
+  ".{0,12}"+
+  // and match this string
+  ":(_ra_term_pid|_ra_get_ldap_pw|hello)"
+);
 
 class TerminalServer extends http.Server {
 
@@ -23,10 +32,12 @@ class TerminalServer extends http.Server {
   }
 
   satisfyRoute(req,res) {
-    switch(req.url) {
-      //case '/e-create-terminal':
-        //this.createTerminal(req,res);
-        //break;
+    var url=Url.parse(req.url,true);
+    switch(url.pathname) {
+      case '/e-resize-terminal':
+        this.resizeTerminal(url.query.pid,url.query.columns,url.query.rows);
+        res.end();
+        break;
       default:
         //res.writeHead(200,{'Content-Type':'text/plain'});
         //res.end('okay');
@@ -38,12 +49,13 @@ class TerminalServer extends http.Server {
     if (url.pathname!="/e-create-terminal") {
       return socket.end();
     }
+    var term=this.createTerminal(url.query.term);
     socket.write('HTTP/1.1 101 Web Socket Protocol Handshake\r\n'+
       'Upgrade: WebSocket\r\n'+
       'Connection: Upgrade\r\n'+
+      'E-Term-Pid: '+term.pid+'\r\n'+
       '\r\n');
     req.setTimeout(0);
-    var term=this.createTerminal(url.query.term);
     socket.on('data',function(msg) {
       term.write(msg);
     });
@@ -57,6 +69,14 @@ class TerminalServer extends http.Server {
     });
   }
 
+  resizeTerminal(pid,columns,rows) {
+    if (pid in E_TERMINALS) {
+      E_TERMINALS[pid].resize(parseInt(columns),parseInt(rows));
+    } else {
+      console.error("resizeTerminal: bad pid: "+pid);
+    }
+  }
+
   onError(e) {
     console.error("CAUGHT: "+e);
   }
@@ -65,7 +85,7 @@ class TerminalServer extends http.Server {
     return crypto.randomBytes(3).toString('hex');
   }
 
-  createTerminal(term) {
+  createTerminal(termType) {
     var self=this;
     var args=[
       "-c",
@@ -74,7 +94,7 @@ class TerminalServer extends http.Server {
 
     var term=pty.spawn("bash",args,{
       // note: node-pty will use "name" to set the terminal type
-      name:term,
+      name:termType,
       encoding:ENCODING,
       //handleFlowControl:true,
       cols:process.stdout.columns,
@@ -84,27 +104,19 @@ class TerminalServer extends http.Server {
     });
     term.setEncoding(ENCODING);
     //console.log("created pty: "+term._pty+":"+term.pid)
-    term.ttyRegex=new RegExp(
-      // match this ANSI sequence ...
-      "\x1b\\[8m"+
-      // allow for other escape codes possibly injected by gnu screen ...
-      ".{0,12}"+
-      // and match this string
-      ":(_ra_term_pid|_ra_get_ldap_pw|hello)"
-    );
 
     term.ttyBuffer='';
     //this.logSession(term);
     term.on('error',function(code) {
-      console.error("escreen main.js caught:"+code);
+      console.error("createTerminal caught:"+code);
+      delete E_TERMINALS[term.pid];
     });
+    E_TERMINALS[term.pid]=term;
     term.on("data",this.resolveMarkers.bind(this,term));
     term.on('exit',function() {
       console.log("terminal exited:"+term.pid)
+      delete E_TERMINALS[term.pid];
     });
-    //process.stdout.on('resize',function() {
-      //term.resize(process.stdout.columns,process.stdout.rows);
-    //});
     return term;
   }
 
@@ -120,7 +132,7 @@ class TerminalServer extends http.Server {
     var MAX_BUF_LENGTH=100;
     var delim=";";
     term.ttyBuffer+=buf;
-    term.ttyBuffer=term.ttyBuffer.replace(term.ttyRegex,function(match,marker) {
+    term.ttyBuffer=term.ttyBuffer.replace(E_TTY_REGEX,function(match,marker) {
       switch(marker) {
         case "hello":
           term.write("HELLO"+delim);

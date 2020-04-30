@@ -1,8 +1,10 @@
 const http=require('http');
+const BASE_URL='http://127.0.0.1:2020';
 
 class TerminalClient {
   init() {
-    const reqUrl='http://127.0.0.1:2020/e-create-terminal?term='+process.env.TERM;
+    var self=this;
+    const reqUrl=BASE_URL+'/e-create-terminal?term='+process.env.TERM;
     const opts={
       headers: {
         'Connection':'Upgrade',
@@ -22,6 +24,21 @@ class TerminalClient {
         process.exit(0);
       });
     });
+
+    req.on('upgrade',function(res) {
+      self.termPid=res.headers['e-term-pid'];
+    });
+
+    process.stdout.on('resize',this.resize.bind(this));
+  }
+
+  resize() {
+    const reqUrl=BASE_URL+'/e-resize-terminal?pid='+this.termPid+'&columns='+process.stdout.columns+'&rows='+process.stdout.rows;
+    const req=http.request(reqUrl);
+    req.end();
+    //req.on('response',function(res) {
+      //console.log("resize response:"+res.statusCode+":"+res.statusMessage)
+    //});
   }
 }
 
