@@ -56,12 +56,10 @@ class TerminalServer extends http.Server {
       'E-Term-Pid: '+term.pid+'\r\n'+
       '\r\n');
     req.setTimeout(0);
-    socket.on('data',function(msg) {
-      term.write(msg);
-    });
     socket.on('error',function(e) {
-      console.error("onUpgrade socket: "+e);
+      console.error("e-create-terminal socket: "+e);
     });
+    socket.pipe(term);
     term.pipe(socket);
     term.on('exit',function(code) {
       //console.log("pty exited now");
@@ -72,6 +70,7 @@ class TerminalServer extends http.Server {
   resizeTerminal(pid,columns,rows) {
     if (pid in E_TERMINALS) {
       E_TERMINALS[pid].resize(parseInt(columns),parseInt(rows));
+      console.log("resize "+pid+":"+columns+":"+rows);
     } else {
       console.error("resizeTerminal: bad pid: "+pid);
     }
@@ -89,7 +88,7 @@ class TerminalServer extends http.Server {
     var self=this;
     var args=[
       "-c",
-      "source "+process.env.ESH_HOME+"/esh-init; set|grep ^ESH; _esh_i $ESH_STY ESH_PORT; ESH_PW_FILE=$(_esh_b ESH_PW_FILE) exec bash --norc --noprofile",
+      "source "+process.env.ESH_HOME+"/esh-init; set|grep ^ESH; _esh_i $ESH_STY ESH_PORT; ESH_PW_FILE=$(_esh_b ESH_PW_FILE) exec bash -i",
     ];
 
     var term=pty.spawn("bash",args,{

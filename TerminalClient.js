@@ -27,6 +27,7 @@ class TerminalClient {
 
     req.on('upgrade',function(res) {
       self.termPid=res.headers['e-term-pid'];
+      self.resize();
     });
 
     process.stdout.on('resize',this.resize.bind(this));
