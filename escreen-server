@@ -10,7 +10,7 @@ ESH_AT=xxxxx1
 ESH_PORT=2021
 
 # only allow these environment variables to pass to the server process
-pass_vars=(HOME PATH SSH_AUTH_SOCK ESH_HOME ESH_TMP ESH_USER ESH_AT ESH_PORT)
+pass_vars=(HOME PATH SSH_AUTH_SOCK ESH_HOME ESH_TMP ESH_USER ESH_AT ESH_PORT LANG)
 
 exec=(env -i)
 for var in ${pass_vars[@]}; do
