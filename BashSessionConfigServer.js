@@ -244,14 +244,16 @@ this.authToken=process.env.ESH_AT;
 
     escreenrc=util.format("%s/.escreenrc",process.env.HOME);
     if (fs.existsSync(escreenrc)) {
-      fs.readFile(escreenrc,'utf8',function(err,data) {
-        return new Promise(function(resolve) {
+      return new Promise(function(resolve) {
+        fs.readFile(escreenrc,'utf8',function(err,data) {
           eval(data);
+          resolve();
         });
       });
     }
 
-    throw "Could not read $HOME/.escreenrc.gpg or $HOME/.escreenrc";
+    console.warn("Could not read $HOME/.escreenrc.gpg or $HOME/.escreenrc");
+    return Promise.resolve();
   }
 
   /**
