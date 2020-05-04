@@ -6,10 +6,10 @@ suffix=-$escreen_branch
 ESH_TMP=/tmp/esh$suffix
 [ ! -d $ESH_TMP ] && mkdir $ESH_TMP && chmod 1777 $ESH_TMP
 ESH_USER=$USER
-exec=(env -i)
 ESH_AT=xxxxx1
 ESH_PORT=2021
 pass_vars=(HOME PATH SSH_AUTH_SOCK ESH_HOME ESH_TMP ESH_USER ESH_AT ESH_PORT)
+exec=(env -i)
 for var in ${pass_vars[@]}; do
   exec+=($var="${!var}")
 done

@@ -102,7 +102,7 @@ class TerminalServer extends http.Server {
       //env:process.env,
     });
     term.setEncoding(ENCODING);
-    //console.log("created pty: "+term._pty+":"+term.pid)
+    console.log("created pty: "+term._pty+":"+term.pid+":"+termType)
 
     term.ttyBuffer='';
     //this.logSession(term);

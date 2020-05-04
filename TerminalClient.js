@@ -14,14 +14,18 @@ class TerminalClient {
     const req=http.request(reqUrl,opts);
     req.end();
 
-    req.on('upgrade',(res,socket,upgradeHead) => {
+    req.on('upgrade',function(res,socket,upgradeHead) {
       process.stdin.setRawMode(true);
+      process.stdin.pipe(socket);
       socket.pipe(process.stdout);
-      process.stdin.on('data',function(buf) {
-        socket.write(buf);
-      });
+      //process.stdin.on('data',function(buf) {
+        //socket.write(buf);
+      //});
       socket.on('close',function() {
         process.exit(0);
+      });
+      socket.on('error',function(e) {
+        console.error("TerminalClient socket: "+e);
       });
     });
 
@@ -37,9 +41,6 @@ class TerminalClient {
     const reqUrl=BASE_URL+'/e-resize-terminal?pid='+this.termPid+'&columns='+process.stdout.columns+'&rows='+process.stdout.rows;
     const req=http.request(reqUrl);
     req.end();
-    //req.on('response',function(res) {
-      //console.log("resize response:"+res.statusCode+":"+res.statusMessage)
-    //});
   }
 }
 
