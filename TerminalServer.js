@@ -88,7 +88,7 @@ class TerminalServer extends http.Server {
     var self=this;
     var args=[
       "-c",
-      "source "+process.env.ESH_HOME+"/esh-init; set|grep ^ESH; _esh_i $ESH_STY ESH_PORT; ESH_PW_FILE=$(_esh_b ESH_PW_FILE) exec bash -i",
+      "source "+process.env.ESH_HOME+"/esh-init; _esh_i $ESH_STY ESH_PORT; ESH_PW_FILE=$(_esh_b ESH_PW_FILE) exec bash -i",
     ];
 
     var term=pty.spawn("bash",args,{
