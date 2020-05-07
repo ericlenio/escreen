@@ -17,7 +17,7 @@
 # all remaining args: names of variables to be saved to file
 #
 _esh_e() {
-  local s=${1:-$ESH_STY} n v f
+  local s=${1:-$ESH_STY} n f
   # little nested function here to derive name of file to stash environment
   # vars
   F() {
@@ -29,19 +29,19 @@ _esh_e() {
       cat $f
       ;;
     1)
+      f=$(F $ESH_STY)
       case $1 in
         -f)
-          F $ESH_STY
+          echo $f
           ;;
         +*)
           # strip leading plus sign, we should be left with a variable name
           n=${1#+}
           # append var name and value to the file
-          declare -p $n >> $(F $ESH_STY)
+          declare -p $n >> $f
           ;;
         *)
-          cat $(F $ESH_STY) > $f
-          echo wrote $f: $(cat $f) 1>&2
+          cat $f > $(F $1)
           ;;
       esac
       ;;
@@ -51,7 +51,7 @@ _esh_e() {
         while [ $# -gt 0 ]; do
           n=$1
           shift
-          eval "declare -p $n" >> $f
+          declare -p $n >> $f
         done
         echo wrote $f: $(cat $f) 1>&2
       }
@@ -80,8 +80,7 @@ _esh_b() {
     echo $ESH_AT "$*"
     #[ ! -t 0 ] && { [ "$(which perl)" ] && perl -pe 'BEGIN{$|=1}' || cat; }
     [ ! -t 0 ] && cat
-  } | \
-  $ESH_NC 127.0.0.1 $ESH_PORT | {
+  } | nc 127.0.0.1 $ESH_PORT | {
     [ ${1:0:1} = z ] && gzip -d -c || cat
   }
 }
@@ -138,26 +137,18 @@ _esh_i() {
   [ -f $i ] && . $i
   local t=$ESH_TMP u=$ESH_USER f=$(_esh_e -f)
   [ ! -d $t ] && mkdir $t && chmod 1777 $t
-  # only write out ESH_STY file if we are NOT in a sudo session
-  #[ -z "$SUDO_USER" ] && _esh_e "$@"
-  # ... actually, write it out if it does not exist
   [ ! -f $f ] && {
     _esh_e "$@"
-    nohup sh -c "while kill -0 $$; do sleep 5; done; f=$(_esh_e -f); rm -f \$f*" </dev/null >/dev/null 2>&1 &
+    #nohup sh -c "while kill -0 $$; do sleep 5; done; rm -f $f" </dev/null >/dev/null 2>&1 &
   }
-  #ESH_NC="nc -q -1"
-  ESH_NC="nc"
-  # test if -q is supported with nc, due to 
-  # https://bugs.launchpad.net/ubuntu/+source/netcat-openbsd/+bug/544935
-  # we need it on newer ubuntu systems
-  #[ "$(nc -q -1 -z 127.0.0.1 1 2>&1)" ] && ESH_NC="nc"
+  #[ $# -gt 0 ] && _esh_e "$@"
   # p0, p1, p2 are set by fpw call
   local $(_esh_b fpw cbf </dev/null)
   _esh_l $t/$u.core $p0
   for f in $(_esh_l $t/$u.fcnlist $p1 1); do
     _esh_gen_stub $t/$u.f.$f
   done
-  export ESH_TMP ESH_STY ESH_NC SHELL=$(which bash)
+  export ESH_TMP ESH_STY SHELL=$(which bash)
   export -f _esh_e _esh_i _esh_b _esh_l _esh_y
   # generate vim executable so it is ready for user, e.g. if escreen starts and
   # then immediately:
@@ -167,14 +158,6 @@ _esh_i() {
 }
 
 export -f _esh_i
-
-ESH_CORE=$ESH_HOME/core
-#[ "$1" ] && ESH_PROFILE="$1" || ESH_PROFILE=$ESH_HOME/profile.lwprof
-
-# ESH_STY is conceptually tied to screen's STY variable ... it gets used as a
-# unique ID to properly track the communications port (ESH_PORT) to use in a
-# given shell between various combinations of screen, sudo, and ssh
-export ESH_STY=$$
 
 _esh_y() {
   local v
@@ -209,3 +192,11 @@ _esh_y() {
   echo "$v"
 }
 export -f _esh_y
+
+ESH_CORE=$ESH_HOME/core
+#[ "$1" ] && ESH_PROFILE="$1" || ESH_PROFILE=$ESH_HOME/profile.lwprof
+
+# ESH_STY is conceptually tied to screen's STY variable ... it gets used as a
+# unique ID to properly track the communications port (ESH_PORT) to use in a
+# given shell between various combinations of screen, sudo, and ssh
+export ESH_STY=$$
