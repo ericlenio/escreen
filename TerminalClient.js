@@ -13,28 +13,25 @@ class TerminalClient {
     };
     const req=http.request(reqUrl,opts);
     req.end();
+    req.on('upgrade',this.upgrade.bind(this));
+  }
 
-    req.on('upgrade',function(res,socket,upgradeHead) {
-      process.stdin.setRawMode(true);
-      process.stdin.pipe(socket);
-      socket.pipe(process.stdout);
-      //process.stdin.on('data',function(buf) {
-        //socket.write(buf);
-      //});
-      socket.on('close',function() {
-        process.exit(0);
-      });
-      socket.on('error',function(e) {
-        console.error("TerminalClient socket: "+e);
-      });
-    });
-
-    req.on('upgrade',function(res) {
-      self.termPid=res.headers['e-term-pid'];
-      self.resize();
-    });
-
+  upgrade(res,socket) {
+    process.stdin.setRawMode(true);
     process.stdout.on('resize',this.resize.bind(this));
+    process.stdin.pipe(socket);
+    socket.pipe(process.stdout);
+    //process.stdin.on('data',function(buf) {
+      //socket.write(buf);
+    //});
+    socket.on('close',function() {
+      process.exit(0);
+    });
+    socket.on('error',function(e) {
+      console.error("TerminalClient socket: "+e);
+    });
+    this.termPid=res.headers['e-term-pid'];
+    this.resize();
   }
 
   resize() {

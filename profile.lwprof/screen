@@ -82,11 +82,10 @@ screen() {
     exec "$@"
   }
   export -f myshell
-  local exec esc=^Ee
+  local esc=^Aa
 
-  if [ "$ESH_SCREEN_EXEC" = 1 ]; then
-    esc=^Aa
-    exec=exec
+  if [ "$SSH_TTY" ]; then
+    esc=^Ee
   fi
 
   # need --import-functions when on freebsd
@@ -95,5 +94,5 @@ screen() {
   # freebsd: screen seems to completely ignore the "-s" flag, so use SHELL
   # environment var instead; strip off "screen." prefix from $TERM to avoid
   # "$TERM too long" issue
-  $exec env SCREENRC=/dev/null TERM=${TERM#screen.} screen -e$esc "${args[@]}" bash -c myshell
+  env SCREENRC=/dev/null TERM=${TERM#screen.} screen -e$esc "${args[@]}" bash -c myshell
 }

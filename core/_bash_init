@@ -28,7 +28,12 @@ _bash_init() {
       echo $f
     done
     declare -p ex
-    echo '"${ex[@]}" <>/dev/tty'
+    # the bash environment is now initialized and ready for an interactive user
+    # session
+    #
+    # user will interact with $SSH_TTY if detected (else gnu screen will not
+    # work inside ssh sessions to openbsd), else just use /dev/tty
+    echo '"${ex[@]}" <>${SSH_TTY:-/dev/tty}'
   } | gzip -9c | openssl enc -a -A)
   printf "sh -c 'echo %s | openssl enc -d -A -a | gzip -dc | exec bash'" $c64
 }
