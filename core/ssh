@@ -104,6 +104,7 @@ ssh() {
     # freebsd, openbsd, et al, and also when dealing with slower connections
     # you get weird timeout issues, so going back to old way
     #
+    if [ -z "THIS IS OLD STUFF" ]; then
     c0=$(echo ':
 sshrc=/etc/escreen.sshrc
 [ -f $sshrc ] && . $sshrc
@@ -115,12 +116,10 @@ b=`which bash`
 [ ! "$b" ] && exec $SHELL -l
 exec $b -c "$(echo '$c0' | openssl enc -d -a -A | gzip -d -c)"
 ' | gzip -9c | openssl enc -a -A)
+    fi
 
-    ssh_opts+=(
-      -t -oServerAliveInterval=30 -oExitOnForwardFailure=yes -R$rem_port:127.0.0.1:$ESH_PORT $ssh_user_host
-      sh -c '"$(echo '$c1' | openssl enc -d -a -A | gzip -d -c)"'
-    )
+    ssh_opts+=(-t -oServerAliveInterval=30 -oExitOnForwardFailure=yes -R$rem_port:127.0.0.1:$ESH_PORT $ssh_user_host)
   fi
-  env ssh "${ssh_opts[@]}"
+  env ssh "${ssh_opts[@]}" $(_bash_init $ssh_user_host-$(pwgen 6) $rem_port)
 }
 export -f ssh

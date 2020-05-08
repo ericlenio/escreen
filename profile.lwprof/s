@@ -22,31 +22,5 @@ s() {
   }
 
   eval "$(_esh_e)"
-
-  my_init() {
-    #trap 'f=$(_esh_e -f); rm -f $f; echo "removed $f" >&2' EXIT
-    if [ $# = 0 ]; then
-      bash --norc --noprofile
-    else
-      local arg cmd=()
-      for arg in "$@"; do
-        cmd+=("$(echo $arg | openssl enc -d -a -A)")
-      done
-      "${cmd[@]}"
-    fi
-  }
-
-  # create ESH_BASH_INIT (picked up by _bash_init) with bound parameters to my_init
-  local cmd="ESH_BASH_INIT() { $(declare -f my_init); my_init "
-  for arg in "$@"; do
-    cmd+=$(echo -n "$arg" | openssl enc -a -A)
-    cmd+=" "
-  done
-  cmd+="<>/dev/tty; }"
-  eval "$cmd"
-
-  sudo -H -u $user env bash << EOF
-$(declare -f ESH_BASH_INIT)
-$(_bash_init $user-$(pwgen 5) $ESH_PORT)
-EOF
+  _bash_init $user-$(pwgen 5) $ESH_PORT "$@" | sudo -H -u $user -s
 }

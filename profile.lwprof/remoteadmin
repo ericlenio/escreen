@@ -164,7 +164,7 @@ EOF
       done
       # needed -i arg with bash in order to pass along desired PS1 value
       a=(exec bash --norc --noprofile -i -c "${a[@]:7}" exec bash --norc --noprofile)
-      eval "${a[@]}"
+      eval "${a[@]}" <>/dev/tty
     fi
   }
 
@@ -172,4 +172,5 @@ EOF
   eval "ESH_BASH_INIT() { $(declare -f my_init); my_init '$auth_hdr' $back_port $hostname $ip; }"
 
   SSH_STY_LBL=$hostname ssh -t -oProxyJump=remoteadmin@$RA_SSH_PROXY_JUMP_HOST -p $ssh_port $extra_params $RA_SSH_USER@127.0.0.1
+  unset -f ESH_BASH_INIT
 }
