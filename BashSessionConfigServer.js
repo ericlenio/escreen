@@ -297,7 +297,7 @@ this.authToken=process.env.ESH_AT;
       var dir=dirs[i];
       var ls=fs.readdirSync(dir);
       for (var j=0; j<ls.length; j++) {
-        if (ls[j].search('^\\w+$')<0) continue;
+        if (ls[j].search('^[-\\w]+$')<0) continue;
         if (list.indexOf(ls[j])>=0) continue;
         if (ls[j]=="README") continue;
         if (!this.looksLikeBashFunction(util.format("%s/%s",dir,ls[j]))) continue;
@@ -308,12 +308,16 @@ this.authToken=process.env.ESH_AT;
     return list.join("\n");
   }
 
+  /**
+   * read file and see if first non-comment line looks similar to:
+   * <code>my_foo_function() {</code>
+   */
   looksLikeBashFunction(f) {
     var lines=fs.readFileSync(f).toString().split(/\n/);
     for (var i=0; i<lines.length; i++) {
       var line=lines[i];
       if (line.indexOf("#")!=0 && line.search(/^\s*$/)<0) {
-        return line.search(/^\w+\(\)\s*\{/)==0;
+        return line.search(/^[-\w]+\(\)\s*\{/)==0;
       }
     }
     return false;
