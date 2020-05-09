@@ -85,6 +85,7 @@ screen() {
   local esc=^Aa
 
   if [ "$SSH_TTY" ]; then
+    # assume nested gnu screen, so use alternate escape sequence
     esc=^Ee
   fi
 

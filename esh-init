@@ -161,13 +161,25 @@ export -f _esh_i
 
 _esh_y() {
   local v
+  dcs() {
+    # not totally clear when the gnu screen Device Control Strings were needed,
+    # but they seemed to be required for "conceal text" (8m) and "restore text"
+    # (0m) at least (arg 1 to this function is either "1" or "0", "1" meaning
+    # we should send the string so long as we detect we are in a gnu screen
+    # session)
+    #
+    # it makes sense it is needed for conceal text because the gnu screen man
+    # page doesn't say that conceal is supported ... but 0m is ("Default
+    # Rendition")
+    [[ $TERM =~ screen* && $1 = 1 ]] && printf "$2"
+  }
   ansi() {
     {
       # gnu screen start Device Control String
-      [ $1 = 1 ] && printf '\x1bP'
+      dcs $1 '\x1bP'
       printf '\x1b[%s' "$2"
       # gnu screen finish Device Control String
-      [ $1 = 1 ] && printf '\x1b\\'
+      dcs $1 '\x1b\\'
     } >/dev/tty
   }
   stty -echo
