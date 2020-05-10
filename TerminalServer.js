@@ -17,6 +17,10 @@ const E_TTY_REGEX=new RegExp(
   // and match this string
   ":(_ra_term_pid|_ra_get_ldap_pw|hello)"
 );
+const E_MIME_TYPES={
+  html:"text/html",
+  md:"text/plain",
+};
 
 class TerminalServer extends http.Server {
 
@@ -34,13 +38,19 @@ class TerminalServer extends http.Server {
   satisfyRoute(req,res) {
     var url=Url.parse(req.url,true);
     switch(url.pathname) {
+      case '/mdwiki.html':
+        return this.staticFile(res,"mdwiki.html");
+        break;
+      case '/README.md':
+        return this.staticFile(res,"README.md");
+        break;
       case '/e-resize-terminal':
         this.resizeTerminal(url.query.pid,url.query.columns,url.query.rows);
         res.end();
         break;
       default:
-        //res.writeHead(200,{'Content-Type':'text/plain'});
-        //res.end('okay');
+        res.writeHead(200,{'Content-Type':'text/plain'});
+        res.end('OK');
     }
   }
 
@@ -188,6 +198,23 @@ class TerminalServer extends http.Server {
       c.stdin.end(pwKey);
     });
   }
+
+  /**
+   * serve up a static file
+   */
+  staticFile(res,path) {
+    var fileExt=path.replace(/.*?\.(\w+)$/,"$1");
+    var type=E_MIME_TYPES[fileExt];
+    fs.readFile(path,{encoding:ENCODING},function(e,data) {
+      if (e) {
+        res.writeHead(500,{'Content-Type':'text/plain'});
+        return res.end(e);
+      }
+      res.writeHead(200,{'Content-Type':type});
+      res.end(data);
+    });
+  }
+
 }
 
 module.exports=TerminalServer;

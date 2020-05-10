@@ -1,7 +1,30 @@
 escreen
 =======
 
-escreen is a GNU screen wrapper, plus a set of bash shell functions that make
+# Background
+
+Here is the value proposition of this project: I am constantly ssh-ing to many
+servers, and within those servers sudo-ing into many different users and then
+often using vim. Each time I ssh and/or sudo, my preferred bash/ssh/vim
+settings are effectively wiped. Rather than copy rc files (.bashrc, .vimrc,
+etc.) all over the place, this project will automate it.
+
+Warning: this project is completely biased to using bash, GNU screen, and vim.
+
+# Architecture
+
+escreen is a combination terminal server and terminal client, written in
+nodejs. The terminal server is actually 2 node http servers:
+
+* one that calls [forkpty](https://linux.die.net/man/3/forkpty) to spawn a new bash session, and
+* one that sends out your preferred shell configuration settings (environment variables, shell functions, etc.) to subshells on demand spawned from the initial bash session
+
+The terminal client runs by sending a request to spawn your initial bash
+session, which you can interact with. The session is initialized with what I
+will call the escreen "core" functions that can communicate back to the bash
+configuration server for various preferred settings you want in your shell.
+
+GNU screen wrapper, plus a set of bash shell functions that make
 for consistent environment settings when ssh-ing to remote servers, and
 possibly sudo-ing to other users on those servers. If you have ever spent lots
 of time setting up your shell with the perfect settings for .bashrc,
