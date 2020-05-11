@@ -17,7 +17,7 @@ _bash_init() {
   #declare -p $(compgen -v ESH_)
   [ ${#ex[@]} = 0 ] && ex=(exec bash --norc --noprofile -i)
   c64=$({
-    declare -p ESH_AT ESH_TMP ESH_STY ESH_USER
+    declare -p ESH_AT ESH_TMP ESH_STY ESH_USER ex
     declare -f _esh_e _esh_b _esh_l _esh_i _esh_y
     printf 'ESH_PORT=%s _esh_i %s ESH_PORT </dev/null\n' $p $ESH_STY
     # layer in all current shell functions with function name prefix
@@ -27,7 +27,6 @@ _bash_init() {
       declare -f $f
       echo $f
     done
-    declare -p ex
     # the bash environment is now initialized and ready for an interactive user
     # session
     #

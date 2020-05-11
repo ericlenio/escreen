@@ -164,7 +164,7 @@ EOF
       done
       # needed -i arg with bash in order to pass along desired PS1 value
       a=(exec bash --norc --noprofile -i -c "${a[@]:7}" exec bash --norc --noprofile)
-      eval "${a[@]}" <>/dev/tty
+      eval "${a[@]}" <>$SSH_TTY
     fi
   }
 
