@@ -3,20 +3,24 @@ const crypto=require('crypto');
 const fs=require('fs');
 const http=require('http');
 const pty=require('node-pty');
+const os=require('os');
 const Url=require('url');
 const BashSessionConfigServer=require("./BashSessionConfigServer");
 
 const E_TERMINAL_SERVER_PORT=2020;
 const ENCODING='utf8';
 const E_TERMINALS={};
+const E_HOSTNAME=os.hostname();
+/*
 const E_TTY_REGEX=new RegExp(
   // match this ANSI sequence ...
   "\x1b\\[8m"+
   // allow for other escape codes possibly injected by gnu screen ...
   ".{0,12}"+
   // and match this string
-  ":(_ra_term_pid|_ra_get_ldap_pw|hello)"
+  ":(_ra_term_pid|_ra_get_ldap_pw|hello|log)"
 );
+*/
 const E_MIME_TYPES={
   html:"text/html",
   md:"text/plain",
@@ -98,7 +102,7 @@ class TerminalServer extends http.Server {
     var self=this;
     var args=[
       "-c",
-      "source "+process.env.ESH_HOME+"/esh-init; _esh_i $ESH_STY ESH_PORT; ESH_PW_FILE=$(_esh_b ESH_PW_FILE) exec bash -i",
+      "source "+process.env.ESH_HOME+"/esh-init; export ESH_TERM_PID=$$; _esh_i $ESH_STY ESH_PORT; ESH_PW_FILE=$(_esh_b ESH_PW_FILE) exec bash -i",
     ];
 
     var term=pty.spawn("bash",args,{
@@ -115,13 +119,15 @@ class TerminalServer extends http.Server {
     console.log("created pty: "+term._pty+":"+term.pid+":"+termType)
 
     term.ttyBuffer='';
-    //this.logSession(term);
+    term.isLogging=false;
+    // probably should scope this log file name with something unique like term.pid ...
+    term.logFile="/tmp/term.log";
     term.on('error',function(code) {
       console.error("createTerminal caught:"+code);
       delete E_TERMINALS[term.pid];
     });
     E_TERMINALS[term.pid]=term;
-    term.on("data",this.resolveMarkers.bind(this,term));
+    //term.on("data",this.resolveMarkers.bind(this,term));
     term.on('exit',function() {
       console.log("terminal exited:"+term.pid)
       delete E_TERMINALS[term.pid];
@@ -129,13 +135,27 @@ class TerminalServer extends http.Server {
     return term;
   }
 
-  logSession(term) {
-    var fd=fs.openSync("/tmp/l","w");
-    term.on("data",function(buf) {
-      fs.write(fd,buf,function() {});
-    });
+  toggleLogging(term) {
+    var status='on';
+    term.isLogging=!term.isLogging;
+    if (term.isLogging) {
+      var fd=fs.openSync(term.logFile,"w");
+      term.termLogger=function(fd,buf,stop) {
+        if (stop) {
+	  return fs.closeSync(fd);
+        }
+	fs.write(fd,buf,function() {});
+      }.bind(this,fd);
+      term.on('data',term.termLogger);
+    } else {
+      term.termLogger(null,true);
+      term.removeListener('data',term.termLogger);
+      status='off';
+    }
+    return status;
   }
 
+  /*
   resolveMarkers(term,buf) {
     var self=this;
     var MAX_BUF_LENGTH=100;
@@ -143,6 +163,10 @@ class TerminalServer extends http.Server {
     term.ttyBuffer+=buf;
     term.ttyBuffer=term.ttyBuffer.replace(E_TTY_REGEX,function(match,marker) {
       switch(marker) {
+        case "log":
+          var status=self.toggleLogging(term);
+          term.write("logging is "+status.toUpperCase()+": "+term.logFile+delim);
+          break;
         case "hello":
           term.write("HELLO"+delim);
           break;
@@ -163,6 +187,42 @@ class TerminalServer extends http.Server {
     if (term.ttyBuffer.length>MAX_BUF_LENGTH) {
       term.ttyBuffer=term.ttyBuffer.substr(term.ttyBuffer.length-MAX_BUF_LENGTH);
     }
+  }
+  */
+
+  /**
+   * resolve a marker for a piece of (possibly sensitive) data; the data is
+   * injected right into the pty
+   */
+  resolveMarker(pid,marker) {
+    if (!(pid in E_TERMINALS)) {
+      return "E_BAD_PID";
+    }
+    var term=E_TERMINALS[pid];
+    var delim=';';
+    switch(marker) {
+      case "log":
+	var status=this.toggleLogging(term);
+	term.write("logging is "+status.toUpperCase()+": "+E_HOSTNAME+":"+term.logFile+delim);
+	break;
+      case "hello":
+	term.write("HELLO"+delim);
+	break;
+      case "_ra_term_pid":
+	term.write(term.pid+delim);
+	break;
+      case "_ra_get_ldap_pw":
+	this._ra_get_ldap_pw().then(function(pw64) {
+	  term.write(pw64+delim);
+	}).catch(function(e) {
+	  console.error("_ra_get_ldap_pw: "+e);
+	  term.write(Buffer.from("_ra_get_ldap_pw: password not available").toString("base64")+delim);
+	});
+	break;
+      default:
+        term.write('?'+delim);
+    }
+    return "E_OK";
   }
 
   /**

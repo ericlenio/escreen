@@ -21,7 +21,7 @@
 #exec > >(tee >(grep ^: >$cmds) | grep -v ^:)
 #trap "rm -f $stdout $cmds; echo $stdout was deleted" EXIT INT
 
-remoteadmin() {
+-ra() {
   local exec ssh_params opts="e:u:j:" opt RA_SERVER_BASE_URL=${RA_SERVER_BASE_URL:-https://remoteadmin.private:3333} RA_SSH_USER=${RA_SSH_USER:-lincdoc} OPTIND=1
   declare -a exec
   declare -a ssh_params

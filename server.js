@@ -9,7 +9,7 @@ const ts=new TerminalServer();
 const bs=new BashSessionConfigServer();
 
 ts.init();
-bs.init(profileDir);
+bs.init(ts,profileDir);
 
 Object.keys(process.env).sort().forEach(function(key) {
     console.log(key+"="+process.env[key]);

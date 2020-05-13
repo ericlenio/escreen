@@ -187,12 +187,13 @@ _esh_y() {
   ansi 0 's'
   # this ANSI pattern matched at the server, and conceals text
   ansi 1 '8m'
-  printf ':%s' "$1" >/dev/tty
+  #printf ':%s' "$1" >/dev/tty
+  v=$(_esh_b m $ESH_TERM_PID "$1")
   # erase line
   ansi 0 '2K'
   # restore cursor position
   ansi 0 'u'
-  read -d ';' v </dev/tty
+  [ "$v" = E_OK ] && read -d ';' v </dev/tty
   # erase line
   ansi 0 '2K'
   # restore cursor position, again

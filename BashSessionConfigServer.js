@@ -44,8 +44,9 @@ class BashSessionConfigServer extends net.Server {
     });
   }
 
-  init(profileDir) {
+  init(ts,profileDir) {
     var self=this;
+    this.ts=ts;
     this.profileDir=profileDir;
 // fix me
 this.authToken=process.env.ESH_AT;
@@ -122,6 +123,15 @@ this.authToken=process.env.ESH_AT;
 
     self.registerHandler("hello",function(socket) {
       socket.end("HELLO\n");
+    });
+
+    /**
+     * resolve a token/marker, which might be sensitive data (e.g. a password);
+     * resolveMarker will type the data right into the pty and _esh_y reads it
+     */
+    self.registerHandler("m",function(socket,pid,marker) {
+      var status=self.ts.resolveMarker(pid,marker);
+      socket.end(status+"\n");
     });
 
     self.registerHandler("ESH_PW_FILE",function(socket) {

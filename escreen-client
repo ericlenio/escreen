@@ -1,3 +1,3 @@
 #! /usr/bin/env bash
 ESH_HOME=$(dirname $(perl -MCwd -e 'print Cwd::abs_path shift' $0))
-exec node $ESH_HOME/client.js
+exec node $ESH_HOME/client.js "$@"
