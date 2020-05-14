@@ -9,13 +9,7 @@ cp2cb() {
   else
     f="-"
   fi
-  # override ESH_NC to not use "-q -1": we want nc to close as soon as it has
-  # read all of its stdin
-  #local nc=${ESH_NC/-q -1/-q 0} local os=$(uname -s)
-  #[ $os = FreeBSD -o $os = OpenBSD ] && nc="nc -N"
-  #perl -pe 'chomp if eof' -- "$f" | gzip -9 -c | ESH_NC="$nc" _esh_b setCb
-
-  t=$(eval cat "$f")
+  t=$(cat "$f")
   # get the length of the text in bytes, not just # of characters
   LANG=C LC_ALL=C l=${#t}
   # this printf is to trim the final \n

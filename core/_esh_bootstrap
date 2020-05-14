@@ -3,10 +3,10 @@
 # _esh_bootstrap bootstraps a function
 #
 _esh_bootstrap() {
-  local f=$1 f0=${1/*.} f1=$(declare -f $f0) f2
+  local f=$1 f0=${1/*.} f1=$(declare -f -- $f0) f2
   shift
   _esh_l $f </dev/null
-  f2=$(declare -f $f0)
+  f2=$(declare -f -- $f0)
   # compare before and after: if the same, then something went wrong in the
   # uploading/decryption/loading of the function
   [ "$f1" = "$f2" ] && echo "escreen: failed to load $f" || $f0 "$@"

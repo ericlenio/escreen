@@ -55,11 +55,13 @@ ssh() {
   cmdline_ssh_host=${ssh_user_host##*@}
   h=$cmdline_ssh_host
   [ "$SSH_STY_LBL" ] && h=$SSH_STY_LBL
-  printf "\033k$h\033\134"
-  # restore screen window title when this function is interrupted, or just
-  # returns normally
-  trap 'printf "\033k${HOSTNAME}\033\134"; trap - INT RETURN' INT RETURN
-  eval $(_esh_e)
+  [ "$STY" ] && {
+    printf "\033k$h\033\134"
+    # restore screen window title when this function is interrupted, or just
+    # returns normally
+    trap 'printf "\033k${HOSTNAME}\033\134"; trap - INT RETURN' INT RETURN
+  }
+  eval "$(_esh_e)"
   # if anything left in the command line (and ssh option -t is not set), then
   # we just do straight through call to ssh.
   if [ $# -gt 0 ]; then
@@ -102,6 +104,7 @@ ssh() {
     # freebsd, openbsd, et al, and also when dealing with slower connections
     # you get weird timeout issues, so going back to old way
     #
+    if [ -z "THIS IS OLD STUFF" ]; then
     c0=$(echo ':
 sshrc=/etc/escreen.sshrc
 [ -f $sshrc ] && . $sshrc
@@ -113,12 +116,10 @@ b=`which bash`
 [ ! "$b" ] && exec $SHELL -l
 exec $b -c "$(echo '$c0' | openssl enc -d -a -A | gzip -d -c)"
 ' | gzip -9c | openssl enc -a -A)
+    fi
 
-    ssh_opts+=(
-      -t -oServerAliveInterval=30 -oExitOnForwardFailure=yes -R$rem_port:127.0.0.1:$ESH_PORT $ssh_user_host
-      sh -c '"$(echo '$c1' | openssl enc -d -a -A | gzip -d -c)"'
-    )
+    ssh_opts+=(-t -oServerAliveInterval=30 -oExitOnForwardFailure=yes -R$rem_port:127.0.0.1:$ESH_PORT $ssh_user_host)
   fi
-  env ssh "${ssh_opts[@]}"
+  env ssh "${ssh_opts[@]}" $(_bash_init $ssh_user_host-$(pwgen 6) $rem_port)
 }
 export -f ssh

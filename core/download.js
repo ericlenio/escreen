@@ -1,6 +1,5 @@
-module.exports=function(controller) {
-
-  controller.registerHandler("download",function(controller,socket,expected_md5,filesize,gzipped,base64filename) {
+module.exports=function(server) {
+  server.registerHandler("download",function(socket,expected_md5,filesize,gzipped,base64filename) {
     var fs=require('fs');
     var crypto=require('crypto');
     var h=crypto.createHash('md5');
@@ -38,5 +37,5 @@ module.exports=function(controller) {
         }
       });
     }
-  },true);
+  });
 };

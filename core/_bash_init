@@ -7,16 +7,33 @@
 #
 _bash_init() {
   # Args:
-  #   p is the communication port
-  local ESH_STY=$1 p=$2
+  #   1st is ESH_STY;
+  #   p is the communication port (to BashSessionConfigServer);
+  #   remaining args are positional parameters to be run in the newly
+  #   initialized bash shell we are about to execute (after we init that shell
+  #   with the core escreen framework), defaulting to an interactive bash
+  #   session
+  local ESH_STY=$1 p=$2 ex=("${@:3}") c64 f fs=$(compgen -A function ESH_BASH_INIT | sort)
   #declare -p $(compgen -v ESH_)
-  declare -p ESH_AT ESH_TMP ESH_STY ESH_USER
-  declare -f _esh_e _esh_b _esh_l _esh_i
-  #[ $# = 1 ] && return
-  printf 'ESH_PORT=%s _esh_i %s ESH_PORT </dev/null\n' $p $ESH_STY
-  if declare -f ESH_BASH_INIT; then
-    echo 'ESH_BASH_INIT'
-  fi
-  echo 'exec bash --norc --noprofile'
+  [ ${#ex[@]} = 0 ] && ex=(exec bash --norc --noprofile -i)
+  c64=$({
+    declare -p ESH_AT ESH_TMP ESH_STY ESH_USER ESH_TERM_PID ex
+    declare -f _esh_e _esh_b _esh_l _esh_i _esh_y
+    printf 'ESH_PORT=%s _esh_i %s ESH_PORT </dev/null\n' $p $ESH_STY
+    # layer in all current shell functions with function name prefix
+    # "ESH_BASH_INIT": execute them in order (by function name) in our new
+    # shell
+    for f in $fs; do
+      declare -f $f
+      echo $f
+    done
+    # the bash environment is now initialized and ready for an interactive user
+    # session
+    #
+    # user will interact with $SSH_TTY if detected (else gnu screen will not
+    # work inside ssh sessions to openbsd), else just use /dev/tty
+    echo '"${ex[@]}" <>${SSH_TTY:-/dev/tty}'
+  } | gzip -9c | openssl enc -a -A)
+  printf "sh -c 'echo %s | openssl enc -d -A -a | gzip -dc | exec bash'" $c64
 }
 export -f _bash_init

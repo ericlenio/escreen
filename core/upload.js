@@ -1,10 +1,10 @@
-module.exports=function(controller) {
+module.exports=function(server) {
 
   // Simple cache for tracking individual upload requests
   var CACHE={};
   var fs=require('fs');
 
-  controller.registerHandler("sshd",function(controller,socket) {
+  server.registerHandler("sshd",function(socket) {
     //socket.cork();
     var child_process=require('child_process');
     var p=child_process.spawn("sudo",["/usr/sbin/sshd","-i"],
@@ -27,8 +27,8 @@ module.exports=function(controller) {
 
 
   // Get values of arbitrary environment variables: values separated by |
-  controller.registerHandler("getEnv",function(controller,socket) {
-    for (var i=2; i<arguments.length; i++) {
+  server.registerHandler("getEnv",function(socket) {
+    for (var i=1; i<arguments.length; i++) {
       var varname=arguments[i];
       socket.write(process.env[varname]);
       if (i<arguments.length-1) socket.write("|");
@@ -37,7 +37,7 @@ module.exports=function(controller) {
   },true);
 
 
-  controller.registerHandler("setUploadFilename",function(controller,socket,token,uploadFileBase64) {
+  server.registerHandler("setUploadFilename",function(socket,token,uploadFileBase64) {
     var upload_file=Buffer.from( uploadFileBase64, 'base64' ).toString();
     upload_file=upload_file.substr(0,1)=="/" ?
       upload_file : process.env.HOME + "/" + upload_file;
@@ -50,7 +50,7 @@ module.exports=function(controller) {
   },true);
 
 
-  controller.registerHandler("getUploadFileInfo",function(controller,socket,token) {
+  server.registerHandler("getUploadFileInfo",function(socket,token) {
     socket.end(
       CACHE[token].filename + "|" +
       CACHE[token].mode + "|" +
@@ -60,13 +60,13 @@ module.exports=function(controller) {
   
 
 
-  controller.registerHandler("dropUploadToken",function(controller,socket,token) {
+  server.registerHandler("dropUploadToken",function(socket,token) {
     delete CACHE[token];
     socket.end();
   },true);
 
 
-  controller.registerHandler("getUploadFile",function(controller,socket,token) {
+  server.registerHandler("getUploadFile",function(socket,token) {
     var upFile=CACHE[token].filename;
     if ( typeof upFile=="string" && upFile.length>0 ) {
       if (fs.existsSync(upFile)) {
@@ -88,7 +88,7 @@ module.exports=function(controller) {
   },true);
 
 
-  controller.registerHandler("getUploadFileHash",function(controller,socket,token) {
+  server.registerHandler("getUploadFileHash",function(socket,token) {
     if (fs.existsSync(CACHE[token].filename)) {
       var md5=CACHE[token].md5hash.digest('hex').toLowerCase();
       socket.end(md5);

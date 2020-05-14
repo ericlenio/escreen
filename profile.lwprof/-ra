@@ -21,7 +21,7 @@
 #exec > >(tee >(grep ^: >$cmds) | grep -v ^:)
 #trap "rm -f $stdout $cmds; echo $stdout was deleted" EXIT INT
 
-remoteadmin() {
+-ra() {
   local exec ssh_params opts="e:u:j:" opt RA_SERVER_BASE_URL=${RA_SERVER_BASE_URL:-https://remoteadmin.private:3333} RA_SSH_USER=${RA_SSH_USER:-lincdoc} OPTIND=1
   declare -a exec
   declare -a ssh_params
@@ -63,7 +63,7 @@ remoteadmin() {
     fi
   }
 
-  eval $(_esh_e)
+  eval "$(_esh_e)"
   if [ "$RA_USER_OVERRIDE" ]; then
     RA_USER=$RA_USER_OVERRIDE
   fi
@@ -155,12 +155,16 @@ EOF
 
   my_init() {
     local a=() c=() i
+    # RA_READ_PTY_FUNC is picked up by remoteadmin's _ra_read_pty function, we
+    # want to override it with _esh_y
+    export RA_READ_PTY_FUNC=_esh_y
     if c=($(curl -f -s -H "$1" http://127.0.0.1:$2/ra-get-ssh-session-args/$3/$4)); then
       for ((i=0;i<${#c[@]};i++)); do
         a+=("$(echo ${c[$i]} | openssl enc -d -a -A)")
       done
-      a=(exec bash --norc --noprofile -c "${a[@]:7}" exec bash --norc --noprofile)
-      eval "${a[@]}"
+      # needed -i arg with bash in order to pass along desired PS1 value
+      a=(exec bash --norc --noprofile -i -c "${a[@]:7}" exec bash --norc --noprofile)
+      eval "${a[@]}" <>$SSH_TTY
     fi
   }
 
@@ -168,20 +172,5 @@ EOF
   eval "ESH_BASH_INIT() { $(declare -f my_init); my_init '$auth_hdr' $back_port $hostname $ip; }"
 
   SSH_STY_LBL=$hostname ssh -t -oProxyJump=remoteadmin@$RA_SSH_PROXY_JUMP_HOST -p $ssh_port $extra_params $RA_SSH_USER@127.0.0.1
-  return $?
-
-
-
-
-
-  endpoint=$RA_SERVER_BASE_URL/ra-get-ssh-session-args/$hostname/$ip
-  ssh_args=(ssh -t)
-  for arg in $(curl -s -k -S -H "$auth_hdr" $endpoint); do
-    ssh_args+=("$(echo $arg | openssl enc -d -a -A)")
-  done
-  ssh_args+=(exec bash)
-
-  echo "${ssh_args[@]}"
-  s=$(echo "${ssh_args[@]}" | openssl enc -a -A)
-  SSH_STY_LBL=$hostname ssh -t -p 2999 remoteadmin@ra.lincware.com '$(echo '$s' | openssl enc -d -A -a)'
+  unset -f ESH_BASH_INIT
 }
