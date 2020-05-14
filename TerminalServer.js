@@ -42,10 +42,10 @@ class TerminalServer extends http.Server {
   satisfyRoute(req,res) {
     var url=Url.parse(req.url,true);
     switch(url.pathname) {
-      case '/mdwiki.html':
+      case '/':
         return this.staticFile(res,"mdwiki.html");
         break;
-      case '/README.md':
+      case '/index.md':
         return this.staticFile(res,"README.md");
         break;
       case '/e-resize-terminal':
