@@ -11,6 +11,10 @@ const E_TERMINAL_SERVER_PORT=2020;
 const ENCODING='utf8';
 const E_TERMINALS={};
 const E_HOSTNAME=os.hostname();
+//const E_MDWIKI_URL="http://dynalon.github.io/mdwiki/mdwiki-latest.html"; <-- serves up a broken version of mdwiki, use 0.6.2
+// using mdwiki for reviewing edits to README.md; download mdwiki and extract
+// mdwiki-slim.html from it and drop into the root dir of this project
+const E_MDWIKI_FILE="mdwiki-slim.html";
 /*
 const E_TTY_REGEX=new RegExp(
   // match this ANSI sequence ...
@@ -43,7 +47,7 @@ class TerminalServer extends http.Server {
     var url=Url.parse(req.url,true);
     switch(url.pathname) {
       case '/':
-        return this.staticFile(res,"mdwiki.html");
+        return this.staticFile(res,E_MDWIKI_FILE);
         break;
       case '/index.md':
         return this.staticFile(res,"README.md");
@@ -268,7 +272,8 @@ class TerminalServer extends http.Server {
     fs.readFile(path,{encoding:ENCODING},function(e,data) {
       if (e) {
         res.writeHead(500,{'Content-Type':'text/plain'});
-        return res.end(e);
+        console.error("staticFile: "+e);
+        return res.end();
       }
       res.writeHead(200,{'Content-Type':type});
       res.end(data);

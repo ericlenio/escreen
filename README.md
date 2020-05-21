@@ -9,7 +9,11 @@ often using vim. Each time I ssh and/or sudo, my preferred bash/ssh/vim
 settings are effectively wiped. Rather than copy rc files (.bashrc, .vimrc,
 etc.) all over the place, this project will automate it.
 
+Also included is easy copy/paste to the system clipboard from a shell script,
+or inside vim (even a multiply nested ssh session running vim)
+
 Warning: this project is completely biased to using bash, GNU screen, and vim.
+
 
 # Architecture
 
@@ -20,9 +24,11 @@ nodejs. The terminal server is actually 2 node http servers:
 * one that sends out your preferred shell configuration settings (environment variables, shell functions, etc.) to subshells on demand spawned from the initial bash session
 
 The terminal client runs by sending a request to spawn your initial bash
-session, which you can interact with. The session is initialized with what I
-will call the escreen "core" functions that can communicate back to the bash
-configuration server for various preferred settings you want in your shell.
+session, which you can interact with. The session is initialized with the
+escreen "core" functions that can communicate back to the bash configuration
+server for various preferred settings you want in your shell.
+
+# OLD docs below ... needs rewrite
 
 GNU screen wrapper, plus a set of bash shell functions that make
 for consistent environment settings when ssh-ing to remote servers, and
