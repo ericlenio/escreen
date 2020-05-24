@@ -11,7 +11,7 @@
 #
 # example usage: 
 #
-#   file=$(pick_something "Pick a file:" "$(find $logdir -type f | sort)")
+#   file=$(-pick-something "Pick a file:" "$(find $logdir -type f | sort)")
 #   [ -f "$file" ] && lwsa_view_file "$file"
 #
 # the user selected item from the original list is echoed to stdout
@@ -19,7 +19,7 @@
 # return code: 0 user picked a valid entry from the list; 1 user did not choose
 # anything; 2 user gave some other bogus choice
 #
-pick_something() {
+-pick-something() {
   local tty=$(tty) intro_label="$1" pick_list="$2" use_idx="$3" i l c
   local -a pick_array ifs_orig=$IFS
   IFS=$'\n' pick_array=($pick_list)
@@ -53,4 +53,4 @@ pick_something() {
     return 2
   fi
 }
-export -f pick_something
+export -f -- -pick-something

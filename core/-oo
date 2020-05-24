@@ -1,0 +1,33 @@
+# vim:filetype=sh
+#
+# run a one off script from the user's current shell
+#
+# usage: run with no args to pick the one off script from a list, or provide
+# the one off script name as arg 1. All remaining args are passed to the one
+# off script
+#
+-oo() {
+  local list script="$1" tmp_script
+  if [ -z "$script" ]; then
+    list=$(_esh_b ooList)
+    if ! script=$(-pick-something "Which one-off script:" "$list"); then
+      return
+    fi
+  else
+    shift
+  fi
+  if ! tmp_script=$(mktemp ${TMPDIR:-/tmp}/$script.XXXXX); then
+    return $?
+  fi
+  # upload the script to the current executing shell
+  if _esh_b ooGet $script > $tmp_script; then
+    if head -1 $tmp_script | grep -w ENOENT; then
+      rm -f $tmp_script
+      return 1
+    fi
+    chmod 700 $tmp_script
+    # execute the one off script now
+    $tmp_script "$@"
+  fi
+  rm -f $tmp_script
+}

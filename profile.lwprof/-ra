@@ -125,7 +125,7 @@ EOF
         printf "%s\n" ${hostnames[$i]}
       done
     )
-    choice=$(pick_something "Pick:" "$choice_list" 1) || {
+    choice=$(-pick-something "Pick:" "$choice_list" 1) || {
       echo "invalid choice"
       return 1
     }

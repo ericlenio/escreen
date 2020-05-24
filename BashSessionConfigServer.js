@@ -25,6 +25,7 @@ const E_OS_PROG_ENUM={
 };
 const E_PORT=process.env.ESH_PORT;
 const E_HOUSEKEEPING_TIMER_INTERVAL=86400000;
+const E_ONE_OFF_SCRIPTS_DIR=process.env.ESH_HOME+"/one-off-scripts";
 const ENCODING='utf8';
 
 class BashSessionConfigServer extends net.Server {
@@ -132,6 +133,37 @@ this.authToken=process.env.ESH_AT;
     self.registerHandler("m",function(socket,pid,marker) {
       var status=self.ts.resolveMarker(pid,marker);
       socket.end(status+"\n");
+    });
+
+    /**
+     * get a list of all one off scripts
+     */
+    self.registerHandler("ooList",function(socket) {
+      fs.readdir(E_ONE_OFF_SCRIPTS_DIR,function(e,files) {
+        if (e) {
+          console.error("ooList: "+e);
+          socket.end(""+e);
+          return;
+        }
+        files.sort().forEach(function(f,idx) {
+          socket.write(f);
+          socket.write("\n");
+        });
+        socket.end();
+      });
+    });
+
+    /**
+     * get a particular one off script
+     */
+    self.registerHandler("ooGet",function(socket,scriptName) {
+      var file=E_ONE_OFF_SCRIPTS_DIR+"/"+scriptName;
+      fs.readFile(file,'utf8',function(e,data) {
+        if (e) {
+          return socket.end(""+e);
+        }
+        socket.end(data);
+      });
     });
 
     self.registerHandler("ESH_PW_FILE",function(socket) {

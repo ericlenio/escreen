@@ -15,7 +15,7 @@ screen() {
           fi
           if [ $(echo "$stys" | wc -l) = 1 ]; then
             pick_sty="$stys"
-          elif ! pick_sty=$(pick_something "Resume which session?" "$stys"); then
+          elif ! pick_sty=$(-pick-something "Resume which session?" "$stys"); then
             return $?
           fi
           eval "$(_esh_e)"
@@ -71,7 +71,7 @@ screen() {
         "caption always \"$caption\""
       _esh_e $STY
       ESH_STY=$STY
-      _esh_i
+      #_esh_i
     }
     # use this trap with DEBUG signal trick to load key environment variables
     # before any/all commands are run - useful for resuming screen sessions on
