@@ -1,0 +1,27 @@
+#! /usr/bin/env bash
+user=eml
+pwkey="LincWare LDAP:$user"
+pw=$(pw "$pwkey")
+[ -z "$pw" ] && {
+  echo "Could not retrieve password" >&2
+  exit 1
+}
+auth=$(printf "%s:%s" "$user" "$pw" | openssl enc -a -A)
+auth_hdr=$(printf "Authorization: Basic %s" $auth)
+
+#url=https://remoteadmin.private:3001/ra-runtime-config
+url=https://remoteadmin.private:3333/ra-runtime-config
+
+code64=$(printf "JSON.stringify(self.config.RA_USER_AUTHORIZED_HOSTS,null,1)" | openssl enc -a -A)
+
+code64=$(printf "
+  var a=[];
+  for (var [sshPort,agent] of RaAgent.getAgents()) {
+    //a.push(agent.getUniqueId());
+    a.push(agent);
+  }
+  a
+" | openssl enc -a -A)
+
+curl -s -f -X POST -H "Content-Type: application/json" -H "$auth_hdr" -d "{\"eval\":\"$code64\"}" $url
+#curl -v -X POST -H "Content-Type: application/json" -H "$auth_hdr" -d "{\"config\":{\"RA_USER_AUTHORIZED_HOSTS\":{\"eml\":\"my value\"}}}" $url
