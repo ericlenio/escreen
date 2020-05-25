@@ -160,9 +160,19 @@ this.authToken=process.env.ESH_AT;
       var file=E_ONE_OFF_SCRIPTS_DIR+"/"+scriptName;
       fs.readFile(file,'utf8',function(e,data) {
         if (e) {
-          return socket.end(""+e);
+          data=""+e;
         }
-        socket.end(data);
+        var hash=self.computeHash(data);
+        // send the hash of the script first
+        socket.write(hash+"\n");
+        // now send the script, gzip'd
+        var z=self.getZlib();
+        z.on('error',function(e) {
+          console.error("ooGet compress: "+e);
+          socket.end();
+        });
+        z.pipe(socket);
+        z.end(data);
       });
     });
 

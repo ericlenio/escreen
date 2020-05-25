@@ -7,27 +7,44 @@
 # off script
 #
 -oo() {
-  local list script="$1" tmp_script
+  local list script="$1" tmp_script yn
   if [ -z "$script" ]; then
     list=$(_esh_b ooList)
     if ! script=$(-pick-something "Which one-off script:" "$list"); then
       return
     fi
+    read -p "Confirm: execute $script (y/n)? " yn
+    if [ "$yn" != y ]; then
+      return
+    fi
   else
     shift
   fi
-  if ! tmp_script=$(mktemp ${TMPDIR:-/tmp}/$script.XXXXX); then
+  if ! tmp_script=$(mktemp ${TMPDIR:-/tmp}/$script.XXXXXX); then
     return $?
   fi
+  trap "echo trap: $tmp_script; trap - RETURN; rm -f $tmp_script" RETURN
   # upload the script to the current executing shell
-  if _esh_b ooGet $script > $tmp_script; then
-    if head -1 $tmp_script | grep -w ENOENT; then
-      rm -f $tmp_script
-      return 1
+  _esh_b ooGet $script | {
+    local hash1 hash2
+    # ooGet first sends a sha256 hash of the one off script, read it
+    read hash1
+    # remaining data from ooGet is the gzip'd script
+    gzip -dc > $tmp_script
+    if [[ $(openssl dgst -sha256 -hex $tmp_script) =~ ([a-z0-9]+)$ ]]; then
+      hash2=${BASH_REMATCH[1]}
+      # if hashes match, go ahead and run the script
+      if [ "$hash1" -a "$hash1" = "$hash2" ]; then
+        if head -1 $tmp_script | grep -w ENOENT; then
+          return 1
+        fi
+        chmod 700 $tmp_script
+        # execute the one off script now
+        $tmp_script "$@" < ${SSH_TTY:-/dev/tty}
+      else
+        echo "$FUNCNAME: mismatched hashes: $hash1/$hash2" >&2
+        return 1
+      fi
     fi
-    chmod 700 $tmp_script
-    # execute the one off script now
-    $tmp_script "$@"
-  fi
-  rm -f $tmp_script
+  }
 }
