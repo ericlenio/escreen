@@ -8,7 +8,11 @@ screen() {
       case $opt in
         -r)
           local curr_sty=${STY:-some_value} pick_sty
-          local stys=$(env screen -ls | grep -v $curr_sty | grep -vi attached | perl -n -e 's{^\s*(\d+\.\S+).*}{$1} && print')
+          local stys=$(env screen -ls | grep -v $curr_sty | grep -vi attached | while read l; do
+            if [[ "$l" =~ ^[[:blank:]]*([0-9]+\.[[:print:]]+) ]]; then
+              echo ${BASH_REMATCH[1]}
+            fi
+          done)
           if [ -z "$stys" ]; then
             echo "No screen sessions detected."
             return 1
