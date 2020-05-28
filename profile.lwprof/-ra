@@ -97,7 +97,10 @@ var agents=JSON.parse(process.argv[2]);
 var filter=new RegExp(process.argv[3],"i");
 agents.map(function(agent,idx) {
   if (agent.raHostname.search(filter)>=0) {
-    console.log("hostname=%s ip=%s ssh_port=%s back_port=%s",agent.raHostname,agent.remoteAddress,agent.raSshPort,agent.raBackPort);
+    var ts=new Date(agent.createTimestamp).toLocaleString();
+    console.log("hostname=%s ip=%s ssh_port=%s back_port=%s create_ts='%s'",
+      agent.raHostname,agent.remoteAddress,
+      agent.raSshPort,agent.raBackPort,ts);
   }
 });
 EOF
@@ -113,16 +116,19 @@ EOF
     local l
     echo "$matching" | while read l; do
       eval "$l"
-      echo "${!key}"
+      echo "'${!key}'"
     done
   }
 
-  local hostnames=($(get_vm_data hostname)) choice=0
+  local hostnames ips create_ts ssh_ports back_ports
+  eval hostnames=($(get_vm_data hostname)) choice=0
+  eval ips=($(get_vm_data ip))
+  eval create_ts=($(get_vm_data create_ts))
   local n=$((${#hostnames[@]}-1))
   if [ $n -ge 1 ]; then
     local choice_list=$(
       for ((i=0; i<=$n; i++)); do
-        printf "%s\n" ${hostnames[$i]}
+        printf "%s/%s (%s)\n" ${hostnames[$i]} ${ips[$i]} "${create_ts[$i]}"
       done
     )
     choice=$(-pick-something "Pick:" "$choice_list" 1) || {
@@ -130,11 +136,10 @@ EOF
       return 1
     }
   fi
-  local ssh_ports=($(get_vm_data ssh_port))
-  local ips=($(get_vm_data ip))
+  eval ssh_ports=($(get_vm_data ssh_port))
   local ssh_port=${ssh_ports[$choice]}
   local hostname=${hostnames[$choice]}
-  local back_ports=($(get_vm_data back_port))
+  eval back_ports=($(get_vm_data back_port))
   local back_port=${back_ports[$choice]}
   local ip=${ips[$choice]}
   local extra_params="$(get_extra_ssh_params $hostname)"
