@@ -1,0 +1,56 @@
+# vim:filetype=sh
+#
+# This function greps "ps" output for a given string (case insensetively);
+# similar to pgrep
+#
+# Usage: -psg search_string
+#
+# If stdout is the tty, the output highlights the search string in red
+#
+-psg() (
+  local ps_cmd ps_output search_string="$*" os=$(uname) i l m matched x n=0 ATTR_RED='\x1b[1;31m' ATTR_CLEAR='\x1b[0m'
+  if [ $# = 0 ]; then
+    echo "Usage: $FUNCNAME search_string" >&2
+    return 1
+  fi
+  shopt -s nocasematch
+  case $os in
+    OpenBSD|Darwin)
+      ps_cmd="ps -jAwww"
+      ;;
+    Linux)
+      ps_cmd="ps -fewww"
+      ;;
+    *)
+      echo "$FUNCNAME: no support for $os" >&2
+      return 1
+      ;;
+  esac
+  ps_output="$($ps_cmd)"
+  while read l; do
+    matched=0
+    n=$(($n+1))
+    if [ $n = 1 ]; then
+      # echo ps header line
+      echo "$l"
+      continue
+    elif [[ "$l" =~ $ps_cmd ]]; then
+      continue
+    fi
+    while [[ "$l" =~ ($search_string)(.*) ]]; do
+      m="${BASH_REMATCH[1]}"
+      matched=1
+      # x will be all text leading up to the matched search string
+      x="${l%%$m*}"
+      # compute the index of the search string in the line
+      i=${#x}
+      if [ -t 1 ]; then
+        printf "%s$ATTR_RED%s$ATTR_CLEAR" "${l:0:$i}" "$m"
+      else
+        printf "%s%s" "${l:0:$i}" "$m"
+      fi
+      l="${l:$i+${#m}}"
+    done
+    [ $matched = 1 ] && printf "%s\n" "$l"
+  done <<< "$ps_output"
+)
