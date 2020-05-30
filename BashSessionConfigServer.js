@@ -369,7 +369,7 @@ this.authToken=process.env.ESH_AT;
     for (var i=0; i<lines.length; i++) {
       var line=lines[i];
       if (line.indexOf("#")!=0 && line.search(/^\s*$/)<0) {
-        return line.search(/^[-\w]+\(\)\s*\{/)==0;
+        return line.search(/^[-\w]+\(\)\s*[\{\(]/)==0;
       }
     }
     return false;
