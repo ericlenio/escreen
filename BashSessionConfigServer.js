@@ -25,7 +25,7 @@ const E_OS_PROG_ENUM={
 };
 const E_PORT=process.env.ESH_PORT;
 const E_HOUSEKEEPING_TIMER_INTERVAL=86400000;
-const E_ONE_OFF_SCRIPTS_DIR=process.env.ESH_HOME+"/one-off-scripts";
+const E_ONE_OFF_SCRIPTS_DIR=process.env.ESH_HOME+"/private/"+process.env.ESH_USER+"/one-off-scripts";
 const ENCODING='utf8';
 
 class BashSessionConfigServer extends net.Server {
@@ -180,7 +180,7 @@ this.authToken=process.env.ESH_AT;
       socket.end(
         // look for value first from .escreenrc, else fall back to default
         global.ESH_PW_FILE ||
-        util.format("%s/private/%s-passwords.gpg",process.env.ESH_HOME,process.env.ESH_USER)
+        util.format("%s/private/%s/passwords.gpg",process.env.ESH_HOME,process.env.ESH_USER)
       );
     });
 
