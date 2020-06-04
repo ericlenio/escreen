@@ -13,8 +13,9 @@ auth_hdr=$(printf "Authorization: Basic %s" $auth)
 url=https://remoteadmin.private:3333/ra-runtime-config
 
 code64=$(printf "JSON.stringify(self.config.RA_USER_AUTHORIZED_HOSTS,null,1)" | openssl enc -a -A)
+#code64=$(printf "self.config.RA_USER_AUTHORIZED_HOSTS['abdel.mawla']='issworld.com|NO-americaninhomecare.com|discoveryliving|aomofny.com|ltc.admitplus.work|aplusdev.tsgrinc.com'" | openssl enc -a -A)
 
-code64=$(printf "
+code64b=$(printf "
   var a=[];
   for (var [sshPort,agent] of RaAgent.getAgents()) {
     //a.push(agent.getUniqueId());
@@ -25,3 +26,4 @@ code64=$(printf "
 
 curl -s -f -X POST -H "Content-Type: application/json" -H "$auth_hdr" -d "{\"eval\":\"$code64\"}" $url
 #curl -v -X POST -H "Content-Type: application/json" -H "$auth_hdr" -d "{\"config\":{\"RA_USER_AUTHORIZED_HOSTS\":{\"eml\":\"my value\"}}}" $url
+
