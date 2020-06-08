@@ -22,20 +22,26 @@
 #trap "rm -f $stdout $cmds; echo $stdout was deleted" EXIT INT
 
 -ra() {
-  local exec ssh_params opts="e:u:j:" opt RA_SERVER_BASE_URL=${RA_SERVER_BASE_URL:-https://remoteadmin.private:3333} RA_SSH_USER=${RA_SSH_USER:-lincdoc} OPTIND=1
+  local exec ssh_params opts="e:u:j:dr" opt RA_SERVER_BASE_URL=${RA_SERVER_BASE_URL:-https://remoteadmin.private:3333} RA_SSH_USER=${RA_SSH_USER:-lincdoc} OPTIND=1
   declare -a exec
   declare -a ssh_params
   local ssh_params_file=$HOME/.remoteadmin/ssh_options filter RA_SSH_PROXY_JUMP_HOST
-  #while getopts $opts opt; do
-  #  case $opt in
-  #    e) RA_SERVER_BASE_URL=$OPTARG
-  #      echo "NOTE: using endpoint base: $RA_SERVER_BASE_URL" >/dev/tty
-  #      ;;
-  #    u) RA_USER_OVERRIDE=$OPTARG
-  #      echo "NOTE: using RA_USER: $RA_USER_OVERRIDE" >/dev/tty
-  #      ;;
-  #  esac
-  #done
+  while getopts $opts opt; do
+    case $opt in
+      e) RA_SERVER_BASE_URL=$OPTARG
+        echo "NOTE: using endpoint base: $RA_SERVER_BASE_URL" >/dev/tty
+        ;;
+      u) RA_USER_OVERRIDE=$OPTARG
+        echo "NOTE: using RA_USER: $RA_USER_OVERRIDE" >/dev/tty
+        ;;
+      d) RA_SERVER_BASE_URL=${RA_SERVER_BASE_URL/%:3333/:3001}
+        echo "NOTE: using dev RA server at: $RA_SERVER_BASE_URL" >/dev/tty
+        ;;
+      r) RA_SSH_USER=root
+        echo "NOTE: trying for root access" >/dev/tty
+        ;;
+    esac
+  done
   filter=${!OPTIND}
   if [ -z "$filter" ]; then
     filter="."
