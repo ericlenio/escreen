@@ -10,7 +10,7 @@ ssh() {
   }
   local i last_arg=${@:$#} \
     ssh_legal_opts="1246ab:c:e:fgi:kl:m:no:p:qstvxACD:E:F:GI:J:KL:MNO:PQ:R:S:TVw:W:XYy" \
-    OPTS arg1 h ssh_user_host cmdline_ssh_host sshrc rem_port c0 c1
+    OPTS arg1 h ssh_user_host cmdline_ssh_host sshrc rem_port c0 c1 sid
   local -a ssh_opts
   [ -z "$last_arg" ] && { echo "no arguments to ssh?"; return 1; }
   # Need to determine now if we are just running a plain shell in the remote
@@ -86,7 +86,7 @@ ssh() {
     # the port: this leads to terminal IO issues when stuffing the ssh escape
     # command into the terminal driver.
     #
-    rem_port=$(( $RANDOM % 1000 + 56100 ))
+    #rem_port=$(( $RANDOM % 1000 + 56100 ))
     #
     # Assumption: /bin/sh exists on remote system. We use it to check for
     # /bin/bash, and if that exists set up prefered bash shell settings.
@@ -104,22 +104,34 @@ ssh() {
     # freebsd, openbsd, et al, and also when dealing with slower connections
     # you get weird timeout issues, so going back to old way
     #
-    if [ -z "THIS IS OLD STUFF" ]; then
-    c0=$(echo ':
-sshrc=/etc/escreen.sshrc
-[ -f $sshrc ] && . $sshrc
-'"$(_bash_init $ssh_user_host-$(pwgen 6) $rem_port)"'
-' | gzip -9c | openssl enc -a -A)
+#    if [ -z "THIS IS OLD STUFF" ]; then
+#    c0=$(echo ':
+#sshrc=/etc/escreen.sshrc
+#[ -f $sshrc ] && . $sshrc
+#'"$(_bash_init $ssh_user_host-$(pwgen 6) $rem_port)"'
+#' | gzip -9c | openssl enc -a -A)
+#
+#    c1=$(echo ':
+#b=`which bash`
+#[ ! "$b" ] && exec $SHELL -l
+#exec $b -c "$(echo '$c0' | openssl enc -d -a -A | gzip -d -c)"
+#' | gzip -9c | openssl enc -a -A)
+#    fi
+#
 
-    c1=$(echo ':
-b=`which bash`
-[ ! "$b" ] && exec $SHELL -l
-exec $b -c "$(echo '$c0' | openssl enc -d -a -A | gzip -d -c)"
-' | gzip -9c | openssl enc -a -A)
+    # if ssh-ing to localhost, and neither ProxyJump nor ProxyCommand are being
+    # used, we can make a small optimization to re-use the current remoteadmin
+    # server listening port
+    if [[ ! $cmdline_ssh_host =~ 127.0.0.1|localhost || "${ssh_opts[@]}" =~ ProxyJump|ProxyCommand ]]; then
+      rem_port=$(( $RANDOM % 1000 + 56100 ))
+      ssh_opts+=(-R$rem_port:127.0.0.1:$ESH_PORT)
+      sid=$ssh_user_host-$RANDOM
+    else
+      rem_port=$ESH_PORT
+      sid=$ESH_STY
     fi
-
-    ssh_opts+=(-t -oServerAliveInterval=30 -oExitOnForwardFailure=yes -R$rem_port:127.0.0.1:$ESH_PORT $ssh_user_host)
+    ssh_opts+=(-t -oServerAliveInterval=30 -oExitOnForwardFailure=yes $ssh_user_host)
   fi
-  env ssh "${ssh_opts[@]}" $(_bash_init $ssh_user_host-$(pwgen 6) $rem_port)
+  env ssh "${ssh_opts[@]}" $(_bash_init $sid $rem_port)
 }
 export -f ssh
