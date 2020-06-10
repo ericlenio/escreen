@@ -2,12 +2,22 @@
 #
 # run a one off script from the user's current shell
 #
-# usage: run with no args to pick the one off script from a list, or provide
-# the one off script name as arg 1. All remaining args are passed to the one
-# off script
+# usage:
+#
+# 1) run with no args to pick the one off script from a list
+#
+# 2) run with "-" as arg 1, you are prompted to pick the one off script from a
+# list and remaining args are passed to it
+#
+# 3) run with the name of the one off script as arg 1; remaining args are
+# passed to that script
 #
 -oo() {
   local list script="$1" tmp_script yn
+  if [ "$script" = - ]; then
+    shift
+    script=""
+  fi
   if [ -z "$script" ]; then
     list=$(_esh_b ooList)
     if ! script=$(-pick-something "Which one-off script:" "$list"); then
