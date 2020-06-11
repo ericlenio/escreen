@@ -28,7 +28,7 @@ _esh_e() {
     0)
       # touch file to keep it fresh so it doesn't get deleted by OS (which
       # might be deleting old files under /tmp)
-      touch $f >/dev/null
+      touch $f 2>/dev/null
       cat $f
       ;;
     1)
