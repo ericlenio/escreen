@@ -22,12 +22,23 @@
 #trap "rm -f $stdout $cmds; echo $stdout was deleted" EXIT INT
 
 -ra() {
-  local exec ssh_params opts="e:u:j:dr" opt RA_SERVER_BASE_URL=${RA_SERVER_BASE_URL:-https://remoteadmin.private:3333} RA_SSH_USER=${RA_SSH_USER:-lincdoc} OPTIND=1
+  local exec ssh_params opts="he:u:j:dr" opt RA_SERVER_BASE_URL=${RA_SERVER_BASE_URL:-https://remoteadmin.private:3333} RA_SSH_USER=${RA_SSH_USER:-lincdoc} OPTIND=1
   declare -a exec
   declare -a ssh_params
   local ssh_params_file=$HOME/.remoteadmin/ssh_options filter RA_SSH_PROXY_JUMP_HOST
+
+  usage() {
+    echo "Usage: -ra [-hdr] [filter [ssh args ...]]"
+    echo "  -h: this usage note"
+    echo "  -d: use dev remoteadmin server"
+    echo "  -r: ssh to the remote server as root"
+  }
+
   while getopts $opts opt; do
     case $opt in
+      h) usage
+        return
+        ;;
       e) RA_SERVER_BASE_URL=$OPTARG
         echo "NOTE: using endpoint base: $RA_SERVER_BASE_URL" >/dev/tty
         ;;
@@ -43,6 +54,7 @@
     esac
   done
   filter=${!OPTIND}
+  shift $OPTIND
   if [ -z "$filter" ]; then
     filter="."
   fi
@@ -82,8 +94,9 @@
     _esh_e +RA_USER
   fi
 
-  local pwkey="LincWare LDAP:$RA_USER"
-  local pw=$(pw "$pwkey")
+  #local pwkey="LincWare LDAP:$RA_USER"
+  #local pw=$(pw "$pwkey")
+  local pw=$(_esh_y _ra_get_ldap_pw | openssl enc -d -a -A)
   [ -z "$pw" ] && {
     echo "Could not retrieve password for \"$RA_USER\" to launch remoteadmin" >&2
     return 1
@@ -182,6 +195,6 @@ EOF
   # create ESH_BASH_INIT (picked up by _bash_init) with bound parameters to my_init
   eval "ESH_BASH_INIT() { $(declare -f my_init); my_init '$auth_hdr' $back_port $hostname $ip; }"
 
-  SSH_STY_LBL=$hostname ssh -t -oProxyJump=remoteadmin@$RA_SSH_PROXY_JUMP_HOST -p $ssh_port $extra_params $RA_SSH_USER@127.0.0.1
+  SSH_STY_LBL=$hostname ssh -t -oProxyJump=remoteadmin@$RA_SSH_PROXY_JUMP_HOST -p $ssh_port $extra_params "$@" $RA_SSH_USER@127.0.0.1
   unset -f ESH_BASH_INIT
 }
