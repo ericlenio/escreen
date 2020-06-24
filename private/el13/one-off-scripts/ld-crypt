@@ -1,8 +1,10 @@
 #! /usr/bin/env groovy
-// This script decrypts (among other things) client_id database account
-// passwords
+// This script encrypts/decrypts sensitive LincDoc data, like client_id
+// database account passwords
 //
-// Usage: decrypt3 encrypted-text-here
+// Usage:
+//   decrypt3 -e plaintext-here
+//   decrypt3 -d encrypted-text-here
 // Example:
 // decrypt3 $(psql -tAc "select unnest(xpath('/database-config/cryptpw/text()',config)) from ld_admin.ld_database where client_id='ltc'" ltc)
 //
@@ -41,4 +43,10 @@
 
 
 import com.lincdoc.Crypt
-println Crypt.decrypt(args[0])
+
+String op=args[0]
+if (op=='-d') {
+  println(Crypt.decrypt(args[1]))
+} else if (op=='-e') {
+  println(Crypt.encrypt(args[1]))
+}
