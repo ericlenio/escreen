@@ -10,10 +10,10 @@ ESH_AT=xxxxx1
 ESH_PORT=2021
 
 # only allow these environment variables to pass to the server process
-pass_vars=(HOME PATH SSH_AUTH_SOCK ESH_HOME ESH_TMP ESH_USER ESH_AT ESH_PORT LANG)
+pass_vars=(HOME PATH SSH_AUTH_SOCK ESH_HOME ESH_TMP ESH_USER ESH_AT ESH_PORT LANG TERM)
 # OpenBSD (and possibly Linux) depend on $DISPLAY for clipboard logic, so pass
 # it too if it is set
-[ "$DISPLAY" ] && pass_vars+=($DISPLAY)
+[ "$DISPLAY" ] && pass_vars+=(DISPLAY)
 
 exec=(env -i)
 for var in ${pass_vars[@]}; do

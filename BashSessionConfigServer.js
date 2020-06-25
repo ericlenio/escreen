@@ -278,7 +278,8 @@ this.authToken=process.env.ESH_AT;
 
     var escreenrc=util.format("%s/.escreenrc.gpg",process.env.HOME);
     if (fs.existsSync(escreenrc)) {
-      var p=child_process.spawn('gpg',['-d',escreenrc],{stdio:['ignore','pipe','inherit']});
+      // note: gpg pinentry/askpass may depend on TERM and/or DISPLAY
+      var p=child_process.spawn('gpg',['-d',escreenrc],{stdio:['inherit','pipe','inherit']});
       p.on("error", function(e) {
         console.error("readEscreenrc: "+e);
       });
