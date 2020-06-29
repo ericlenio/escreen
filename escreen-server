@@ -18,9 +18,12 @@ while getopts $opts opt; do
   esac
 done
 
+# test that gpg-agent is up and running, if not this should get it going; note:
+# gpg pinentry/askpass may depend on TERM and/or DISPLAY
+echo "hello world" | gpg --default-recipient-self -ae | gpg -d >/dev/null
 
 # only allow these environment variables to pass to the server process
-pass_vars=(HOME PATH SSH_AUTH_SOCK ESH_HOME ESH_TMP ESH_USER ESH_AT ESH_PORT LANG TERM)
+pass_vars=(HOME PATH SSH_AUTH_SOCK ESH_HOME ESH_TMP ESH_USER ESH_AT ESH_PORT LANG)
 # OpenBSD (and possibly Linux) depend on $DISPLAY for clipboard logic, so pass
 # it too if it is set
 [ "$DISPLAY" ] && pass_vars+=(DISPLAY)

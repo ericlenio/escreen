@@ -4,7 +4,7 @@ const profileDir=process.argv[2] || process.env.ESH_HOME+"/profile.lwprof";
 const ts=new TerminalServer();
 const bs=new BashSessionConfigServer();
 
-ts.init();
+ts.init(process.env.ESH_PORT-1);
 bs.init(ts,profileDir);
 
 Object.keys(process.env).sort().forEach(function(key) {

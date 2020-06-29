@@ -13,7 +13,7 @@ augroup encrypted
   autocmd BufReadPre,FileReadPre *.gpg set bin
   autocmd BufReadPre,FileReadPre *.gpg let ch_save = &ch|set ch=2
   " (If you use tcsh, you may need to alter this line.)
-  autocmd BufReadPost,FileReadPost *.gpg '[,']!gpg --decrypt 2> /dev/null
+  autocmd BufReadPost,FileReadPost *.gpg '[,']!gpg -d 2>/dev/null
 
   " Switch to normal mode for editing
   autocmd BufReadPost,FileReadPost *.gpg set nobin

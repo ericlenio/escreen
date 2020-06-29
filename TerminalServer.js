@@ -6,8 +6,9 @@ const pty=require('node-pty');
 const os=require('os');
 const Url=require('url');
 const BashSessionConfigServer=require("./BashSessionConfigServer");
+const CommandLineParser=require("./CommandLineParser");
 
-const E_TERMINAL_SERVER_PORT=2020;
+const E_TERMINAL_SERVER_PORT=CommandLineParser.parse("-p",2020);
 const ENCODING='utf8';
 const E_TERMINALS={};
 const E_HOSTNAME=os.hostname();
