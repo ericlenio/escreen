@@ -9,6 +9,16 @@ ESH_USER=$USER
 ESH_AT=xxxxx1
 ESH_PORT=2021
 
+opts="p:"
+while getopts $opts opt; do
+  case $opt in
+    p) ESH_PORT=$OPTARG
+      echo "NOTE: using port: $ESH_PORT"
+      ;;
+  esac
+done
+
+
 # only allow these environment variables to pass to the server process
 pass_vars=(HOME PATH SSH_AUTH_SOCK ESH_HOME ESH_TMP ESH_USER ESH_AT ESH_PORT LANG TERM)
 # OpenBSD (and possibly Linux) depend on $DISPLAY for clipboard logic, so pass
@@ -21,4 +31,4 @@ for var in ${pass_vars[@]}; do
 done
 exec+=($(which node) $ESH_HOME/server.js)
 
-exec "${exec[@]}"
+exec "${exec[@]}" "$@"
