@@ -3,17 +3,17 @@ escreen
 
 # Background
 
-Here is the value proposition of this project: I am constantly ssh-ing to many
-servers, and within those servers sudo-ing into many different users and then
-often using vim. Each time I ssh and/or sudo, my preferred bash/ssh/vim
-settings are effectively wiped. Rather than copy rc files (.bashrc, .vimrc,
-etc.) all over the place, this project will automate it.
+This software makes for an automated, consistent command line experience when
+using GNU screen, bash, ssh, and sudo. A key design goal of this project is
+that when you need to ssh and/or sudo into different accounts, you lose your
+current bash settings/functions. One way to address this is to copy
+configuration files to multiple machines/accounts, but that is very tedious.
+With escreen, you have a framework which automatically synchronizes your own
+bash functions to ssh or sudo sessions (or even a nested ssh and then sudo'd to
+some other account)
 
-Also included is easy copy/paste to the system clipboard from a shell script,
-or inside vim (even a multiply nested ssh session running vim)
-
-Warning: this project is completely biased to using bash, GNU screen, and vim.
-
+Also included is a copy/paste facility to control the system clipboard from a
+shell script, or inside vim (or even a nested ssh session running vim).
 
 # Architecture
 
@@ -27,6 +27,26 @@ The terminal client runs by sending a request to spawn your initial bash
 session, which you can interact with. The session is initialized with the
 escreen "core" functions that can communicate back to the bash configuration
 server for various preferred settings you want in your shell.
+
+# Installation
+
+Install nodejs and make sure it is in your $PATH. Then:
+
+    git clone git@github.com:ericlenio/escreen.git
+    cd escreen
+    npm i
+
+If `npm i` fails with compile errors, these tips might help:
+
+* make sure `npm` is up to date: `sudo npm -g i npm@latest` (adjust this command depending on your environment)
+* play around with `CXX` environment variable, e.g. on OpenBSD this helped the compile to work:
+
+    CXX=clang++ npm i
+
+# Running
+
+Start the server in a dedicated window: `escreen-server`. Then in another
+window run `escreen-client`. 
 
 # OLD docs below ... needs rewrite
 
