@@ -1,10 +1,10 @@
 const http=require('http');
-const BASE_URL='http://127.0.0.1:2020';
 
 class TerminalClient {
-  init() {
+  init(port) {
     var self=this;
-    const reqUrl=BASE_URL+'/e-create-terminal?term='+process.env.TERM;
+    self.port=port;
+    const reqUrl=this.getBaseUrl()+'/e-create-terminal?term='+process.env.TERM;
     const opts={
       headers: {
         'Connection':'Upgrade',
@@ -14,6 +14,10 @@ class TerminalClient {
     const req=http.request(reqUrl,opts);
     req.end();
     req.on('upgrade',this.upgrade.bind(this));
+  }
+
+  getBaseUrl() {
+    return 'http://127.0.0.1:'+this.port;
   }
 
   upgrade(res,socket) {
@@ -35,7 +39,7 @@ class TerminalClient {
   }
 
   resize() {
-    const reqUrl=BASE_URL+'/e-resize-terminal?pid='+this.termPid+'&columns='+process.stdout.columns+'&rows='+process.stdout.rows;
+    const reqUrl=this.getBaseUrl()+'/e-resize-terminal?pid='+this.termPid+'&columns='+process.stdout.columns+'&rows='+process.stdout.rows;
     const req=http.request(reqUrl);
     req.end();
   }

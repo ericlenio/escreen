@@ -1,11 +1,10 @@
 const TerminalServer=require('./TerminalServer');
 const BashSessionConfigServer=require('./BashSessionConfigServer');
-const profileDir=process.argv[2] || process.env.ESH_HOME+"/profile.lwprof";
 const ts=new TerminalServer();
 const bs=new BashSessionConfigServer();
 
-ts.init();
-bs.init(ts,profileDir);
+ts.init(process.env.ESH_PORT-1);
+bs.init(ts,process.env.ESH_PROFILE_DIR);
 
 Object.keys(process.env).sort().forEach(function(key) {
   console.log(key+"="+process.env[key]);
