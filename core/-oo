@@ -13,11 +13,24 @@
 # passed to that script
 #
 -oo() {
-  local list script="$1" tmp_script yn
-  if [ "$script" = - ]; then
-    shift
-    script=""
-  fi
+  local list arg1="$1" script tmp_script yn oo_dir
+  case "$arg1" in
+    -)
+      shift
+      ;;
+    -e)
+      _esh_b ooEdit
+      #oo_dir=$(_esh_b ooDir) && cd $oo_dir && v *
+      return $?
+      ;;
+    "")
+      ;;
+    *)
+      script="$arg1"
+      shift
+      ;;
+  esac
+
   if [ -z "$script" ]; then
     list=$(_esh_b ooList)
     if ! script=$(-pick-something "Which one-off script:" "$list"); then
@@ -27,13 +40,13 @@
     if [ "$yn" != y ]; then
       return
     fi
-  else
-    shift
   fi
+
   if ! tmp_script=$(mktemp ${TMPDIR:-/tmp}/$script.XXXXXX); then
     return $?
   fi
-  trap "echo trap: $tmp_script; trap - RETURN; rm -f $tmp_script" RETURN
+  trap "echo trap: $tmp_script >/dev/tty; trap - RETURN; rm -f $tmp_script" RETURN
+
   # upload the script to the current executing shell
   _esh_b ooGet $script | {
     local hash1 hash2

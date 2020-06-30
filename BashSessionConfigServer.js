@@ -176,6 +176,10 @@ this.authToken=process.env.ESH_AT;
       });
     });
 
+    self.registerHandler("ooDir",function(socket) {
+      socket.end(E_ONE_OFF_SCRIPTS_DIR);
+    });
+
     self.registerHandler("ESH_PW_FILE",function(socket) {
       socket.end(
         // look for value first from .escreenrc, else fall back to default
