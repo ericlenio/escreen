@@ -126,6 +126,11 @@ this.authToken=process.env.ESH_AT;
       socket.end("HELLO\n");
     });
 
+    self.registerHandler("registerSty",function(socket,pid,sty) {
+      var status=self.ts.registerSty(pid,sty);
+      socket.end(status+"\n");
+    });
+
     /**
      * resolve a token/marker, which might be sensitive data (e.g. a password);
      * resolveMarker will type the data right into the pty and _esh_y reads it

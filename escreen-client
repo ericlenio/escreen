@@ -1,3 +1,14 @@
 #! /usr/bin/env bash
-ESH_HOME=$(node -r fs -e "console.log(fs.realpathSync(fs.realpathSync('$0')+'/..'))")
+export ESH_HOME=$(node -r fs -e "console.log(fs.realpathSync(fs.realpathSync('$0')+'/..'))")
+export ESH_PORT=2020
+
+opts="p:"
+while getopts $opts opt; do
+  case $opt in
+    p) ESH_PORT=$OPTARG
+      echo "NOTE: using port: $ESH_PORT"
+      ;;
+  esac
+done
+
 exec node $ESH_HOME/client.js "$@"

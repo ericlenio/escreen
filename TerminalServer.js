@@ -6,9 +6,7 @@ const pty=require('node-pty');
 const os=require('os');
 const Url=require('url');
 const BashSessionConfigServer=require("./BashSessionConfigServer");
-const CommandLineParser=require("./CommandLineParser");
 
-const E_TERMINAL_SERVER_PORT=CommandLineParser.parse("-p",2020);
 const ENCODING='utf8';
 const E_TERMINALS={};
 const E_HOSTNAME=os.hostname();
@@ -33,10 +31,10 @@ const E_MIME_TYPES={
 
 class TerminalServer extends http.Server {
 
-  init() {
+  init(port) {
     var self=this;
-    this.listen(E_TERMINAL_SERVER_PORT,'127.0.0.1',function() {
-      console.log("TerminalServer is listening on port: "+E_TERMINAL_SERVER_PORT);
+    this.listen(port,'127.0.0.1',function() {
+      console.log("TerminalServer is listening on port: "+port);
     });
 
     this.on('request',this.satisfyRoute);
@@ -227,6 +225,16 @@ class TerminalServer extends http.Server {
       default:
         term.write('?'+delim);
     }
+    return "E_OK";
+  }
+
+  registerSty(pid,sty) {
+    if (!(pid in E_TERMINALS)) {
+      return "E_BAD_PID";
+    }
+    var term=E_TERMINALS[pid];
+    term.sty=sty;
+    console.log(`registerSty: STY=${sty} now registered to terminal: ${pid}`);
     return "E_OK";
   }
 

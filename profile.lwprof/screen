@@ -1,7 +1,7 @@
 # vim:filetype=sh
 screen() {
   # make copy of original function args
-  local args=("$@") opt
+  local args=("$@") opt rcfile
   # Note: escreen sends "--", that is why we skip it here
   if [ "$1" != -- ]; then
     for opt in "$@"; do
@@ -22,11 +22,15 @@ screen() {
           elif ! pick_sty=$(-pick-something "Resume which session?" "$stys"); then
             return $?
           fi
-          eval "$(_esh_e)"
-          _esh_e $pick_sty ESH_PORT SSH_AUTH_SOCK ESH_AT ESH_TERM_PID
-          # strip off "screen." prefix from $TERM to avoid "$TERM too long" issue
-          env TERM=${TERM#screen.} screen -d -r $pick_sty
-          return $?
+          if [[ $pick_sty =~ ^[0-9]+\.(.+) ]]; then
+            _esh_e ${BASH_REMATCH[1]} ESH_PORT SSH_AUTH_SOCK ESH_AT ESH_TERM_PID
+            # strip off "screen." prefix from $TERM to avoid "$TERM too long" issue
+            env TERM=${TERM#screen.} screen -d -r $pick_sty
+            return $?
+          else
+            echo "failed to acquire ESH_STY value" >&2
+            return 1
+          fi
           ;;
         -d|-D|-R|-RR|-ls|-list|-Q|-v|-x|-X)
           env screen "$@"
@@ -38,66 +42,31 @@ screen() {
   # anticipitory optimization: pre-load vim, so it does not need to be loaded
   # in every screen window
   v --version >/dev/null
-  local -f myshell
-  export MY_PS1="$PS1"
-  myshell() {
-    local caption="%{= kw}%-w%{= BW}%n%t%{-}%+w %-= @%H %{= Y}%l%{-} %m/%d %c"
-    # Force SHELL back to normal (freebsd workaround)
-    SHELL=$BASH
-    if [ "$1" = hardcopy ]; then
-      hc=$(mktemp)
-      m=$(mktemp)
-      echo "hardcopy $hc" > $m
-      echo "screen sh -c '$ESH_EDITOR $hc; rm $hc'" >> $m
-      env screen -S $STY -X source $m
-      rm $m
-      exit
-    fi
-    export PS1="$MY_PS1"
-    [ "$STY" -a "$STY" != "$ESH_STY" ] && {
-      # we are in the first window of the screen session, init some things
-      #
-      # setting SHELL in freebsd does not seem to work
-      printf "\033k:\033\134"
-      env screen -S $STY -X eval \
-        "setenv SHELL $SHELL" \
-        "setenv ESH_STY $STY" \
-        "bind / screen $ESH_EDITOR $ESH_PW_FILE" \
-        "bind % exec bash -c 'myshell hardcopy'" \
-        "bind c screen bash -c myshell" \
-        'bind \040 windowlist -b' \
-        "vbell on" \
-        "vbell_msg DING" \
-        "defmonitor on" \
-        "msgwait 3" \
-        "hardstatus ignore" \
-        'shelltitle "$ |:"' \
-        "caption always \"$caption\""
-      _esh_e $STY
-      ESH_STY=$STY
-      #_esh_i
-    }
-    # use this trap with DEBUG signal trick to load key environment variables
-    # before any/all commands are run - useful for resuming screen sessions on
-    # remote hosts; might want to utilize $BASH_COMMAND at some point to
-    # conditionally call _esh_e
-    trap 'eval "$(_esh_e)"' DEBUG
-    [ $# -eq 0 -o "$1" = "-c" ] && exec $SHELL --norc --noprofile "$@"
-    exec "$@"
-  }
-  export -f myshell
   local esc=^Aa
 
   if [ "$SSH_TTY" ]; then
     # assume nested gnu screen, so use alternate escape sequence
     esc=^Ee
+  else
+    # not nested, register $ESH_STY
+    _esh_b registerSty $ESH_TERM_PID $ESH_STY
   fi
 
-  # need --import-functions when on freebsd
-  #env SCREENRC=$SCREENRC screen -e$esc -s $shell bash $(bash --help|grep -- --import-functions) -c "source $initfile" "${args[@]}"
-
-  # freebsd: screen seems to completely ignore the "-s" flag, so use SHELL
-  # environment var instead; strip off "screen." prefix from $TERM to avoid
-  # "$TERM too long" issue
-  env SCREENRC=/dev/null TERM=${TERM#screen.} screen -e$esc "${args[@]}" bash -c myshell
+  rcfile=$(mktemp)
+  cat << EOF >$rcfile
+bind / screen $ESH_EDITOR $ESH_PW_FILE
+# bind "%" to take a screenshot, and open a new window to edit it
+bind % exec bash -c 'f=\$(mktemp) t=\$RANDOM; env screen -X hardcopy \$f; env screen -t \$t sh -c "$ESH_EDITOR \$f; rm \$f"; env screen -X select \$t'
+bind \040 windowlist -b
+vbell on
+vbell_msg DING
+defmonitor on
+msgwait 3
+hardstatus ignore
+shelltitle "$ |:"
+caption always "%{= kw}%-w%{= BW}%n%t%{-}%+w %-= @%H %{= Y}%l%{-} %m/%d %c"
+EOF
+  # strip off "screen." prefix from $TERM to avoid "$TERM too long" issue
+  env SCREENRC=/dev/null TERM=${TERM#screen.} screen -S $ESH_STY -e$esc "${args[@]}" -c $rcfile
+  rm -f $rcfile
 }

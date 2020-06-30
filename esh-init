@@ -158,6 +158,12 @@ _esh_i() {
   #   s nobody
   #   fc
   _vime
+  # use DEBUG trap to load environment vars from _esh_e before every command is
+  # run; only set the trap if we detect DEBUG has no signal handler yet
+  #
+  # TO DO: do some sort of sanity checking that _esh_e contains only "declare"
+  # statements
+  export PROMPT_COMMAND='if ! trap -p DEBUG | grep -q trap; then trap '"'"'eval "$(_esh_e)"'"'"' DEBUG; fi'
 }
 
 export -f _esh_i
