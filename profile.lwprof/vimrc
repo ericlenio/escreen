@@ -53,7 +53,7 @@ syntax enable
 set cursorline noswapfile number hlsearch incsearch sw=2 ignorecase wrap nocompatible
 set ruler ai nocindent indentexpr= showmatch modeline modelines=5 nobackup nowritebackup textwidth=0
 set expandtab formatoptions=croql nojoinspaces scrolloff=0
-set wildmenu wildignore=*.o,*.class,*.jar,*.png,*.pdf,**node_modules/**,build/**,.git/**,.svn/**,dist/**,tmp/** path=.,,**
+set wildmenu wildignore=*.o,*.class,*.jar,*.png,*.pdf,$PWD/**node_modules/**,build/**,.git/**,.svn/**,dist/**,tmp/** path=.,,**
 filetype indent off
 "nnoremap K :execute " grep -srnw --binary-files=without-match --exclude-dir=.git --exclude-dir=node_modules --exclude-dir=.svn . -e " . expand("<cword>") . " " <bar> cwindow<CR>
 " note: vimgrep respects wildignore
