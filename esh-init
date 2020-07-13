@@ -169,6 +169,8 @@ _esh_i() {
 export -f _esh_i
 
 _esh_y() {
+  # TO DO: use "tput invis" to hide characters, and "tput sgr0" to make
+  # visible/normal (cleaner way to do it ... man terminfo)
   local v
   dcs() {
     # not totally clear when the gnu screen Device Control Strings were needed,
