@@ -54,7 +54,7 @@
     esac
   done
   filter=${!OPTIND}
-  shift $OPTIND
+  [ $OPTIND -gt $# ] && shift $# || shift $OPTIND
   if [ -z "$filter" ]; then
     filter="."
   fi
