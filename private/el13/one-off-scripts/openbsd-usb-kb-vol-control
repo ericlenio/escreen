@@ -7,7 +7,7 @@ if [ $(uname) != OpenBSD ]; then
 fi
 
 conf=$(mktemp)
-cat << EOF >$conf
+cat << 'EOF' >$conf
 # usbhidaction -f /dev/uhid1 -c conf /dev/mixer0
 # usbhidaction -f /dev/uhid1 -c /usr/local/etc/usbhidaction-keyboard.conf /dev/mixer
 #
@@ -24,7 +24,6 @@ EOF
 
 #sudo usbhidaction -f /dev/uhid1 -c /usr/local/etc/usbhidaction-keyboard.conf /dev/mixer
 if ! sudo usbhidaction -f /dev/uhid1 -c $conf /dev/audioctl0; then
-  echo "$(basename $0): try re-plugging in the keyboard"
-  exit 1
+  echo "$(basename $0): try re-plugging in the keyboard, or killing previous usbhidaction daemon"
 fi
 rm -f $conf
