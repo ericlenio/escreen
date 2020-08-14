@@ -5,7 +5,7 @@
 # you can customize the environment by pre-defining a function called
 # ESH_BASH_INIT
 #
-_bash_init() {
+_init_ctx() {
   # Args:
   #   1st is ESH_STY;
   #   p is the communication port (to BashSessionConfigServer);
@@ -13,10 +13,10 @@ _bash_init() {
   #   initialized bash shell we are about to execute (after we init that shell
   #   with the core escreen framework), defaulting to an interactive bash
   #   session
-  local ESH_STY=$1 p=$2 ex=("${@:3}") c64 f fs=$(compgen -A function ESH_BASH_INIT | sort)
+  local ESH_STY=$1 p=$2 ex=("${@:3}") z_init_64 f fs=$(compgen -A function ESH_BASH_INIT | sort) bootstr i
   #declare -p $(compgen -v ESH_)
   [ ${#ex[@]} = 0 ] && ex=(exec bash --norc --noprofile -i)
-  c64=$({
+  z_init_64=$({
     declare -p ESH_AT ESH_TMP ESH_STY ESH_USER ESH_TERM_PID ex
     declare -f _esh_e _esh_b _esh_l _esh_i _esh_y
     printf 'ESH_PORT=%s _esh_i %s ESH_PORT </dev/null\n' $p $ESH_STY
@@ -27,13 +27,29 @@ _bash_init() {
       declare -f $f
       echo $f
     done
+    # shift off the z_init_64 arg
+    echo shift
+    # scan the ex array for any dollar quoted strings; if one is found then we
+    # assume we need to eval the array
+    for ((i=0;i<${#ex[@]};i++)); do
+      if [ "${ex[$i]:0:1}" = "$" ]; then
+        printf 'eval ex[%s]="${ex[%s]}"\n' $i $i
+      fi
+    done
     # the bash environment is now initialized and ready for an interactive user
-    # session
+    # session (or, run whatever command is in the ex array)
     #
     # user will interact with $SSH_TTY if detected (else gnu screen will not
     # work inside ssh sessions to openbsd), else just use /dev/tty
     echo '"${ex[@]}" <>${SSH_TTY:-/dev/tty}'
   } | gzip -9c | openssl enc -a -A)
-  printf "sh -c 'echo %s | openssl enc -d -A -a | gzip -dc | exec bash'" $c64
+
+  quoter() {
+    local q=$'\047' dollar=$'\044' s="$1"
+    printf "%s%s%s%s\n" $dollar $q ${s// /\\x20} $q
+  }
+
+  bootstr='exec bash -c "$(echo $1 | openssl enc -d -A -a | gzip -dc)" -- "$@"'
+  printf 'exec sh -c %s -- %s' $(quoter "$bootstr") $z_init_64
 }
-export -f _bash_init
+export -f _init_ctx

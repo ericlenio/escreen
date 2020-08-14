@@ -64,7 +64,7 @@ ssh() {
   eval "$(_esh_e)"
   # if anything left in the command line (and ssh option -t is not set), then
   # we just do straight through call to ssh.
-  if [ $# -gt 0 ]; then
+  if [ $# -lt 0 ]; then
     ssh_opts+=($ssh_user_host "$@")
   else
     #
@@ -94,7 +94,7 @@ ssh() {
     #
     # OLD WAY: gzip + base64 encode to pass init code to remote session ...
     #
-    #local c="$(_bash_init $ssh_user_host-0000 $rem_port|gzip -9 -c|openssl enc -a -A)"
+    #local c="$(_init_ctx $ssh_user_host-0000 $rem_port|gzip -9 -c|openssl enc -a -A)"
     #env ssh "${ssh_opts[@]}" -t -oExitOnForwardFailure=yes -R$rem_port:localhost:$(_esh_e) $ssh_user_host -- sh -c "'"'b=`which bash`; [ "$b" ] && exec $b -c "eval $(echo '$c'|openssl enc -d -a -A|gzip -d -c)" - "$@" || exec $SHELL -l'"'" - "${remote_cmd[@]}"
     #
     # NEW WAY: just gzip and send the init code via netcat; requires opening a
@@ -108,7 +108,7 @@ ssh() {
 #    c0=$(echo ':
 #sshrc=/etc/escreen.sshrc
 #[ -f $sshrc ] && . $sshrc
-#'"$(_bash_init $ssh_user_host-$(pwgen 6) $rem_port)"'
+#'"$(_init_ctx $ssh_user_host-$(pwgen 6) $rem_port)"'
 #' | gzip -9c | openssl enc -a -A)
 #
 #    c1=$(echo ':
@@ -132,6 +132,6 @@ ssh() {
     fi
     ssh_opts+=(-t -oServerAliveInterval=30 -oExitOnForwardFailure=yes $ssh_user_host)
   fi
-  env ssh "${ssh_opts[@]}" $(_bash_init $sid $rem_port)
+  env ssh "${ssh_opts[@]}" $(_init_ctx $sid $rem_port "$@")
 }
 export -f ssh

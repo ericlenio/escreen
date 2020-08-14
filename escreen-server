@@ -4,7 +4,6 @@ escreen_branch=$(cd $ESH_HOME && git rev-parse --abbrev-ref HEAD)
 suffix=-$escreen_branch
 [ $escreen_branch = master ] && suffix=""
 ESH_TMP=/tmp/esh$suffix
-[ ! -d $ESH_TMP ] && mkdir $ESH_TMP && chmod 1777 $ESH_TMP
 ESH_USER=$USER
 ESH_AT=xxxxx1
 ESH_PORT=2021
@@ -14,10 +13,12 @@ while getopts $opts opt; do
   case $opt in
     p) ESH_PORT=$OPTARG
       echo "NOTE: using port: $ESH_PORT"
+      ESH_TMP=/tmp/esh$suffix-$ESH_PORT
       ;;
   esac
 done
 
+[ ! -d $ESH_TMP ] && mkdir $ESH_TMP && chmod 1777 $ESH_TMP
 ESH_PROFILE_DIR=${!OPTIND:-$ESH_HOME/profile.lwprof}
 
 # test that gpg-agent is up and running, if not this should get it going; note:
