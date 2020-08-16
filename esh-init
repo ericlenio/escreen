@@ -196,13 +196,13 @@ _esh_y() {
       dcs $1 '\x1b\\'
     } >/dev/tty
   }
-  stty -echo
+  [ -t 1 ] && stty -echo
   # save cursor position
   ansi 0 's'
   # this ANSI pattern matched at the server, and conceals text
   ansi 1 '8m'
   #printf ':%s' "$1" >/dev/tty
-  v=$(_esh_b m $ESH_TERM_PID "$1")
+  v=$(_esh_b m $ESH_TERM_PID "$1" </dev/null)
   # erase line
   ansi 0 '2K'
   # restore cursor position
@@ -215,7 +215,7 @@ _esh_y() {
   # unconceal
   ansi 1 '0m'
   # echo back the value we just read to stdout
-  stty echo
+  [ -t 1 ] && stty echo
   echo "$v"
 }
 export -f _esh_y
