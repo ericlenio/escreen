@@ -27,8 +27,6 @@ _init_ctx() {
       declare -f $f
       echo $f
     done
-    # shift off the z_init_64 arg
-    echo shift
     # scan the ex array for any dollar quoted strings; if one is found then we
     # assume we need to eval the array
     for ((i=0;i<${#ex[@]};i++)); do
@@ -42,14 +40,10 @@ _init_ctx() {
     # user will interact with $SSH_TTY if detected (else gnu screen will not
     # work inside ssh sessions to openbsd), else just use /dev/tty
     echo '"${ex[@]}" <>${SSH_TTY:-/dev/tty}'
-  } | gzip -9c | openssl enc -a -A)
+  } | gzip -9c | openssl enc -a)
 
-  quoter() {
-    local q=$'\047' dollar=$'\044' s="$1"
-    printf "%s%s%s%s\n" $dollar $q ${s// /\\x20} $q
-  }
-
-  bootstr='exec bash -c "$(echo $1 | openssl enc -d -A -a | gzip -dc)" -- "$@"'
-  printf 'exec sh -c %s -- %s' $(quoter "$bootstr") $z_init_64
+  bootstr='echo $* | tr -d " " | openssl enc -d -a -A | gzip -dc | exec bash'
+  printf 'echo %s | openssl enc -d -A -a | exec sh -s -- ' $(echo "$bootstr" | openssl enc -a -A)
+  echo $z_init_64
 }
 export -f _init_ctx
