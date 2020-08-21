@@ -200,7 +200,7 @@ EOF
   #unset -f ESH_BASH_INIT
 
   local c=()
-  if c=($(curl -f -s -S -H "$auth_hdr" -H "Content-Type: application/json" $RA_SERVER_BASE_URL/ra-get-shell-ctx/$hostname/$ip)); then
+  if c=($(curl -k -f -s -S -H "$auth_hdr" -H "Content-Type: application/json" $RA_SERVER_BASE_URL/ra-get-shell-ctx/$hostname/$ip)); then
     SSH_STY_LBL=$hostname ssh -t -oProxyJump=remoteadmin@$RA_SSH_PROXY_JUMP_HOST -p $ssh_port $extra_params "$@" $RA_SSH_USER@127.0.0.1 "${c[@]}" exec bash
   fi
 }
