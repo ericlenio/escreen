@@ -1,3 +1,7 @@
+#if [ -f ~/.bashrc ] && grep -q '^alias l=' ~/.bashrc; then
+  # remove annoying alias for l
+  #perl -pi -e 's{^(alias l=.*)}{#$1}' ~/.bashrc
+#fi
 export INPUTRC=$ESH_TMP/$LOGNAME-inputrc
 echo "set mark-symlinked-directories on" > $INPUTRC
 export \
