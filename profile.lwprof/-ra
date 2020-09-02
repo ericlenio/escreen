@@ -104,7 +104,7 @@
   local vmjson auth=$(printf "%s:%s" "$RA_USER" "$pw" | openssl enc -a -A)
   local auth_hdr=$(printf "Authorization: Basic %s" $auth)
   local endpoint=$RA_SERVER_BASE_URL/ra-get-agents
-  vmjson=$(curl -k -S -s -f -H "$auth_hdr" $endpoint)
+  vmjson=$(curl -k -S -s -f -H "$auth_hdr" -H "X-Ra-Agent-Id: remoteadmin.private/127.0.0.1" $endpoint)
   local rc=$?
   if [ $rc -gt 0 ]; then
     echo "Failed to read $endpoint"
