@@ -4,6 +4,7 @@ rgrep() {
   find . -type f ! -path './dist/*' ! -path './build/*' ! -path '*/.svn*' \
     ! -path '*.class' ! -path '*.jar' ! -path '*.swp' ! -path './node_modules/*' \
     ! -path './.git/*' ! -path '*.pdf' ! -path '*.png' ! -path '*.jpg' \
+    ! -path './.fusebox/*' \
     | perl -pe 's{(.*)}{"$1"}' | xargs grep "$@"
 }
 export -f rgrep
