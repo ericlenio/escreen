@@ -167,6 +167,8 @@ _esh_i() {
   # TO DO: do some sort of sanity checking that _esh_e contains only "declare"
   # statements
   export PROMPT_COMMAND='[ "$(trap -p DEBUG)" ] || trap '"'"'eval "$(_esh_e)"'"'"' DEBUG'
+  # set shell option so that the DEBUG trap is executed in subshells
+  set -T
 }
 
 export -f _esh_i
