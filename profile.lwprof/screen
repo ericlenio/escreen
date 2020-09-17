@@ -23,6 +23,7 @@ screen() {
             return $?
           fi
           if [[ $pick_sty =~ ^[0-9]+\.(.+) ]]; then
+            eval "$(_esh_e)"
             _esh_e ${BASH_REMATCH[1]} ESH_PORT SSH_AUTH_SOCK ESH_AT ESH_TERM_PID
             # strip off "screen." prefix from $TERM to avoid "$TERM too long" issue
             env TERM=${TERM#screen.} screen -d -r $pick_sty
