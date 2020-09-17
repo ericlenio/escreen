@@ -10,7 +10,7 @@ _esh_gen_stub() {
     local f=$funcname'() { _esh_bootstrap '$funcfile' "$@"; }'
     eval -- "$f"
     export -f -- $funcname
-    unalias -- $funcname 2>/dev/null
+    #unalias -- $funcname 2>/dev/null
   }
 }
 export -f _esh_gen_stub

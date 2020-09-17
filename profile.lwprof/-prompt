@@ -28,3 +28,4 @@
     unalias -a
   fi
 }
+export -f -- -prompt

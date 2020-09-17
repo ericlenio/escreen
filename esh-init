@@ -161,6 +161,7 @@ _esh_i() {
   #   s nobody
   #   fc
   _vime
+  _esh_l $t/-prompt $p2
   export PROMPT_COMMAND='-prompt'
 }
 

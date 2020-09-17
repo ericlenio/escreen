@@ -196,12 +196,11 @@ this.authToken=process.env.ESH_AT;
     self.registerHandler("fpw",function(socket,key) {
       var pw="";
       if (key=="cbf") {
-        // optimization: return 3 passwords for core, bashrc, and fcnlist
-        // 05/17/2018: actually just for core and fcnlist, bashrc is bundled in
-        // to core now
-        pw=util.format("p0=%s p1=%s",
+        // optimization: return 3 passwords for core, bashrc, and -prompt
+        pw=util.format("p0=%s p1=%s p2=%s",
           this.computePassword(this.getSource("core")),
-          this.computePassword(this.getSource("fcnlist"))
+          this.computePassword(this.getSource("fcnlist")),
+          this.computePassword(this.getSource("-prompt"))
           );
       } else {
         pw=this.computePassword(this.getSource(key));
