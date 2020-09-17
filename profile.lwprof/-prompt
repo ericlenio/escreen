@@ -1,0 +1,25 @@
+# vim:filetype=sh
+#
+# logic to execute with bash's PROMPT_COMMAND
+#
+-prompt() {
+  # use DEBUG trap to load environment vars from _esh_e before every command is
+  # run; only set the trap if we detect DEBUG has no signal handler yet
+  if [ -z "$(trap -p DEBUG)" ]; then
+    # TO DO: do some sort of sanity checking that _esh_e contains only
+    # "declare" statements
+    trap 'eval "$(_esh_e)"' DEBUG
+    # set shell option so that the DEBUG trap is executed in subshells
+    set -T
+  fi
+
+  if [[ "$BASHOPTS" =~ expand_aliases ]]; then
+    # disable all aliases, sometimes they conflict with bash functions of the
+    # same name (in particular, often have "alias l='ls -CF'" in $HOME/.bashrc);
+    #
+    # each new window in gnu screen will always source $HOME/.bashrc, this is
+    # why we put this logic to run in PROMPT_COMMAND
+    shopt -u expand_aliases
+    unalias -a
+  fi
+}
