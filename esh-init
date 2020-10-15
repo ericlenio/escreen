@@ -154,7 +154,7 @@ _esh_i() {
   for f in $(_esh_l $t/$u.fcnlist $p1 1); do
     _esh_gen_stub $t/$u.f.$f
   done
-  export ESH_TMP ESH_STY SHELL=$(which bash) RA_READ_PTY_FUNC=_esh_y
+  export ESH_TMP ESH_STY SHELL=$(which bash) RA_READ_PTY_FUNC=_esh_y ESH_PORT
   export -f _esh_e _esh_i _esh_b _esh_l _esh_y
   # generate vim executable so it is ready for user, e.g. if escreen starts and
   # then immediately:
