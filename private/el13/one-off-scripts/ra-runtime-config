@@ -16,7 +16,8 @@ url=https://remoteadmin.private:3333/ra-runtime-config
 #code64=$(printf "JSON.stringify(self.config.RA_USER_AUTHORIZED_HOSTS,null,1)" | openssl enc -a -A)
 #code64=$(printf "self.config.RA_USER_AUTHORIZED_HOSTS['abdel.mawla']='issworld.com|americaninhomecare.com|discoveryliving|aomofny.com|ltc.admitplus.work|aplusdev.tsgrinc.com'" | openssl enc -a -A)
 #code64=$(printf "self.config.RA_USER_AUTHORIZED_HOSTS['paul.ratilla']='ltc.admitplus.work'" | openssl enc -a -A)
-code64=$(printf "self.config.RA_CHECK_FOR_REBOOTS_NOTIFY='support_cc@lincware.com'" | openssl enc -a -A)
+#code64=$(printf "self.config.RA_CHECK_FOR_REBOOTS_NOTIFY='support_cc@lincware.com'" | openssl enc -a -A)
+code64=$(printf "self.config.RA_USER_AUTHORIZED_HOSTS['mohammad.shahid'].push('admit.work')" | openssl enc -a -A)
 
 code64b=$(printf "
   var a=[];
