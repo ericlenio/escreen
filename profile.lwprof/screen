@@ -62,12 +62,11 @@ bind \040 windowlist -b
 vbell on
 vbell_msg DING
 defmonitor on
-msgwait 3
+msgwait 1
 hardstatus ignore
 shelltitle "$ |:"
 caption always "%{= kw}%-w%{= BW}%n%t%{-}%+w %-= @%H %{= Y}%l%{-} %m/%d %c"
 EOF
   # strip off "screen." prefix from $TERM to avoid "$TERM too long" issue
-  env SCREENRC=/dev/null TERM=${TERM#screen.} screen -S $ESH_STY -e$esc "${args[@]}" -c $rcfile
-  rm -f $rcfile
+  env SCREENRC=$rcfile DROP_SCREENRC=1 TERM=${TERM#screen.} screen -S $ESH_STY -e$esc "${args[@]}"
 }
