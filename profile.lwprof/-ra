@@ -191,7 +191,7 @@
         echo "Passing extra params to ssh: $extra_params"
       fi
       if c=($(curl -k -f -s -S -H "$auth_hdr" -H "X-Ra-Agent-Id: $raAgentId" $RA_SERVER_BASE_URL/ra-get-shell-ctx)); then
-        SSH_STY_LBL=$hostname ssh -t -oProxyJump=remoteadmin@$RA_SSH_PROXY_JUMP_HOST -p $raSshPort $extra_params "$@" $RA_SSH_USER@127.0.0.1 "${c[@]}" exec bash
+        SSH_EXEC=1 SSH_STY_LBL=$hostname ssh -t -oProxyJump=remoteadmin@$RA_SSH_PROXY_JUMP_HOST -p $raSshPort $extra_params "$@" $RA_SSH_USER@127.0.0.1 "${c[@]}" exec bash
       fi
       ;;
     psql)
