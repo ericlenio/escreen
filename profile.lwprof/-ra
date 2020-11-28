@@ -32,7 +32,7 @@
     echo "       -ra [-d] -p [filter [psql args ...]]"
     echo "  -h: this usage note"
     echo "  -d: use dev remoteadmin server"
-    echo "  -r: ssh to the remote server as root"
+    echo "  -r: in ssh mode (the default), ssh to the remote server as root; in psql mode, connect with the owner of the ld_admin schema"
     echo "  -p: psql mode"
   }
 
@@ -191,7 +191,7 @@
         echo "Passing extra params to ssh: $extra_params"
       fi
       if c=($(curl -k -f -s -S -H "$auth_hdr" -H "X-Ra-Agent-Id: $raAgentId" $RA_SERVER_BASE_URL/ra-get-shell-ctx)); then
-        SSH_STY_LBL=$hostname exec ssh -t -oProxyJump=remoteadmin@$RA_SSH_PROXY_JUMP_HOST -p $raSshPort $extra_params "$@" $RA_SSH_USER@127.0.0.1 "${c[@]}" exec bash
+        SSH_STY_LBL=$hostname ssh -t -oProxyJump=remoteadmin@$RA_SSH_PROXY_JUMP_HOST -p $raSshPort $extra_params "$@" $RA_SSH_USER@127.0.0.1 "${c[@]}" exec bash
       fi
       ;;
     psql)
@@ -215,7 +215,7 @@
         PGPORT=${port[$choice]} \
         PGOPTIONS="-c lw.raAgentId=$raAgentId/${context[$choice]}" \
         PGPASSWORD="$(echo ${password[$choice]} | openssl enc -d -a -A)"
-      exec psql -v PROMPT1="$raHostname.%n@%/>"
+      exec psql -v PROMPT1="$raHostname:%n@%/>" "$@"
       ;;
   esac
 )
