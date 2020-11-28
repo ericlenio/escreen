@@ -21,17 +21,19 @@
 #exec > >(tee >(grep ^: >$cmds) | grep -v ^:)
 #trap "rm -f $stdout $cmds; echo $stdout was deleted" EXIT INT
 
--ra() {
-  local exec ssh_params opts="he:u:j:dr" opt RA_SERVER_BASE_URL=${RA_SERVER_BASE_URL:-https://remoteadmin.private:3333} RA_SSH_USER=${RA_SSH_USER:-lincdoc} OPTIND=1
+-ra() (
+  local exec ssh_params opts="he:u:j:drp" opt RA_SERVER_BASE_URL=${RA_SERVER_BASE_URL:-https://remoteadmin.private:3333} RA_SSH_USER=${RA_SSH_USER:-lincdoc} OPTIND=1
   declare -a exec
   declare -a ssh_params
-  local ssh_params_file=$HOME/.remoteadmin/ssh_options filter RA_SSH_PROXY_JUMP_HOST
+  local ssh_params_file=$HOME/.remoteadmin/ssh_options filter RA_SSH_PROXY_JUMP_HOST RA_MODE=ssh superuser=0
 
   usage() {
     echo "Usage: -ra [-hdr] [filter [ssh args ...]]"
+    echo "       -ra [-d] -p [filter [psql args ...]]"
     echo "  -h: this usage note"
     echo "  -d: use dev remoteadmin server"
     echo "  -r: ssh to the remote server as root"
+    echo "  -p: psql mode"
   }
 
   while getopts $opts opt; do
@@ -49,7 +51,9 @@
         echo "NOTE: using dev RA server at: $RA_SERVER_BASE_URL" >/dev/tty
         ;;
       r) RA_SSH_USER=root
-        echo "NOTE: trying for root access" >/dev/tty
+        superuser=1
+        ;;
+      p) RA_MODE=psql
         ;;
     esac
   done
@@ -103,7 +107,7 @@
   }
   local raw agents auth=$(printf "%s:%s" "$RA_USER" "$pw" | openssl enc -a -A)
   local auth_hdr=$(printf "Authorization: Basic %s" $auth)
-  local endpoint=$RA_SERVER_BASE_URL/ra-get-agents
+  local endpoint=$RA_SERVER_BASE_URL/ra-get-agents?superuser=$superuser
   if ! raw=$(curl -k -S -s -f -H "Accept: text/plain" -H "$auth_hdr" -H "X-Ra-Agent-Id: remoteadmin.private/127.0.0.1" $endpoint); then
     echo "$FUNCNAME: failed to read $endpoint" >&2
     return 1
@@ -177,16 +181,41 @@
     }
   fi
 
+  #get_data $choice
   eval "$(get_data $choice)"
 
-  local ip=${ips[$choice]}
-  local extra_params="$(get_extra_ssh_params $raHostname)"
-  if [ -n "$extra_params" ]; then
-    echo "Passing extra params to ssh: $extra_params"
-  fi
-
-  local c=()
-  if c=($(curl -k -f -s -S -H "$auth_hdr" -H "Content-Type: application/json" -H "X-Ra-Agent-Id: $raAgentId" $RA_SERVER_BASE_URL/ra-get-shell-ctx)); then
-    SSH_STY_LBL=$hostname ssh -t -oProxyJump=remoteadmin@$RA_SSH_PROXY_JUMP_HOST -p $raSshPort $extra_params "$@" $RA_SSH_USER@127.0.0.1 "${c[@]}" exec bash
-  fi
-}
+  case $RA_MODE in
+    ssh)
+      local extra_params="$(get_extra_ssh_params $raHostname)"
+      if [ -n "$extra_params" ]; then
+        echo "Passing extra params to ssh: $extra_params"
+      fi
+      if c=($(curl -k -f -s -S -H "$auth_hdr" -H "X-Ra-Agent-Id: $raAgentId" $RA_SERVER_BASE_URL/ra-get-shell-ctx)); then
+        SSH_STY_LBL=$hostname exec ssh -t -oProxyJump=remoteadmin@$RA_SSH_PROXY_JUMP_HOST -p $raSshPort $extra_params "$@" $RA_SSH_USER@127.0.0.1 "${c[@]}" exec bash
+      fi
+      ;;
+    psql)
+      n=$((${#context[@]}-1))
+      choice=0
+      if [ $n -ge 1 ]; then
+        local choice_list=$(
+          for ((i=0;i<=$n;i++)); do
+            printf "%s (%s/%s/%s)\n" ${context[$i]} ${ldVersion[$i]} ${database[$i]} ${username[$i]}
+          done
+        )
+        choice=$(-pick-something "Pick:" "$choice_list" 1) || {
+          echo "invalid choice"
+          return 1
+        }
+      fi
+      export PGDATABASE=${database[$choice]} \
+        PGUSER=${username[$choice]} \
+        PGHOST=${host[$choice]} \
+        PGSSLMODE=require \
+        PGPORT=${port[$choice]} \
+        PGOPTIONS="-c lw.raAgentId=$raAgentId/${context[$choice]}" \
+        PGPASSWORD="$(echo ${password[$choice]} | openssl enc -d -a -A)"
+      exec psql -v PROMPT1="$raHostname.%n@%/>"
+      ;;
+  esac
+)
