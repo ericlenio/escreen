@@ -219,8 +219,7 @@ _esh_y() {
       e="$FUNCNAME: failed to read value for \"$key\", attempt $attempt/$max_attempts"
     fi
   else
-    e="$FUNCNAME status: $status"
-    v=$(read_v)
+    e="$FUNCNAME: $status $(read_v)"
   fi
   # erase line
   ansi 0 '2K'
