@@ -136,8 +136,9 @@ this.authToken=process.env.ESH_AT;
      * resolveMarker will type the data right into the pty and _esh_y reads it
      */
     self.registerHandler("m",function(socket,pid,marker) {
-      var status=self.ts.resolveMarker(pid,marker);
-      socket.end(status+"\n");
+      self.ts.resolveMarker(pid,marker).then(function(status) {
+        socket.end(status+"\n");
+      });
     });
 
     /**

@@ -198,34 +198,40 @@ class TerminalServer extends http.Server {
    * injected right into the pty
    */
   resolveMarker(pid,marker) {
+    var self=this;
     if (!(pid in E_TERMINALS)) {
-      return "E_BAD_PID";
+      return Promise.resolve("E_BAD_PID");
     }
     var term=E_TERMINALS[pid];
     var delim=';';
-    switch(marker) {
-      case "log":
-	var status=this.toggleLogging(term);
-	term.write("logging is "+status.toUpperCase()+": "+E_HOSTNAME+":"+term.logFile+delim);
-	break;
-      case "hello":
-	term.write("HELLO"+delim);
-	break;
-      case "_ra_term_pid":
-	term.write(term.pid+delim);
-	break;
-      case "_ra_get_ldap_pw":
-	this._ra_get_ldap_pw().then(function(pw64) {
-	  term.write(pw64+delim);
-	}).catch(function(e) {
-	  console.error("_ra_get_ldap_pw: "+e);
-	  term.write(Buffer.from("_ra_get_ldap_pw: password not available").toString("base64")+delim);
-	});
-	break;
-      default:
-        term.write('?'+delim);
-    }
-    return "E_OK";
+    return new Promise(function(resolve,reject) {
+      switch(marker) {
+        case "log":
+          var status=self.toggleLogging(term);
+          resolve("logging is "+status.toUpperCase()+": "+E_HOSTNAME+":"+term.logFile);
+          break;
+        case "hello":
+          resolve("HELLO");
+          break;
+        case "_ra_term_pid":
+          resolve(""+term.pid);
+          break;
+        case "_ra_get_ldap_pw":
+          self._ra_get_ldap_pw().then(resolve)
+            .catch(function(e) {
+              reject("_ra_get_ldap_pw: password not available: "+e);
+            });
+          break;
+        default:
+          resolve('?');
+      }
+    }).then(function(value) {
+      term.write(Buffer.from(value).toString("base64")+delim);
+      return "E_OK";
+    }).catch(function(e) {
+      term.write(Buffer.from(e.toString()).toString("base64")+delim);
+      return "E_MARKER_ERR";
+    });
   }
 
   registerSty(pid,sty) {
@@ -265,8 +271,7 @@ class TerminalServer extends http.Server {
         pw+=buf;
       });
       c.on("exit",function(code,signal) {
-        // strip off trailing white space, and convert to base 64
-        resolve(Buffer.from(pw.replace(/\s*$/,"")).toString('base64'));
+        resolve(pw.replace(/\s*$/,""));
       });
       c.stdin.end(pwKey);
     });

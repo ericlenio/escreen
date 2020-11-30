@@ -168,9 +168,9 @@ _esh_i() {
 export -f _esh_i
 
 _esh_y() {
+  local key=$1 attempt=${2:-1} max_attempts=10 e v status
   # TO DO: use "tput invis" to hide characters, and "tput sgr0" to make
   # visible/normal (cleaner way to do it ... man terminfo)
-  local v
   dcs() {
     # not totally clear when the gnu screen Device Control Strings were needed,
     # but they seemed to be required for "conceal text" (8m) and "restore text"
@@ -192,18 +192,36 @@ _esh_y() {
       dcs $1 '\x1b\\'
     } >/dev/tty
   }
+  read_v() {
+    local v
+    read -d ';' v </dev/tty
+    v=$(echo "$v" | openssl enc -d -a -A)
+    if [[ "$v" =~ ^[[:print:]]+$ ]]; then
+      echo "$v"
+    else
+      return 1
+    fi
+  }
   [ -t 1 ] && stty -echo
   # save cursor position
   ansi 0 's'
   # this ANSI pattern matched at the server, and conceals text
   ansi 1 '8m'
   #printf ':%s' "$1" >/dev/tty
-  v=$(_esh_b m $ESH_TERM_PID "$1" </dev/null)
+  status=$(_esh_b m $ESH_TERM_PID "$key" </dev/null)
   # erase line
   ansi 0 '2K'
   # restore cursor position
   ansi 0 'u'
-  [ "$v" = E_OK ] && read -d ';' v </dev/tty
+  if [ "$status" = E_OK ]; then
+    if ! v=$(read_v); then
+      # user was probably typing on the keyboard
+      e="$FUNCNAME: failed to read value for \"$key\", attempt $attempt/$max_attempts"
+    fi
+  else
+    e="$FUNCNAME status: $status"
+    v=$(read_v)
+  fi
   # erase line
   ansi 0 '2K'
   # restore cursor position, again
@@ -212,7 +230,17 @@ _esh_y() {
   ansi 1 '0m'
   # echo back the value we just read to stdout
   [ -t 1 ] && stty echo
-  echo "$v"
+  if [[ "$v" =~ ^[[:print:]]+$ ]]; then
+    echo "$v"
+  fi
+  if [ "$e" ]; then
+    echo "$e" >&2
+    if [ $attempt -lt $max_attempts ]; then
+      $FUNCNAME $key $(($attempt+1))
+      return $?
+    fi
+    return 1
+  fi
 }
 export -f _esh_y
 

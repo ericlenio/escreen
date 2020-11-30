@@ -5,24 +5,14 @@ module.exports=function(server) {
   var fs=require('fs');
 
   server.registerHandler("sshd",function(socket) {
-    //socket.cork();
     var child_process=require('child_process');
     var p=child_process.spawn("sudo",["/usr/sbin/sshd","-i"],
       {
         //cwd:"/tmp",
         stdio:['pipe','pipe',process.stderr]
       });
-    //console.log("sshd started: %s",p.pid)
     socket.pipe(p.stdin);
-    //socket.on('data', function(data){
-      //p.stdin.write(data);
-    //});
     p.stdout.pipe(socket);
-    //p.stderr.pipe(socket);
-    p.on('exit',function(rc,signal) {
-      //console.log("sshd exit, rc=%s, signal=%s",rc,signal);
-      socket.end();
-    });
   },true);
 
 

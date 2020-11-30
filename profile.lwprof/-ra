@@ -101,17 +101,10 @@
   #local pwkey="LincWare LDAP:$RA_USER"
   #local pw=$(pw "$pwkey")
   attempts=0
-  while ! pw=$(_esh_y _ra_get_ldap_pw | openssl enc -d -a -A) || ! [[ "$pw" =~ ^[[:print:]]+$ ]]; do
-    attempts=$(($attempts+1))
-    if [ $attempts -ge 5 ]; then
-      echo "$FUNCNAME: could not acquire password" >&2
-      return 1
-    fi
-  done
-  [ -z "$pw" ] && {
-    echo "$FUNCNAME: could not retrieve password for \"$RA_USER\" to launch remoteadmin" >&2
+  if ! pw=$(_esh_y _ra_get_ldap_pw); then
+    echo "$FUNCNAME: could not acquire password" >&2
     return 1
-  }
+  fi
   local raw agents auth=$(printf "%s:%s" "$RA_USER" "$pw" | openssl enc -a -A)
   local auth_hdr=$(printf "Authorization: Basic %s" $auth)
   local endpoint=$RA_SERVER_BASE_URL/ra-get-agents?superuser=$superuser
