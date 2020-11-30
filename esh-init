@@ -193,11 +193,19 @@ _esh_y() {
     } >/dev/tty
   }
   read_v() {
-    local v
+    local v len
     read -d ';' v </dev/tty
     v=$(echo "$v" | openssl enc -d -a -A)
-    if [[ "$v" =~ ^[[:print:]]+$ ]]; then
-      echo "$v"
+    # we expect to get a value of format N:xxxxxxx, where N is the length of
+    # the string xxxxxxx
+    if [[ "$v" =~ ^([0-9]+):([[:print:]]+)$ ]]; then
+      len=${BASH_REMATCH[1]}
+      v="${BASH_REMATCH[2]}"
+      if [ $len = ${#v} ]; then
+        echo "$v"
+      else
+        return 1
+      fi
     else
       return 1
     fi

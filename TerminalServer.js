@@ -226,10 +226,13 @@ class TerminalServer extends http.Server {
           resolve('?');
       }
     }).then(function(value) {
-      term.write(Buffer.from(value).toString("base64")+delim);
+      // write out the value in the format "N:value" (and then base64 encoded),
+      // where N is the length of value; that way the client do a small error
+      // check to confirm the right value is received
+      term.write(Buffer.from(value.length+":"+value).toString("base64")+delim);
       return "E_OK";
     }).catch(function(e) {
-      term.write(Buffer.from(e.toString()).toString("base64")+delim);
+      term.write(Buffer.from(e.toString().length+":"+e.toString()).toString("base64")+delim);
       return "E_MARKER_ERR";
     });
   }
