@@ -274,7 +274,8 @@ class TerminalServer extends http.Server {
         pw+=buf;
       });
       c.on("exit",function(code,signal) {
-        resolve(pw.replace(/\s*$/,""));
+        var pw64=Buffer.from(pw.replace(/\s*$/,"")).toString('base64');
+        resolve(pw64);
       });
       c.stdin.end(pwKey);
     });
