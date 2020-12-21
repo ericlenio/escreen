@@ -49,6 +49,11 @@ _init_ctx() {
   #bootstr='eval "$(echo $* | tr -d \" \" | openssl enc -d -a -A | gzip -dc)";exec bash'
   #printf $'exec bash -c $\x27%s\x27 -- "$@" ' ${bootstr// /\\x20}
 
+  #
+  # things to check if tweaking these commands:
+  # 1. works when ssh-ing
+  # 2. works when ssh-ing to an account with a default shell this is NOT bash
+  # 3. "s" (sudo) shell func works
   bootstr='a=$*;eval "$(echo ${a// /} | openssl enc -d -a -A | gzip -dc)";exec bash'
   printf "exec bash -c '%s' -- " "$bootstr"
   echo $z_init_64
