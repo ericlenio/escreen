@@ -1,4 +1,4 @@
-# vim:filetype=sh
+# vim:filetype=bash
 pg_activity() {
   local version=$(pg_version)
   # little version comparison function here, up to 4 levels e.g. 9.6.10.3

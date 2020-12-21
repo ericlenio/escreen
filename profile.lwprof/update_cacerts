@@ -1,4 +1,4 @@
-# vim:filetype=sh
+# vim:filetype=bash
 update_cacerts() {
   # Update java cacerts file with SSL cert from given host:port
   local cacerts=/etc/ssl/certs/java/cacerts

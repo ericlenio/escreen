@@ -1,4 +1,4 @@
-# vim:filetype=sh
+# vim:filetype=bash
 #
 # Usage: remoteadmin [filter] [command ...]
 # where filter is used as a simple search filter against all currently

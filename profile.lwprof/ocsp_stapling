@@ -1,4 +1,4 @@
-# vim:filetype=sh
+# vim:filetype=bash
 # per https://raymii.org/s/tutorials/OCSP_Stapling_on_nginx.html, get a list of
 # hosts to add firewall rules for so OCSP stapling works
 ocsp_stapling() {

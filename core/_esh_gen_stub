@@ -1,4 +1,4 @@
-# vim:filetype=sh
+# vim:filetype=bash
 #
 # generate a self-loading stub function for each function
 #

@@ -1,4 +1,4 @@
-# vim:filetype=sh
+# vim:filetype=bash
 redmine_time_report() {
   #ssh root@redmine -oProxyCommand="ssh zarafa1 ssh redmine sshd -i" sudo -u postgres psql redmine << EOF
   /usr/bin/ssh root@redmine sudo -u postgres psql redmine << EOF

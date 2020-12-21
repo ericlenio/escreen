@@ -1,4 +1,4 @@
-# vim:filetype=sh
+# vim:filetype=bash
 #
 # pw retrieves a password from $ESH_PW_FILE based on the given key, which can
 # be supplied as arg 1 or passed in stdin

@@ -1,4 +1,4 @@
-# vim:filetype=sh
+# vim:filetype=bash
 show_open_ptys() {
   local os=$(uname)
   if [ "$os" = OpenBSD ]; then

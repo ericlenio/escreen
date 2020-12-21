@@ -1,4 +1,4 @@
-# vim:filetype=sh
+# vim:filetype=bash
 update_gpg_key() {
   local apt_keyring=/etc/apt/trusted.gpg
   # the old key expired 04/28/2014

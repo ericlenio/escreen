@@ -1,4 +1,4 @@
-# vim:filetype=sh
+# vim:filetype=bash
 cp2cb() {
   local f="$1" t l
   if [ -t 0 ]; then

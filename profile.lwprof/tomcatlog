@@ -1,4 +1,4 @@
-# vim:filetype=sh
+# vim:filetype=bash
 tomcatlog() {
   local opts="23ecx" flag=$1 op opt tcuser=$(grep -w tomcat. /etc/passwd | tail -1 | cut -d: -f1)
   # if ssh-ing to remote system with odd/custom tomcat setup: create

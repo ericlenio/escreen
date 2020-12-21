@@ -1,4 +1,4 @@
-# vim:filetype=sh
+# vim:filetype=bash
 # Generate a new ssh keypair for remoteadmin unique situations, like forwarding
 # port 443. Sample usage in /etc/lincware/lwsa/remoteadmin-ssh-config:
 #   Host remoteadmin.lincware.com

@@ -1,4 +1,4 @@
-# vim:filetype=sh
+# vim:filetype=bash
 openssl_s_client_show_certs() {
   local hostport="$1"
   local host=${hostport%%:[0-9]*}

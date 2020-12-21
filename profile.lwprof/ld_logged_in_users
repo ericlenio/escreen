@@ -1,4 +1,4 @@
-# vim:filetype=sh
+# vim:filetype=bash
 ld_logged_in_users() {
   local db="${1:-lincdoc}" tz="EST"
   echo "Scanning database \"$db\" for logged in users"

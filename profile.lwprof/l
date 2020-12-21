@@ -1,4 +1,4 @@
-# vim:filetype=sh
+# vim:filetype=bash
 l() {
   local os=$(uname -s)
   case $os in

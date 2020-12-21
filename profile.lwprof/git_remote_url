@@ -1,4 +1,4 @@
-# vim:filetype=sh
+# vim:filetype=bash
 git_remote_url() {
   git config --get remote.origin.url
 }

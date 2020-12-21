@@ -1,4 +1,4 @@
-# vim:filetype=sh
+# vim:filetype=bash
 rgrep() {
   # double quote each file in perl, in case filename contains a single quote
   find . -type f ! -path './dist/*' ! -path './build/*' ! -path '*/.svn*' \

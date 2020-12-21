@@ -1,4 +1,4 @@
-# vim:filetype=sh
+# vim:filetype=bash
 pg_terminate_backend() {
   local procpid="$1"
   if [ -z "$procpid" ]; then

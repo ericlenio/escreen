@@ -1,4 +1,4 @@
-# vim:filetype=sh
+# vim:filetype=bash
 #
 # This function greps "ps" output for a given string (case insensetively);
 # similar to pgrep

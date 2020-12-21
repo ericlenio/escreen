@@ -1,4 +1,4 @@
-# vim:filetype=sh
+# vim:filetype=bash
 # based on Oleg configuration at:
 # https://jenkins.lincware.com/view/All/job/LDC-Staging/configure
 #

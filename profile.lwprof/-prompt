@@ -1,4 +1,4 @@
-# vim:filetype=sh
+# vim:filetype=bash
 #
 # logic to execute with bash's PROMPT_COMMAND
 #

@@ -1,4 +1,4 @@
-# vim:filetype=sh
+# vim:filetype=bash
 download() {
   local f="$1" ext gzip=1
   if [ ! -e "$f" ]; then

@@ -1,4 +1,4 @@
-# vim:filetype=sh
+# vim:filetype=bash
 openssl_show_cert() {
   local cert=$1
   if [ -z "$cert" ]; then

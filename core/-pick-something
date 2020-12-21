@@ -1,4 +1,4 @@
-# vim:filetype=sh
+# vim:filetype=bash
 #
 # pick 1 line from a list. positional parameters:
 #

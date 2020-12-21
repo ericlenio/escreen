@@ -1,4 +1,4 @@
-# vim:filetype=sh
+# vim:filetype=bash
 screen() {
   # make copy of original function args
   local args=("$@") opt rcfile

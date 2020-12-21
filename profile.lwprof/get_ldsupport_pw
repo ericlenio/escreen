@@ -1,4 +1,4 @@
-# vim:filetype=sh
+# vim:filetype=bash
 get_ldsupport_pw() {
   #local marker="$(_ES_marker LDSUPPORT_PW)"
   local app_context=$1

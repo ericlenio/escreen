@@ -1,4 +1,4 @@
-# vim:filetype=sh
+# vim:filetype=bash
 # _vime: generate wrapped vim executable at shell initialization time
 #
 # calls _esh_i to init the session, to make sure the communication port is

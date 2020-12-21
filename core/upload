@@ -1,4 +1,4 @@
-# vim:filetype=sh
+# vim:filetype=bash
 # Upload a file from the system that launched escreen to the current running
 # shell's working directory.
 upload() {

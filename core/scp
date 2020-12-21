@@ -1,4 +1,4 @@
-# vim:filetype=sh
+# vim:filetype=bash
 scp() {
   eval "$(_esh_e)"
   env scp "$@"
