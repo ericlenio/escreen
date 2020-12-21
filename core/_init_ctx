@@ -1,4 +1,5 @@
-# vim:filetype=sh
+# vim:filetype=bash
+#
 # bash init string when entering new bash session (e.g. either by ssh or sudo,
 # or a system call inside of vim)
 #
@@ -42,8 +43,14 @@ _init_ctx() {
     echo '"${ex[@]}" <>${SSH_TTY:-/dev/tty}'
   } | gzip -9c | openssl enc -a)
 
-  bootstr='echo $* | tr -d " " | openssl enc -d -a -A | gzip -dc | exec bash'
-  printf 'echo %s | openssl enc -d -A -a | exec sh -s -- ' $(echo "$bootstr" | openssl enc -a -A)
+  #bootstr='echo $* | tr -d " " | openssl enc -d -a -A | gzip -dc | exec bash'
+  #printf 'echo %s | openssl enc -d -A -a | exec sh -s -- ' $(echo "$bootstr" | openssl enc -a -A)
+
+  #bootstr='eval "$(echo $* | tr -d \" \" | openssl enc -d -a -A | gzip -dc)";exec bash'
+  #printf $'exec bash -c $\x27%s\x27 -- "$@" ' ${bootstr// /\\x20}
+
+  bootstr='a=$*;eval "$(echo ${a// /} | openssl enc -d -a -A | gzip -dc)";exec bash'
+  printf "exec bash -c '%s' -- " "$bootstr"
   echo $z_init_64
 }
 export -f _init_ctx
