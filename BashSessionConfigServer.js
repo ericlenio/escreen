@@ -49,14 +49,16 @@ class BashSessionConfigServer extends net.Server {
     var self=this;
     this.ts=ts;
     this.profileDir=profileDir;
-// fix me
-this.authToken=process.env.ESH_AT;
 
     this.readEscreenrc().then(function() {
       self.listen(E_PORT,'127.0.0.1',function() {
         console.log("BashSessionConfigServer is listening on port: "+E_PORT);
       });
     });
+
+    // look for value first from .escreenrc, else fall back to default
+    process.env.ESH_PW_FILE=global.ESH_PW_FILE ||
+      util.format("%s/private/%s/passwords.gpg",process.env.ESH_HOME,process.env.ESH_USER);
 
     this.on('connection',function(socket) {
       socket.once("readable",function() {
@@ -97,12 +99,18 @@ this.authToken=process.env.ESH_AT;
     if (hdr.length==0) {
       hdr=new String(chunk).trim().split(" ");
     }
-    if (hdr[0]!=this.authToken) {
-      console.error("unmatched auth token: %s (expected %s): %s",hdr[0],this.authToken,hdr[1]);
-      setTimeout( function() { socket.end("bad auth token"); }, 3000 );
-      return;
-    }
+    var authToken=hdr[0];
     var evtId=hdr[1];
+    if (evtId!='otp') {
+      if (!this.ts.isValidAuthToken(authToken)) {
+        console.error("invalid auth token: %s (%s)",authToken,hdr[1]);
+        //setTimeout( function() { socket.end("bad auth token"); }, 3000 );
+        return socket.end("bad auth token");
+      }
+      this.ts.deleteAuthToken(authToken);
+      authToken=this.ts.generateAuthToken();
+      socket.write(authToken+"\n");
+    }
     hdr.splice(0,2);
     console.log(evtId+":"+hdr);
     hdr.unshift(socket);
@@ -137,6 +145,12 @@ this.authToken=process.env.ESH_AT;
      */
     self.registerHandler("m",function(socket,pid,marker) {
       self.ts.resolveMarker(pid,marker).then(function(status) {
+        socket.end(status+"\n");
+      });
+    });
+
+    self.registerHandler("otp",function(socket,pid) {
+      self.ts.resolveMarker(pid,"otp").then(function(status) {
         socket.end(status+"\n");
       });
     });
@@ -184,14 +198,6 @@ this.authToken=process.env.ESH_AT;
 
     self.registerHandler("ooDir",function(socket) {
       socket.end(E_ONE_OFF_SCRIPTS_DIR);
-    });
-
-    self.registerHandler("ESH_PW_FILE",function(socket) {
-      socket.end(
-        // look for value first from .escreenrc, else fall back to default
-        global.ESH_PW_FILE ||
-        util.format("%s/private/%s/passwords.gpg",process.env.ESH_HOME,process.env.ESH_USER)
-      );
     });
 
     self.registerHandler("fpw",function(socket,key) {

@@ -21,7 +21,7 @@
 #exec > >(tee >(grep ^: >$cmds) | grep -v ^:)
 #trap "rm -f $stdout $cmds; echo $stdout was deleted" EXIT INT
 
--ra() (
+-ra() {
   local exec ssh_params opts="he:u:j:drp" opt RA_SERVER_BASE_URL=${RA_SERVER_BASE_URL:-https://remoteadmin.private:3333} RA_SSH_USER=${RA_SSH_USER:-lincdoc} OPTIND=1
   declare -a exec
   declare -a ssh_params
@@ -101,7 +101,7 @@
   #local pwkey="LincWare LDAP:$RA_USER"
   #local pw=$(pw "$pwkey")
   attempts=0
-  if ! pw=$(_esh_y _ra_get_ldap_pw | openssl enc -d -a -A); then
+  if ! pw=$(echo "$RA_USER_PASSWORD_64" | openssl enc -d -a -A); then
     echo "$FUNCNAME: could not acquire password" >&2
     return 1
   fi
@@ -208,14 +208,14 @@
           return 1
         }
       fi
-      export PGDATABASE=${database[$choice]} \
+      PGDATABASE=${database[$choice]} \
         PGUSER=${username[$choice]} \
         PGHOST=${host[$choice]} \
         PGSSLMODE=require \
         PGPORT=${port[$choice]} \
         PGOPTIONS="-c lw.raAgentId=$raAgentId/${context[$choice]}" \
-        PGPASSWORD="$(echo ${password[$choice]} | openssl enc -d -a -A)"
-      exec psql -v PROMPT1="$raHostname:%n@%/>" "$@"
+        PGPASSWORD="$(echo ${password[$choice]} | openssl enc -d -a -A)" \
+        psql -v PROMPT1="$raHostname:%n@%/>" "$@"
       ;;
   esac
-)
+}

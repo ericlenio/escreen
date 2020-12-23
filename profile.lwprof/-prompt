@@ -34,5 +34,13 @@
     env screen -X eval "unsetenv SCREENRC" "unsetenv DROP_SCREENRC"
     rm -f $SCREENRC
   fi
+
+  if [ -z "$RA_USER_PASSWORD_64" ]; then
+echo $FUNCNAME: need to load RA_USER_PASSWORD_64: ESH_AT:$ESH_AT >&2
+    {
+      read ESH_AT
+      RA_USER_PASSWORD_64=$(</dev/stdin)
+    } < <(_esh_y _ra_get_ldap_pw)
+  fi
 }
 export -f -- -prompt

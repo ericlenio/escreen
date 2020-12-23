@@ -5,7 +5,6 @@ suffix=-$escreen_branch
 [ $escreen_branch = master ] && suffix=""
 ESH_TMP=/tmp/esh$suffix
 ESH_USER=$USER
-ESH_AT=xxxxx1
 ESH_PORT=2021
 
 opts="p:"
@@ -30,7 +29,7 @@ else
 fi
 
 # only allow these environment variables to pass to the server process
-pass_vars=(HOME PATH SSH_AUTH_SOCK ESH_HOME ESH_TMP ESH_USER ESH_AT ESH_PORT ESH_PROFILE_DIR LANG)
+pass_vars=(HOME PATH SSH_AUTH_SOCK ESH_HOME ESH_TMP ESH_USER ESH_PORT ESH_PROFILE_DIR LANG)
 # OpenBSD (and possibly Linux) depend on $DISPLAY for clipboard logic, so pass
 # it too if it is set
 [ "$DISPLAY" ] && pass_vars+=(DISPLAY)

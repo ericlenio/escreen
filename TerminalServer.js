@@ -9,6 +9,9 @@ const BashSessionConfigServer=require("./BashSessionConfigServer");
 
 const ENCODING='utf8';
 const E_TERMINALS={};
+const E_AUTH_TOKENS={};
+const E_EXPIRE_AUTH_TOKENS_INTERVAL=300000;
+const E_AUTH_TOKENS_MAX_AGE=30000;
 const E_HOSTNAME=os.hostname();
 //const E_MDWIKI_URL="http://dynalon.github.io/mdwiki/mdwiki-latest.html"; <-- serves up a broken version of mdwiki, use 0.6.2
 // using mdwiki for reviewing edits to README.md; download mdwiki and extract
@@ -40,6 +43,7 @@ class TerminalServer extends http.Server {
     this.on('request',this.satisfyRoute);
     this.on('upgrade',this.onUpgrade);
     this.on('error',this.onError);
+    setInterval(this.expireAuthTokens.bind(this),E_EXPIRE_AUTH_TOKENS_INTERVAL);
   }
 
   satisfyRoute(req,res) {
@@ -59,6 +63,25 @@ class TerminalServer extends http.Server {
         res.writeHead(200,{'Content-Type':'text/plain'});
         res.end('OK');
     }
+  }
+
+  deleteAuthToken(authToken) {
+    delete E_AUTH_TOKENS[authToken];
+  }
+
+  expireAuthTokens() {
+    var now=Date.now();
+    var deleted=0;
+    for (const [authToken,authTokenObj] of Object.entries(E_AUTH_TOKENS)) {
+      if (now-authTokenObj.createTimestamp>E_AUTH_TOKENS_MAX_AGE) {
+        this.deleteAuthToken(authToken);
+        deleted++;
+      }
+    }
+    if (deleted>0) {
+      console.log("expireAuthTokens: expired "+deleted+" token(s)");
+    }
+    console.log("expireAuthTokens: "+Object.keys(E_AUTH_TOKENS).length+" active tokens now");
   }
 
   onUpgrade(req,socket,head) {
@@ -97,15 +120,12 @@ class TerminalServer extends http.Server {
     console.error("CAUGHT: "+e);
   }
 
-  generateAuthToken() {
-    return crypto.randomBytes(3).toString('hex');
-  }
-
   createTerminal(termType) {
     var self=this;
+    var authToken=this.generateAuthToken();
     var args=[
       "-c",
-      "source "+process.env.ESH_HOME+"/esh-init; export ESH_TERM_PID=$$; _esh_i $ESH_STY ESH_PORT; ESH_PW_FILE=$(_esh_b ESH_PW_FILE) exec bash -i",
+      "source "+process.env.ESH_HOME+"/esh-init; export ESH_TERM_PID=$$; ESH_AT="+authToken+"; _esh_i $ESH_STY ESH_PORT; ESH_AT=$ESH_AT exec bash -i",
     ];
 
     var term=pty.spawn("bash",args,{
@@ -210,6 +230,10 @@ class TerminalServer extends http.Server {
           var status=self.toggleLogging(term);
           resolve("logging is "+status.toUpperCase()+": "+E_HOSTNAME+":"+term.logFile);
           break;
+        case "otp":
+          var authToken=self.generateAuthToken();
+          resolve(authToken);
+          break;
         case "hello":
           resolve("HELLO");
           break;
@@ -247,6 +271,25 @@ class TerminalServer extends http.Server {
     return "E_OK";
   }
 
+  generateAuthToken() {
+    var authToken=crypto.randomBytes(6).toString('hex');
+    if (authToken in E_AUTH_TOKENS) {
+      // whoa
+      return this.generateAuthToken();
+    }
+    this.registerAuthToken(authToken);
+    console.log("generateAuthToken: "+Object.keys(E_AUTH_TOKENS).length+" active tokens");
+    return authToken;
+  }
+
+  registerAuthToken(authToken) {
+    E_AUTH_TOKENS[authToken]={createTimestamp:Date.now()};
+  }
+
+  isValidAuthToken(authToken) {
+    return authToken in E_AUTH_TOKENS;
+  }
+
   /**
    * this function acquires local user's LDAP password using the
    * <code>pw</code> shell script
@@ -254,15 +297,17 @@ class TerminalServer extends http.Server {
    * @returns {Promise} promise resolves with the base64 encoded password
    */
   _ra_get_ldap_pw() {
+    var self=this;
     return new Promise(function(resolve,reject) {
       var pwKey=global.MY_LDAP_PASSWORD_KEY;
       if (!pwKey) {
         var msg="_ra_get_ldap_pw: please set global.MY_LDAP_PASSWORD_KEY";
         reject(msg);
       }
+      var authToken=self.generateAuthToken();
       var args=[
         "-c",
-        "source "+process.env.ESH_HOME+"/esh-init; _esh_i $ESH_STY ESH_PORT; ESH_PW_FILE=$(_esh_b ESH_PW_FILE </dev/null); pw",
+        "source "+process.env.ESH_HOME+"/esh-init; ESH_AT="+authToken+"; _esh_i $ESH_STY ESH_PORT; pw",
       ];
       var c=child_process.spawn('bash',args,{stdio:['pipe','pipe',process.stderr]});
       var pw='';

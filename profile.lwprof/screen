@@ -40,7 +40,7 @@ screen() {
       esac
     done
   fi
-  # anticipitory optimization: pre-load vim, so it does not need to be loaded
+  # anticipatory optimization: pre-load vim, so it does not need to be loaded
   # in every screen window
   v --version >/dev/null
   local esc=^Aa
@@ -50,7 +50,7 @@ screen() {
     esc=^Ee
   else
     # not nested, register $ESH_STY
-    _esh_b registerSty $ESH_TERM_PID $ESH_STY
+    read ESH_AT < <(_esh_b "$ESH_AT" registerSty $ESH_TERM_PID $ESH_STY)
   fi
 
   rcfile=$(mktemp)
@@ -68,5 +68,5 @@ shelltitle "$ |:"
 caption always "%{= kw}%-w%{= BW}%n%t%{-}%+w %-= @%H %{= Y}%l%{-} %m/%d %c"
 EOF
   # strip off "screen." prefix from $TERM to avoid "$TERM too long" issue
-  env SCREENRC=$rcfile DROP_SCREENRC=1 TERM=${TERM#screen.} screen -S $ESH_STY -e$esc "${args[@]}"
+  env ESH_AT=$ESH_AT SCREENRC=$rcfile DROP_SCREENRC=1 TERM=${TERM#screen.} screen -S $ESH_STY -e$esc "${args[@]}"
 }

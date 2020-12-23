@@ -78,14 +78,27 @@ export -f _esh_e
 # older shells may not be able to do the /dev/tcp/host/port trick, this works
 # around that ... netcat will be needed though
 _esh_b() {
+  local ESH_AT="$1"
+  shift
   eval "$(_esh_e)"
+if [ -z "$ESH_AT" ]; then
+  echo missing: ESH_AT "${FUNCNAME[*]}" >&2
+  return 1
+fi
   {
-    echo $ESH_AT "$*"
-    #[ ! -t 0 ] && { [ "$(which perl)" ] && perl -pe 'BEGIN{$|=1}' || cat; }
-    [ ! -t 0 ] && cat
-  } | nc 127.0.0.1 $ESH_PORT | {
-    [ ${1:0:1} = z ] && gzip -dc || cat
-  }
+    read ESH_AT
+    echo $ESH_AT
+    if [ ${1:0:1} = z ]; then
+      gzip -dc
+    else
+      cat
+    fi
+  } < <(
+    {
+      echo $ESH_AT "$*"
+      [ ! -t 0 ] && cat
+    } | nc 127.0.0.1 $ESH_PORT
+  )
 }
 export -f _esh_b
 
@@ -98,7 +111,15 @@ export -f _esh_b
 # to eval it
 _esh_l() {
   local f=$1 c p o
-  export p=$([ "$2" ] && echo $2 || echo $(_esh_b fpw ${f/*.} </dev/null))
+  export p="$2"
+  if [ -z "$p" ]; then
+echo $FUNCNAME: ESH_AT=$ESH_AT, "$@" >&2
+    {
+      read ESH_AT
+      p=$(</dev/stdin)
+    } < <(_esh_b "$ESH_AT" fpw ${f/*.} </dev/null)
+  fi
+echo $FUNCNAME: loading $f >&2
   o="openssl enc -aes256 -pass env:p"
   # https://cryptosense.com/weak-key-derivation-in-openssl/
   # try to use the cached file first ...
@@ -113,7 +134,11 @@ _esh_l() {
     [[ "$c" =~ ^0000000000000000 ]] || {
     # cached file does not exist or is expired, or failed integrity check so
     # re-cache it
-    c=$(_esh_b zup ${f/*.} </dev/null)
+    #c=$(_esh_b zup ${f/*.} </dev/null)
+    {
+      read ESH_AT
+      c=$(</dev/stdin)
+    } < <(_esh_b "$ESH_AT" zup ${f/*.} </dev/null)
     echo up: ${f/*.} ${#c} bytes >&2
     echo "$c" | $o >$f
     chmod 666 $f
@@ -149,20 +174,26 @@ _esh_i() {
   }
   #[ $# -gt 0 ] && _esh_e "$@"
   # p0, p1, p2 are set by fpw call
-  local $(_esh_b fpw cbf </dev/null)
+  #local $(_esh_b fpw cbf </dev/null)
+  local p0 p1 p2
+  {
+    read ESH_AT
+    eval $(</dev/stdin)
+  } < <(_esh_b "$ESH_AT" fpw cbf </dev/null)
   _esh_l $t/$u.core $p0
   for f in $(_esh_l $t/$u.fcnlist $p1 1); do
     _esh_gen_stub $t/$u.f.$f
   done
   export ESH_TMP ESH_STY SHELL=$(which bash) RA_READ_PTY_FUNC=_esh_y ESH_PORT
-  export -f _esh_e _esh_i _esh_b _esh_l _esh_y
   # generate vim executable so it is ready for user, e.g. if escreen starts and
   # then immediately:
   #   s nobody
   #   fc
   _vime
   _esh_l $t/-prompt $p2
+  export -f _esh_e _esh_i _esh_b _esh_l _esh_y
   export PROMPT_COMMAND='-prompt'
+echo $FUNCNAME exit: $ESH_AT >&2
 }
 
 export -f _esh_i
@@ -216,7 +247,15 @@ _esh_y() {
   # this ANSI pattern matched at the server, and conceals text
   ansi 1 '8m'
   #printf ':%s' "$1" >/dev/tty
-  status=$(_esh_b m $ESH_TERM_PID "$key" </dev/null)
+  #status=$(_esh_b m $ESH_TERM_PID "$key" </dev/null)
+  if [ $key = otp ]; then
+    status=$(_esh_b x otp $ESH_TERM_PID </dev/null)
+  else
+    {
+      read ESH_AT
+      status=$(</dev/stdin)
+    } < <(_esh_b "$ESH_AT" m $ESH_TERM_PID "$key" </dev/null)
+  fi
   # erase line
   ansi 0 '2K'
   # restore cursor position
@@ -238,6 +277,7 @@ _esh_y() {
   # echo back the value we just read to stdout
   [ -t 1 ] && stty echo
   if [[ "$v" =~ ^[[:print:]]+$ ]]; then
+    [ $key != otp ] && echo $ESH_AT
     echo "$v"
   fi
   if [ "$e" ]; then

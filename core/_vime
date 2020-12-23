@@ -10,7 +10,7 @@ _vime() {
     local p=$(cat <<'EOF'
 %s!/usr/bin/env bash
 %s
-_esh_i </dev/null
+ESH_AT=$(_esh_y otp) _esh_i </dev/null
 t=$(mktemp)
 _vimrc > $t
 echo "call delete('$t')" >> $t
