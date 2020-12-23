@@ -54,7 +54,13 @@ _init_ctx() {
   # 1. works when ssh-ing
   # 2. works when ssh-ing to an account with a default shell this is NOT bash
   # 3. "s" (sudo) shell func works
-  bootstr='a=$*;eval "$(echo ${a// /} | openssl enc -d -a -A | gzip -dc)";exec bash'
+  # 4. "-ra" remoteadmin tool ssh to host
+  #   a. _ra_ssh ltc.admitplus.work
+  #   b. _ra_ssh -c ltc.admitplus.work
+  #   c. _ra_ssh ltc.admitplus.work uname -a
+  #   d. _ra_ssh -c ltc.admitplus.work uname -a
+  #   e. ra_promote
+  bootstr='a=$*;eval "$(echo ${a// /} | openssl enc -d -a -A | gzip -dc)"'
   printf "exec bash -c '%s' -- " "$bootstr"
   echo $z_init_64
 }
