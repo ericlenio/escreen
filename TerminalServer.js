@@ -9,7 +9,8 @@ const BashSessionConfigServer=require("./BashSessionConfigServer");
 
 const ENCODING='utf8';
 const E_TERMINALS={};
-const E_AUTH_TOKENS={};
+const E_ONE_TIME_AUTH_TOKENS={};
+const E_TERMINAL_AUTH_TOKENS={};
 const E_EXPIRE_AUTH_TOKENS_INTERVAL=300000;
 const E_AUTH_TOKENS_MAX_AGE=30000;
 const E_HOSTNAME=os.hostname();
@@ -66,13 +67,13 @@ class TerminalServer extends http.Server {
   }
 
   deleteAuthToken(authToken) {
-    delete E_AUTH_TOKENS[authToken];
+    delete E_ONE_TIME_AUTH_TOKENS[authToken];
   }
 
   expireAuthTokens() {
     var now=Date.now();
     var deleted=0;
-    for (const [authToken,authTokenObj] of Object.entries(E_AUTH_TOKENS)) {
+    for (const [authToken,authTokenObj] of Object.entries(E_ONE_TIME_AUTH_TOKENS)) {
       if (now-authTokenObj.createTimestamp>E_AUTH_TOKENS_MAX_AGE) {
         this.deleteAuthToken(authToken);
         deleted++;
@@ -81,7 +82,7 @@ class TerminalServer extends http.Server {
     if (deleted>0) {
       console.log("expireAuthTokens: expired "+deleted+" token(s)");
     }
-    console.log("expireAuthTokens: "+Object.keys(E_AUTH_TOKENS).length+" active tokens now");
+    console.log("expireAuthTokens: "+Object.keys(E_ONE_TIME_AUTH_TOKENS).length+" active tokens now");
   }
 
   onUpgrade(req,socket,head) {
@@ -122,10 +123,13 @@ class TerminalServer extends http.Server {
 
   createTerminal(termType) {
     var self=this;
-    var authToken=this.generateAuthToken();
+    var authToken=this.generateOneTimeAuthToken();
+    var termAuthToken=this.generateTerminalAuthToken();
     var args=[
       "-c",
-      "source "+process.env.ESH_HOME+"/esh-init; export ESH_TERM_PID=$$; ESH_AT="+authToken+"; _esh_i $ESH_STY ESH_PORT; ESH_AT=$ESH_AT exec bash -i",
+      "source "+process.env.ESH_HOME+"/esh-init",
+      "--",
+      termAuthToken, // not ideal putting this on the command line
     ];
 
     var term=pty.spawn("bash",args,{
@@ -140,6 +144,7 @@ class TerminalServer extends http.Server {
     });
     term.setEncoding(ENCODING);
     console.log("created pty: "+term._pty+":"+term.pid+":"+termType)
+    E_TERMINAL_AUTH_TOKENS[termAuthToken].pid=term.pid;
 
     term.ttyBuffer='';
     term.isLogging=false;
@@ -147,13 +152,13 @@ class TerminalServer extends http.Server {
     term.logFile="/tmp/term.log";
     term.on('error',function(code) {
       console.error("createTerminal caught:"+code);
-      delete E_TERMINALS[term.pid];
     });
     E_TERMINALS[term.pid]=term;
     //term.on("data",this.resolveMarkers.bind(this,term));
     term.on('exit',function() {
       console.log("terminal exited:"+term.pid)
       delete E_TERMINALS[term.pid];
+      delete E_TERMINAL_AUTH_TOKENS[termAuthToken];
     });
     return term;
   }
@@ -230,9 +235,14 @@ class TerminalServer extends http.Server {
           var status=self.toggleLogging(term);
           resolve("logging is "+status.toUpperCase()+": "+E_HOSTNAME+":"+term.logFile);
           break;
-        case "otp":
-          var authToken=self.generateAuthToken();
-          resolve(authToken);
+        case "tat":
+          // get terminal auth token
+          for (const [authToken,authTokenObj] of Object.entries(E_TERMINAL_AUTH_TOKENS)) {
+            if (authTokenObj.pid==pid) {
+              return resolve(authToken);
+            }
+          }
+          resolve("no_term_auth_token");
           break;
         case "hello":
           resolve("HELLO");
@@ -271,23 +281,50 @@ class TerminalServer extends http.Server {
     return "E_OK";
   }
 
-  generateAuthToken() {
-    var authToken=crypto.randomBytes(6).toString('hex');
-    if (authToken in E_AUTH_TOKENS) {
-      // whoa
-      return this.generateAuthToken();
-    }
-    this.registerAuthToken(authToken);
-    console.log("generateAuthToken: "+Object.keys(E_AUTH_TOKENS).length+" active tokens");
+  generateOneTimeAuthToken() {
+    var otp=this.generateAuthToken(true);
+    console.log("generateOneTimeAuthToken: "+Object.keys(E_ONE_TIME_AUTH_TOKENS).length+" active tokens");
+    return otp;
+  }
+
+  generateTerminalAuthToken() {
+    var authToken=this.generateAuthToken(false);
+    console.log("generateTerminalAuthToken: "+Object.keys(E_TERMINAL_AUTH_TOKENS).length+" active tokens");
     return authToken;
   }
 
-  registerAuthToken(authToken) {
-    E_AUTH_TOKENS[authToken]={createTimestamp:Date.now()};
+  /**
+   * generate an auth token - there are 2 types: one time, and terminal; one
+   * time tokens always begin with the letter "o", and terminal tokens begin
+   * with the letter "t"; terminal tokens are reusable for the lifetime of a
+   * terminal session
+   */
+  generateAuthToken(isOneTime) {
+    var authToken=(isOneTime ? 'o' : 't')+crypto.randomBytes(6).toString('hex');
+    if (authToken in E_ONE_TIME_AUTH_TOKENS || authToken in E_TERMINAL_AUTH_TOKENS) {
+      return this.generateAuthToken(isOneTime);
+    }
+    this.registerAuthToken(authToken,isOneTime);
+    return authToken;
+  }
+
+  registerAuthToken(authToken,isOneTime) {
+    if (isOneTime) {
+      E_ONE_TIME_AUTH_TOKENS[authToken]={createTimestamp:Date.now()};
+    } else {
+      E_TERMINAL_AUTH_TOKENS[authToken]={
+        pid:undefined, // set later
+        createTimestamp:Date.now(),
+      };
+    }
   }
 
   isValidAuthToken(authToken) {
-    return authToken in E_AUTH_TOKENS;
+    return authToken in E_ONE_TIME_AUTH_TOKENS || authToken in E_TERMINAL_AUTH_TOKENS;
+  }
+
+  isValidOneTimeAuthToken(authToken) {
+    return authToken in E_ONE_TIME_AUTH_TOKENS;
   }
 
   /**
@@ -304,7 +341,7 @@ class TerminalServer extends http.Server {
         var msg="_ra_get_ldap_pw: please set global.MY_LDAP_PASSWORD_KEY";
         reject(msg);
       }
-      var authToken=self.generateAuthToken();
+      var authToken=self.generateOneTimeAuthToken();
       var args=[
         "-c",
         "source "+process.env.ESH_HOME+"/esh-init; ESH_AT="+authToken+"; _esh_i $ESH_STY ESH_PORT; pw",

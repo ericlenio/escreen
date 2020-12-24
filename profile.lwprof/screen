@@ -50,7 +50,7 @@ screen() {
     esc=^Ee
   else
     # not nested, register $ESH_STY
-    read ESH_AT < <(_esh_b "$ESH_AT" registerSty $ESH_TERM_PID $ESH_STY)
+    read ESH_AT < <(_esh_b registerSty $ESH_TERM_PID $ESH_STY)
   fi
 
   rcfile=$(mktemp)
