@@ -7,6 +7,16 @@
 # ESH_BASH_INIT
 #
 _init_ctx() {
+  local OPTIND opts='d' opt teefile=/dev/null
+  while getopts "$opts" opt; do
+    case $opt in
+      d) # debug
+        teefile=/tmp/$FUNCNAME.log
+        echo "$FUNCNAME: debug on, logfile in: $teefile" >&2
+        shift
+        ;;
+    esac
+  done
   # Args:
   #   1st is ESH_STY;
   #   p is the communication port (to BashSessionConfigServer);
@@ -16,11 +26,23 @@ _init_ctx() {
   #   session
   local ESH_STY=$1 p=$2 ex=("${@:3}") z_init_64 f fs=$(compgen -A function ESH_BASH_INIT | sort) bootstr i
   #declare -p $(compgen -v ESH_)
-  [ ${#ex[@]} = 0 ] && ex=(exec bash --norc --noprofile -i)
   z_init_64=$({
-    declare -p ESH_AT ESH_TMP ESH_STY ESH_USER ESH_TERM_PID ex
+    if [ ${#ex[@]} = 0 ]; then
+      # assume to run a bash shell
+      #
+      # set up a temp file to pass ESH_TERM_AUTH_TOKEN (we don't want to just
+      # export it, for better security)
+      printf 't=$(mktemp)\n'
+      printf '{\n'
+      printf '  echo ESH_TERM_AUTH_TOKEN=%s\n' $ESH_TERM_AUTH_TOKEN
+      printf '  echo echo "sourced $t"\n'
+      printf '  echo rm $t\n'
+      printf '} >$t\n'
+      ex=(exec bash --init-file '$t' --noprofile -i)
+    fi
+    declare -p ESH_TMP ESH_STY ESH_USER ESH_TERM_PID ex
     declare -f _esh_e _esh_b _esh_l _esh_i _esh_y
-    printf 'ESH_PORT=%s _esh_i %s ESH_PORT </dev/null\n' $p $ESH_STY
+    printf 'ESH_TERM_AUTH_TOKEN=%s ESH_PORT=%s _esh_i %s ESH_PORT </dev/null\n' $ESH_TERM_AUTH_TOKEN $p $ESH_STY
     # layer in all current shell functions with function name prefix
     # "ESH_BASH_INIT": execute them in order (by function name) in our new
     # shell
@@ -40,6 +62,8 @@ _init_ctx() {
     #
     # user will interact with $SSH_TTY if detected (else gnu screen will not
     # work inside ssh sessions to openbsd), else just use /dev/tty
+echo 'echo ans:"${ex[@]}" >&2'
+echo 'echo t:$t >&2'
     echo '"${ex[@]}" <>${SSH_TTY:-/dev/tty}'
   } | gzip -9c | openssl enc -a)
 
@@ -60,7 +84,7 @@ _init_ctx() {
   #   c. _ra_ssh ltc.admitplus.work uname -a
   #   d. _ra_ssh -c ltc.admitplus.work uname -a
   #   e. ra_promote
-  bootstr='a=$*;eval "$(echo ${a// /} | openssl enc -d -a -A | gzip -dc)"'
+  bootstr='a=$*;eval "$(echo ${a// /} | openssl enc -d -a -A | gzip -dc | tee '$teefile')"'
   printf "exec bash -c '%s' -- " "$bootstr"
   echo $z_init_64
 }

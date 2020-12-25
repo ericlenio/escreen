@@ -135,6 +135,6 @@ ssh() {
     fi
     ssh_opts+=(-t -oServerAliveInterval=30 -oExitOnForwardFailure=yes $ssh_user_host)
   fi
-  $([ ${SSH_EXEC:-0} = 1 ] && echo exec) env ssh "${ssh_opts[@]}" $(_init_ctx $sid $rem_port "$@")
+  $([ ${SSH_EXEC:-0} = 1 ] && echo exec) env ssh "${ssh_opts[@]}" $(ESH_TERM_AUTH_TOKEN=$ESH_TERM_AUTH_TOKEN _init_ctx $sid $rem_port "$@")
 }
 export -f ssh

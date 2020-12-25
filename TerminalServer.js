@@ -123,7 +123,6 @@ class TerminalServer extends http.Server {
 
   createTerminal(termType) {
     var self=this;
-    var authToken=this.generateOneTimeAuthToken();
     var termAuthToken=this.generateTerminalAuthToken();
     var args=[
       "-c",

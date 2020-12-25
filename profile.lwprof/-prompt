@@ -38,8 +38,8 @@
   if [ -z "$ESH_TERM_AUTH_TOKEN" ]; then
     ESH_TERM_AUTH_TOKEN=$(_esh_y tat)
   fi
+
   if [ -z "$RA_USER_PASSWORD_64" ]; then
-echo $FUNCNAME: need to load RA_USER_PASSWORD_64: ESH_AT:$ESH_AT >&2
     {
       read ESH_AT
       RA_USER_PASSWORD_64=$(</dev/stdin)
