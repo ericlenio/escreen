@@ -62,9 +62,9 @@ _init_ctx() {
     #
     # user will interact with $SSH_TTY if detected (else gnu screen will not
     # work inside ssh sessions to openbsd), else just use /dev/tty
-echo 'echo ans:"${ex[@]}" >&2'
-echo 'echo t:$t >&2'
-    echo '"${ex[@]}" <>${SSH_TTY:-/dev/tty}'
+echo 'echo '$FUNCNAME':"${ex[@]}" >&2'
+    #echo '"${ex[@]}" <>${SSH_TTY:-/dev/tty}'
+    echo '"${ex[@]}"'
   } | gzip -9c | openssl enc -a)
 
   #bootstr='echo $* | tr -d " " | openssl enc -d -a -A | gzip -dc | exec bash'

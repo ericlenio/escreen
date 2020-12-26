@@ -28,7 +28,7 @@
     unalias -a
   fi
 
-  if [ "$DROP_SCREENRC" ]; then
+  if [ "$DROP_SCREENRC" = 1 ]; then
     # do some init stuff for a new GNU screen session
     unset SCREENRC DROP_SCREENRC
     env screen -X eval "unsetenv SCREENRC" "unsetenv DROP_SCREENRC"
