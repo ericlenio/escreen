@@ -1,4 +1,10 @@
 # vim:filetype=bash
 vim() {
-  $ESH_EDITOR "$@"
+  local tmpfile=$(mktemp)
+  {
+    declare -p ESH_TERM_AUTH_TOKEN
+    echo "unset BASH_ENV"
+    echo "rm $tmpfile"
+  } > $tmpfile
+  BASH_ENV=$tmpfile $ESH_EDITOR "$@"
 }

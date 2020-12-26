@@ -9,10 +9,15 @@ _vime() {
   [ ! -f $e -o -w $e ] && {
     local p=$(cat <<'EOF'
 %s!/usr/bin/env bash
+[ "$1" = "--version" ] && exec vim "$@"
 %s
-ESH_TERM_AUTH_TOKEN=$(_esh_y tat) _esh_i </dev/null
+if [ -z "$ESH_TERM_AUTH_TOKEN" ]; then
+  ESH_TERM_AUTH_TOKEN=$(_esh_y tat)
+fi
+_esh_i </dev/null
 t=$(mktemp)
 _vimrc > $t
+echo "let g:ESH_TERM_AUTH_TOKEN='$ESH_TERM_AUTH_TOKEN'" >> $t
 echo "call delete('$t')" >> $t
 exec vim -S $t "$@"
 EOF
