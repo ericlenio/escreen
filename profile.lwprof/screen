@@ -68,5 +68,5 @@ shelltitle "$ |:"
 caption always "%{= kw}%-w%{= BW}%n%t%{-}%+w %-= @%H %{= Y}%l%{-} %m/%d %c"
 EOF
   # strip off "screen." prefix from $TERM to avoid "$TERM too long" issue
-  env ESH_AT=$ESH_AT SCREENRC=$rcfile DROP_SCREENRC=1 TERM=${TERM#screen.} screen -S $ESH_STY -e$esc "${args[@]}"
+  env SCREENRC=$rcfile DROP_SCREENRC=1 TERM=${TERM#screen.} screen -S $ESH_STY -e$esc "${args[@]}"
 }
