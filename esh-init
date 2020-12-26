@@ -85,8 +85,8 @@ _esh_b() {
     return 1
   fi
   {
-    read one_time_auth_token
-    echo $one_time_auth_token
+    read ESH_AT
+    echo $ESH_AT
     if [ ${1:0:1} = z ]; then
       gzip -dc
     else
@@ -250,12 +250,12 @@ _esh_y() {
   #printf ':%s' "$1" >/dev/tty
   #status=$(_esh_b m $ESH_TERM_PID "$key" </dev/null)
   if [ $key = tat ]; then
-    status=$(_esh_b tat $ESH_TERM_PID </dev/null)
+    status=$(_esh_b tat $ESH_TERM_PID "$STY" "$WINDOW"</dev/null)
   else
     {
       read ESH_AT
       status=$(</dev/stdin)
-    } < <(_esh_b m $ESH_TERM_PID "$key" </dev/null)
+    } < <(_esh_b m $ESH_TERM_PID "$key" "$STY" "$WINDOW"</dev/null)
   fi
   # erase line
   ansi 0 '2K'

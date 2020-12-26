@@ -227,7 +227,6 @@ class TerminalServer extends http.Server {
       return Promise.resolve("E_BAD_PID");
     }
     var term=E_TERMINALS[pid];
-    var delim=';';
     return new Promise(function(resolve,reject) {
       switch(marker) {
         case "log":
@@ -258,15 +257,46 @@ class TerminalServer extends http.Server {
         default:
           resolve('?');
       }
-    }).then(function(value) {
+    });
+  }
+
+  injectToTerminal(pid,marker,sty,windowId) {
+    if (!(pid in E_TERMINALS)) {
+      return Promise.resolve("E_BAD_PID");
+    }
+    var term=E_TERMINALS[pid];
+    var delim=';';
+    var injectValue;
+    return this.resolveMarker(pid,marker).then(function(value) {
+      injectValue=value;
+      return "E_OK";
+    }).catch(function(e) {
+      injectValue=e.toString();
+      return "E_MARKER_ERR";
+    }).finally(function() {
       // write out the value in the format "N:value" (and then base64 encoded),
       // where N is the length of value; that way the client do a small error
       // check to confirm the right value is received
-      term.write(Buffer.from(value.length+":"+value).toString("base64")+delim);
-      return "E_OK";
-    }).catch(function(e) {
-      term.write(Buffer.from(e.toString().length+":"+e.toString()).toString("base64")+delim);
-      return "E_MARKER_ERR";
+      var stuffValue=Buffer.from(injectValue.length+":"+injectValue).toString("base64")+delim;
+      if (sty) {
+        // GNU screen is running, use the "stuff" command to write to the terminal
+        var args=[
+          "-X",
+          "-S",
+          sty,
+          "-p",
+          windowId,
+          "stuff",
+          stuffValue,
+        ];
+        var c=child_process.spawn('screen',args,{stdio:['ignore','pipe',process.stderr]});
+        c.on("error",function(e) {
+          console.error("injectToTerminal: "+e);
+        });
+      } else {
+        // no GNU screen running, just write directly to the terminal
+        term.write(stuffValue);
+      }
     });
   }
 

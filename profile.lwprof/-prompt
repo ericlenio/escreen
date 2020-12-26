@@ -30,8 +30,8 @@
 
   if [ "$DROP_SCREENRC" = 1 ]; then
     # do some init stuff for a new GNU screen session
-    unset SCREENRC DROP_SCREENRC
-    env screen -X eval "unsetenv SCREENRC" "unsetenv DROP_SCREENRC"
+    unset SCREENRC DROP_SCREENRC ESH_AT
+    env screen -X eval "unsetenv SCREENRC" "unsetenv DROP_SCREENRC" "unsetenv ESH_AT"
     rm -f $SCREENRC
   fi
 

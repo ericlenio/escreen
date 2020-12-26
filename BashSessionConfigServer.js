@@ -103,7 +103,7 @@ class BashSessionConfigServer extends net.Server {
     var evtId=hdr[1];
     if (evtId!='tat') {
       if (!this.ts.isValidAuthToken(authToken)) {
-        console.error("invalid auth token: %s (%s)",authToken,hdr[1]);
+        console.error("invalid auth token: %s (evtId: %s)",authToken,evtId);
         //setTimeout( function() { socket.end("bad auth token"); }, 3000 );
         return socket.end("bad auth token");
       }
@@ -143,16 +143,17 @@ class BashSessionConfigServer extends net.Server {
 
     /**
      * resolve a token/marker, which might be sensitive data (e.g. a password);
-     * resolveMarker will type the data right into the pty and _esh_y reads it
+     * injectToTerminal will type the data right into the pty and _esh_y reads
+     * it
      */
-    self.registerHandler("m",function(socket,pid,marker) {
-      self.ts.resolveMarker(pid,marker).then(function(status) {
+    self.registerHandler("m",function(socket,pid,marker,sty,windowId) {
+      self.ts.injectToTerminal(pid,marker,sty,windowId).then(function(status) {
         socket.end(status+"\n");
       });
     });
 
-    self.registerHandler("tat",function(socket,pid) {
-      self.ts.resolveMarker(pid,"tat").then(function(status) {
+    self.registerHandler("tat",function(socket,pid,sty,windowId) {
+      self.ts.injectToTerminal(pid,"tat",sty,windowId).then(function(status) {
         socket.end(status+"\n");
       });
     });
