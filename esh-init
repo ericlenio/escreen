@@ -78,10 +78,26 @@ export -f _esh_e
 # older shells may not be able to do the /dev/tcp/host/port trick, this works
 # around that ... netcat will be needed though
 _esh_b() {
-  local auth_token=${ESH_TERM_AUTH_TOKEN:-${ESH_AT:-no_token}}
+  if [ "$1" != tat -a -z "$ESH_TERM_AUTH_TOKEN" ]; then
+    if [ "$STY" ]; then
+      read ESH_TERM_AUTH_TOKEN < <(
+        # paste the contents of register "p" into the paste buffer, then write
+        # the paste buffer to a temp file, then read the temp file for
+        # ESH_TERM_AUTH_TOKEN
+        t=$(mktemp)
+        env screen -X -p $WINDOW eval "paste p ." "writebuf $t"
+        cat $t
+        rm $t
+      )
+      echo "loaded ESH_TERM_AUTH_TOKEN" >&2
+    else
+      #ESH_TERM_AUTH_TOKEN=$(_esh_y tat)
+      echo HELP ME >&2
+    fi
+  fi
   eval "$(_esh_e)"
-  if [ -z "$auth_token" ]; then
-    echo "missing auth_token: stack trace: ${FUNCNAME[*]}" >&2
+  if [ -z "$ESH_TERM_AUTH_TOKEN" ]; then
+    echo "missing ESH_TERM_AUTH_TOKEN: stack trace: ${FUNCNAME[*]}" >&2
     return 1
   fi
   {
@@ -94,7 +110,7 @@ _esh_b() {
     fi
   } < <(
     {
-      echo $auth_token "$*"
+      echo $ESH_TERM_AUTH_TOKEN "$*"
       [ ! -t 0 ] && cat
     } | nc 127.0.0.1 $ESH_PORT
   )
