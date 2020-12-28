@@ -46,11 +46,8 @@
     fi
   fi
 
-  #if [ -z "$RA_USER_PASSWORD_64" ]; then
-    #{
-      #read ESH_AT
-      #RA_USER_PASSWORD_64=$(</dev/stdin)
-    #} < <(_esh_y _ra_get_ldap_pw)
-  #fi
+  if [ -z "$RA_USER_PASSWORD_64" ]; then
+    read RA_USER_PASSWORD_64 < <(_esh_y _ra_get_ldap_pw)
+  fi
 }
 export -f -- -prompt
