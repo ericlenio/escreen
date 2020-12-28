@@ -78,31 +78,40 @@ export -f _esh_e
 # older shells may not be able to do the /dev/tcp/host/port trick, this works
 # around that ... netcat will be needed though
 _esh_b() {
-  if [ "$1" != tat -a -z "$ESH_TERM_AUTH_TOKEN" ]; then
+  local status
+  if [ -z "$ESH_TERM_AUTH_TOKEN" ]; then
     if [ "$STY" ]; then
       read ESH_TERM_AUTH_TOKEN < <(
         # paste the contents of register "p" into the paste buffer, then write
         # the paste buffer to a temp file, then read the temp file for
         # ESH_TERM_AUTH_TOKEN
         t=$(mktemp)
-        env screen -X -p $WINDOW eval "paste p ." "writebuf $t"
+        env screen -X eval "paste p ." "writebuf $t"
         cat $t
         rm $t
       )
-      echo "loaded ESH_TERM_AUTH_TOKEN" >&2
+      echo "$FUNCNAME: loaded ESH_TERM_AUTH_TOKEN" >&2
     else
       #ESH_TERM_AUTH_TOKEN=$(_esh_y tat)
-      echo HELP ME >&2
+      ESH_TERM_AUTH_TOKEN=unknown
+      echo "please run GNU screen: stack trace: ${FUNCNAME[*]}" >&2
+      return 1
     fi
   fi
-  eval "$(_esh_e)"
   if [ -z "$ESH_TERM_AUTH_TOKEN" ]; then
     echo "missing ESH_TERM_AUTH_TOKEN: stack trace: ${FUNCNAME[*]}" >&2
     return 1
   fi
+  eval "$(_esh_e)"
   {
-    read ESH_AT
-    echo $ESH_AT
+    read status
+    if [ "$status" = E_BAD_AUTH_TOKEN ]; then
+      echo "$FUNCNAME: bad auth token detected, retrying: $*" >&2
+      # retry, unset ESH_TERM_AUTH_TOKEN to force it to refresh
+      unset ESH_TERM_AUTH_TOKEN
+      $FUNCNAME "$@"
+      return $?
+    fi
     if [ ${1:0:1} = z ]; then
       gzip -dc
     else
@@ -115,7 +124,6 @@ _esh_b() {
     } | nc 127.0.0.1 $ESH_PORT
   )
 }
-export -f _esh_b
 
 
 # load a bash function into the session: first try using cached version,
@@ -130,7 +138,6 @@ _esh_l() {
   if [ -z "$p" ]; then
 #echo $FUNCNAME: ESH_AT=$ESH_AT, "$@" >&2
     {
-      read ESH_AT
       p=$(</dev/stdin)
     } < <(_esh_b fpw ${f/*.} </dev/null)
   fi
@@ -138,31 +145,24 @@ _esh_l() {
   o="openssl enc -aes256 -pass env:p"
   # https://cryptosense.com/weak-key-derivation-in-openssl/
   # try to use the cached file first ...
-  [ -f $f ] && 
-    # using grep here to avoid this message when the file is out of date and
-    # needs re-uploading: "main: line 63: warning: command substitution:
-    # ignored null byte in input"
-    #! $o -d -in $f 2>/dev/null | grep -q -E '[^[:print:]]' &&
-    c=$($o -d -in $f 2>/dev/null) &&
+  if [ ! -f $f ] || ! c=$($o -d -in $f 2>/dev/null) || 
     # check for 16 byte header block injected by server: integrity check for
     # #16
-    [[ "$c" =~ ^0000000000000000 ]] || {
+    ! [[ "$c" =~ ^0000000000000000 ]]; then
     # cached file does not exist or is expired, or failed integrity check so
     # re-cache it
     #c=$(_esh_b zup ${f/*.} </dev/null)
     {
-      read ESH_AT
       c=$(</dev/stdin)
     } < <(_esh_b zup ${f/*.} </dev/null)
     echo up: ${f/*.} ${#c} bytes >&2
     echo "$c" | $o >$f
     chmod 666 $f
-  }
+  fi
   # strip out 16 byte header block for integrity check
   c=${c:16}
   [ -z "$3" ] && eval "$c" || echo "$c"
 }
-export -f _esh_l
 
 # ESH_AT is a simple security access token
 #export ESH_AT=$(openssl rand 3 -hex)
@@ -192,7 +192,6 @@ echo "INSIDE $FUNCNAME:$ESH_TERM_AUTH_TOKEN-->$@" >&2
   #local $(_esh_b fpw cbf </dev/null)
   local p0 p1 p2 ft=$(mktemp)
   {
-    read ESH_AT
     eval $(</dev/stdin)
   } < <(_esh_b fpw cbf </dev/null)
   _esh_l $t/$u.core $p0
@@ -213,7 +212,6 @@ echo "INSIDE $FUNCNAME:$ESH_TERM_AUTH_TOKEN-->$@" >&2
   export -n ESH_AT ESH_TERM_AUTH_TOKEN
 }
 
-export -f _esh_i
 
 _esh_y() {
   local key=$1 attempt=${2:-1} max_attempts=10 e v status
@@ -269,7 +267,6 @@ _esh_y() {
     status=$(_esh_b tat $ESH_TERM_PID "$STY" "$WINDOW"</dev/null)
   else
     {
-      read ESH_AT
       status=$(</dev/stdin)
     } < <(_esh_b m $ESH_TERM_PID "$key" "$STY" "$WINDOW"</dev/null)
   fi
@@ -294,7 +291,6 @@ _esh_y() {
   # echo back the value we just read to stdout
   [ -t 1 ] && stty echo
   if [[ "$v" =~ ^[[:print:]]+$ ]]; then
-    [ $key != tat ] && echo $ESH_AT
     echo "$v"
   fi
   if [ "$e" ]; then
@@ -306,7 +302,6 @@ _esh_y() {
     return 1
   fi
 }
-export -f _esh_y
 
 ESH_CORE=$ESH_HOME/core
 #[ "$1" ] && ESH_PROFILE="$1" || ESH_PROFILE=$ESH_HOME/profile.lwprof

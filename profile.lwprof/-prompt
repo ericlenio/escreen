@@ -28,13 +28,6 @@
     unalias -a
   fi
 
-  if [ "$DROP_SCREENRC" = 1 ]; then
-    # do some init stuff for a new GNU screen session
-    unset SCREENRC DROP_SCREENRC
-    rm -f $SCREENRC
-    env screen -X eval "unsetenv SCREENRC" "unsetenv DROP_SCREENRC"
-  fi
-
   if [ -z "$ESH_TERM_AUTH_TOKEN" ]; then
     if [ "$STY" ]; then
       read ESH_TERM_AUTH_TOKEN < <(
@@ -46,10 +39,11 @@
         cat $t
         rm $t
       )
+      echo "$FUNCNAME: loaded ESH_TERM_AUTH_TOKEN from register p:$ESH_TERM_AUTH_TOKEN" >&2
     else
       ESH_TERM_AUTH_TOKEN=$(_esh_y tat)
+      echo "$FUNCNAME: loaded ESH_TERM_AUTH_TOKEN from tat:$ESH_TERM_AUTH_TOKEN" >&2
     fi
-    echo "LOADED ESH_TERM_AUTH_TOKEN" >&2
   fi
 
   #if [ -z "$RA_USER_PASSWORD_64" ]; then

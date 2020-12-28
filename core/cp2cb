@@ -13,5 +13,6 @@ cp2cb() {
   # get the length of the text in bytes, not just # of characters
   LANG=C LC_ALL=C l=${#t}
   # this printf is to trim the final \n
-  printf %s "$t" | gzip -9 -c | _esh_b setCb $l
+  #printf %s "$t" | gzip -9 -c | _esh_b setCb $l
+  _esh_b setCb $l < <(printf %s "$t" | gzip -9 -c)
 }

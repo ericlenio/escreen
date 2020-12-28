@@ -101,18 +101,23 @@ class BashSessionConfigServer extends net.Server {
     }
     var authToken=hdr[0];
     var evtId=hdr[1];
+console.log("dbg:"+evtId+":"+authToken);
     if (evtId!='tat') {
       if (!this.ts.isValidAuthToken(authToken)) {
         console.error("invalid auth token: %s (evtId: %s)",authToken,evtId);
         //setTimeout( function() { socket.end("bad auth token"); }, 3000 );
-        return socket.end("bad auth token");
+        socket.write("E_BAD_AUTH_TOKEN\n");
+        // mirror back original payload, so it can be re-used in the retry
+        // logic of _esh_b
+        return socket.pipe(socket);
       }
       if (this.ts.isValidOneTimeAuthToken(authToken)) {
         this.ts.deleteAuthToken(authToken);
       }
-      authToken=this.ts.generateOneTimeAuthToken();
-      socket.write(authToken+"\n");
+      //authToken=this.ts.generateOneTimeAuthToken();
+      //socket.write(authToken+"\n");
     }
+    socket.write("E_AUTH_TOKEN_OK\n");
     hdr.splice(0,2);
     console.log(evtId+":"+hdr);
     hdr.unshift(socket);
@@ -136,10 +141,10 @@ class BashSessionConfigServer extends net.Server {
       socket.end("HELLO\n");
     });
 
-    self.registerHandler("registerSty",function(socket,pid,sty) {
-      var status=self.ts.registerSty(pid,sty);
-      socket.end(status+"\n");
-    });
+    //self.registerHandler("registerSty",function(socket,pid,sty) {
+      //var authToken=self.ts.registerSty(pid,sty);
+      //socket.end(authToken+"\n");
+    //});
 
     /**
      * resolve a token/marker, which might be sensitive data (e.g. a password);

@@ -24,8 +24,9 @@ screen() {
           fi
           if [[ $pick_sty =~ ^[0-9]+\.(.+) ]]; then
             eval "$(_esh_e)"
-            _esh_e ${BASH_REMATCH[1]} ESH_PORT SSH_AUTH_SOCK ESH_AT ESH_TERM_PID
+            _esh_e ${BASH_REMATCH[1]} ESH_PORT SSH_AUTH_SOCK ESH_TERM_PID
             # strip off "screen." prefix from $TERM to avoid "$TERM too long" issue
+            env screen -X -S $pick_sty register p $ESH_TERM_AUTH_TOKEN
             env TERM=${TERM#screen.} screen -d -r $pick_sty
             return $?
           else
@@ -50,7 +51,8 @@ screen() {
     esc=^Ee
   else
     # not nested, register $ESH_STY
-    read ESH_AT < <(_esh_b registerSty $ESH_TERM_PID $ESH_STY)
+    #read ESH_STY_AUTH_TOKEN < <(_esh_b registerSty $ESH_TERM_PID $ESH_STY)
+    :
   fi
 
   rcfile=$(mktemp)
@@ -67,9 +69,10 @@ hardstatus ignore
 shelltitle "$ |:"
 caption always "%{= kw}%-w%{= BW}%n%t%{-}%+w %-= @%H %{= Y}%l%{-} %m/%d %c"
 register p $ESH_TERM_AUTH_TOKEN
+unsetenv SCREENRC
+screen
+screen rm $rcfile
 EOF
   # strip off "screen." prefix from $TERM to avoid "$TERM too long" issue
-  env SCREENRC=$rcfile DROP_SCREENRC=1 TERM=${TERM#screen.} screen -S $ESH_STY -e$esc "${args[@]}"
-  # the -prompt script should drop $rcfile, this is a safety net:
-  rm -f $rcfile
+  env SCREENRC=$rcfile TERM=${TERM#screen.} screen -S $ESH_STY -e$esc "${args[@]}"
 }
