@@ -151,9 +151,16 @@ console.log("dbg:"+evtId+":"+authToken);
      * injectToTerminal will type the data right into the pty and _esh_y reads
      * it
      */
+    /*
     self.registerHandler("m",function(socket,pid,marker,sty,windowId) {
       self.ts.injectToTerminal(pid,marker,sty,windowId).then(function(status) {
         socket.end(status+"\n");
+      });
+    });
+    */
+    self.registerHandler("m2",function(socket,pid,marker) {
+      self.ts.resolveMarker(pid,marker).then(function(value) {
+        socket.end(value+"\n");
       });
     });
 

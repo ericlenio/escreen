@@ -257,7 +257,7 @@ class TerminalServer extends http.Server {
           resolve(""+term.pid);
           break;
         case "_ra_get_ldap_pw":
-          self._ra_get_ldap_pw().then(resolve)
+          self._ra_get_ldap_pw(pid).then(resolve)
             .catch(function(e) {
               reject("_ra_get_ldap_pw: password not available: "+e);
             });
@@ -389,7 +389,7 @@ class TerminalServer extends http.Server {
    *
    * @returns {Promise} promise resolves with the base64 encoded password
    */
-  _ra_get_ldap_pw() {
+  _ra_get_ldap_pw(pid) {
     var self=this;
     return new Promise(function(resolve,reject) {
       var pwKey=global.MY_LDAP_PASSWORD_KEY;
@@ -397,11 +397,21 @@ class TerminalServer extends http.Server {
         var msg="_ra_get_ldap_pw: please set global.MY_LDAP_PASSWORD_KEY";
         reject(msg);
       }
-      //var authToken=self.generateOneTimeAuthToken();
+      var authToken;
+      for (const [authToken1,authTokenObj] of Object.entries(E_TERMINAL_AUTH_TOKENS)) {
+        if (pid==authTokenObj.pid) {
+          authToken=authToken1;
+          break;
+        }
+      }
+      if (!authToken) {
+        return resolve(Buffer.from("unknown").toString('base64'));
+      }
       var args=[
         "-c",
-        //"source "+process.env.ESH_HOME+"/esh-init; ESH_AT="+authToken+"; _esh_i $ESH_STY ESH_PORT; pw",
-        "source "+process.env.ESH_HOME+"/esh-init; _esh_i $ESH_STY ESH_PORT; pw",
+        // caution: export ESH_TERM_AUTH_TOKEN here, we would never do that on
+        // a remote host
+        "source "+process.env.ESH_HOME+"/esh-init; export ESH_TERM_AUTH_TOKEN="+authToken+"; _esh_i $ESH_STY ESH_PORT; pw",
       ];
       var c=child_process.spawn('bash',args,{stdio:['pipe','pipe',process.stderr]});
       var pw='';

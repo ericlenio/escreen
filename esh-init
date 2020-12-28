@@ -79,6 +79,13 @@ export -f _esh_e
 # around that ... netcat will be needed though
 _esh_b() {
   local status
+  if [ ${#FUNCNAME[@]} -gt 25 ]; then
+    # this function recurses on itself, this is a safety switch to prevent a
+    # fork bomb
+    echo "$FUNCNAME: too many levels deep: $*" >&2
+    echo "stack trace: ${FUNCNAME[*]}" >&2
+    return 1
+  fi
   if [ -z "$ESH_TERM_AUTH_TOKEN" ]; then
     if [ "$STY" ]; then
       read ESH_TERM_AUTH_TOKEN < <(
@@ -94,7 +101,7 @@ _esh_b() {
     else
       #ESH_TERM_AUTH_TOKEN=$(_esh_y tat)
       ESH_TERM_AUTH_TOKEN=unknown
-      echo "please run GNU screen: stack trace: ${FUNCNAME[*]}" >&2
+      echo "please call $FUNCNAME from inside GNU screen: stack trace: ${FUNCNAME[*]}" >&2
       return 1
     fi
   fi
@@ -205,15 +212,17 @@ echo "INSIDE $FUNCNAME:$ESH_TERM_AUTH_TOKEN-->$@" >&2
   # then immediately:
   #   s nobody
   #   fc
-  _vime
-  _esh_l $t/-prompt $p2
+  if [ -t 0 ]; then
+    _vime
+    _esh_l $t/-prompt $p2
+    export PROMPT_COMMAND='-prompt'
+  fi
   export -f _esh_e _esh_i _esh_b _esh_l _esh_y
-  export PROMPT_COMMAND='-prompt'
-  export -n ESH_AT ESH_TERM_AUTH_TOKEN
+  #export -n ESH_AT ESH_TERM_AUTH_TOKEN
 }
 
 
-_esh_y() {
+_esh_y_OLD() {
   local key=$1 attempt=${2:-1} max_attempts=10 e v status
   # TO DO: use "tput invis" to hide characters, and "tput sgr0" to make
   # visible/normal (cleaner way to do it ... man terminfo)
@@ -303,6 +312,11 @@ _esh_y() {
   fi
 }
 
+_esh_y() {
+  local key=$1 attempt=${2:-1} max_attempts=10 e v status
+  _esh_b m2 $ESH_TERM_PID "$key" </dev/null
+}
+
 ESH_CORE=$ESH_HOME/core
 #[ "$1" ] && ESH_PROFILE="$1" || ESH_PROFILE=$ESH_HOME/profile.lwprof
 
@@ -313,7 +327,8 @@ export ESH_STY=$$
 export ESH_TERM_PID=$$
 
 if [ $# -gt 0 ]; then
-  ESH_TERM_AUTH_TOKEN=$1 _esh_i $ESH_STY ESH_PORT
-  e=$(ESH_TERM_AUTH_TOKEN=$1 _init_ctx -d $ESH_STY $ESH_PORT)
+  ESH_TERM_AUTH_TOKEN=$1
+  _esh_i $ESH_STY ESH_PORT
+  e=$(ESH_TERM_AUTH_TOKEN=$ESH_TERM_AUTH_TOKEN _init_ctx -d $ESH_STY $ESH_PORT)
   eval "$e"
 fi

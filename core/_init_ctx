@@ -35,7 +35,7 @@ _init_ctx() {
       printf 't=$(mktemp)\n'
       printf '{\n'
       printf '  echo ESH_TERM_AUTH_TOKEN=%s\n' $ESH_TERM_AUTH_TOKEN
-      printf '  echo echo "sourced $t"\n'
+      #printf '  echo echo "sourced $t"\n'
       printf '  echo rm $t\n'
       printf '} >$t\n'
       ex=(exec bash --init-file '$t' --noprofile -i)
