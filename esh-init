@@ -97,7 +97,9 @@ _esh_b() {
         cat $t
         rm $t
       )
-      echo "$FUNCNAME: loaded ESH_TERM_AUTH_TOKEN" >&2
+      if [ -t 2 ]; then
+        echo "$FUNCNAME: loaded ESH_TERM_AUTH_TOKEN" >&2
+      fi
     else
       #ESH_TERM_AUTH_TOKEN=$(_esh_y tat)
       ESH_TERM_AUTH_TOKEN=unknown

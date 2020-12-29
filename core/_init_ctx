@@ -28,17 +28,20 @@ _init_ctx() {
   #declare -p $(compgen -v ESH_)
   z_init_64=$({
     if [ ${#ex[@]} = 0 ]; then
-      # assume to run a bash shell
+      ex=(exec bash)
+    fi
+    if [ ${#ex[@]} -ge 2 ] && [ "${ex[@]: -2:1}" = exec ] && [ "${ex[@]: -1:1}" = bash ]; then
+      # last 2 args of ex array are "exec" and "bash"
       #
       # set up a temp file to pass ESH_TERM_AUTH_TOKEN (we don't want to just
       # export it, for better security)
       printf 't=$(mktemp)\n'
       printf '{\n'
       printf '  echo ESH_TERM_AUTH_TOKEN=%s\n' $ESH_TERM_AUTH_TOKEN
-      #printf '  echo echo "sourced $t"\n'
+      printf '  echo "[ -t 1 ] && echo sourced $t"\n'
       printf '  echo rm $t\n'
       printf '} >$t\n'
-      ex=(exec bash --init-file '$t' --noprofile -i)
+      ex+=(--init-file '$t' --noprofile -i)
     fi
     declare -p ESH_TMP ESH_STY ESH_USER ESH_TERM_PID ex
     declare -f _esh_e _esh_b _esh_l _esh_i _esh_y
