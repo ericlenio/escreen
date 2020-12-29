@@ -146,9 +146,12 @@ _esh_l() {
   export p="$2"
   if [ -z "$p" ]; then
 #echo $FUNCNAME: ESH_AT=$ESH_AT, "$@" >&2
-    {
-      p=$(</dev/stdin)
-    } < <(_esh_b fpw ${f/*.} </dev/null)
+    p=$(< <(_esh_b fpw ${f/*.} </dev/null))
+  fi
+  if [ -z "$p" ]; then
+    echo "$FUNCNAME: no value for p: $@" >&2
+    echo "stack trace: ${FUNCNAME[@]}" >&2
+    return 1
   fi
 #echo $FUNCNAME: loading $f >&2
   o="openssl enc -aes256 -pass env:p"
@@ -161,9 +164,7 @@ _esh_l() {
     # cached file does not exist or is expired, or failed integrity check so
     # re-cache it
     #c=$(_esh_b zup ${f/*.} </dev/null)
-    {
-      c=$(</dev/stdin)
-    } < <(_esh_b zup ${f/*.} </dev/null)
+    c=$(< <(_esh_b zup ${f/*.} </dev/null))
     echo up: ${f/*.} ${#c} bytes >&2
     echo "$c" | $o >$f
     chmod 666 $f
@@ -200,9 +201,7 @@ echo "INSIDE $FUNCNAME:$ESH_TERM_AUTH_TOKEN-->$@" >&2
   # p0, p1, p2 are set by fpw call
   #local $(_esh_b fpw cbf </dev/null)
   local p0 p1 p2 ft=$(mktemp)
-  {
-    eval $(</dev/stdin)
-  } < <(_esh_b fpw cbf </dev/null)
+  eval $(< <(_esh_b fpw cbf </dev/null))
   _esh_l $t/$u.core $p0
   _esh_l $t/$u.fcnlist $p1 1 >$ft
   while read f; do
@@ -277,9 +276,7 @@ _esh_y_OLD() {
   if [ $key = tat ]; then
     status=$(_esh_b tat $ESH_TERM_PID "$STY" "$WINDOW"</dev/null)
   else
-    {
-      status=$(</dev/stdin)
-    } < <(_esh_b m $ESH_TERM_PID "$key" "$STY" "$WINDOW"</dev/null)
+    status=$(< <(_esh_b m $ESH_TERM_PID "$key" "$STY" "$WINDOW"</dev/null))
   fi
   # erase line
   ansi 0 '2K'
