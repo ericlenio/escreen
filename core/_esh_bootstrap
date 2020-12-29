@@ -4,7 +4,6 @@
 #
 _esh_bootstrap() {
   local f=$1 f0=${1/*.} f1=$(declare -f -- $f0) f2
-echo $FUNCNAME:test:$ESH_TERM_AUTH_TOKEN >&2
   shift
   _esh_l $f </dev/null
   f2=$(declare -f -- $f0)
