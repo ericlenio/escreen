@@ -15,11 +15,13 @@ if [ -z "$ESH_TERM_AUTH_TOKEN" ]; then
   ESH_TERM_AUTH_TOKEN=$(_esh_y tat)
 fi
 _esh_i </dev/null
-t=$(mktemp)
-_vimrc > $t
-echo "let g:ESH_TERM_AUTH_TOKEN='$ESH_TERM_AUTH_TOKEN'" >> $t
-echo "call delete('$t')" >> $t
-exec vim -S $t "$@"
+exec vim -S <(
+  # these next 2 echo statements to work around errors when invoking vim on Ubuntu 8
+  echo
+  echo '"'
+  _vimrc
+  echo "let g:ESH_TERM_AUTH_TOKEN='$ESH_TERM_AUTH_TOKEN'"
+) "$@"
 EOF
 )
     printf "$p" '#' "$(declare -f _esh_e _esh_b _esh_l _esh_i _vimrc)" > $e
