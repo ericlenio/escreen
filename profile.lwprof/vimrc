@@ -29,27 +29,45 @@ endf
 
 fu PasteCb()
   " paste contents of OS clipboard
-  call Mktmpdir()
-  let @a=Mkbashenv()
-  let @"=system("_esh_b zGetCb")
-  call delete(@a)
-  unlet $BASH_ENV
-  call feedkeys(col("$")-col(".")==1 ? "p" : "P")
-  redraw
-  echon "Pasted " len(@") " characters"
+  try
+    let @"=Systemcaller("_esh_b zGetCb")
+    call feedkeys(col("$")-col(".")==1 ? "p" : "P")
+    redraw
+    echon "Pasted " len(@") " characters"
+  catch /.*/
+    echo v:exception
+  endtry
 endf
 map <c-v> :call PasteCb()<cr>
+
+" wraps a system call so that BASH_ENV
+" can pass ESH_TERM_AUTH_TOKEN
+fu Systemcaller(cmd,...)
+  "try
+    call Mktmpdir()
+    let l:bash_env=Mkbashenv()
+    if a:0 == 1
+      let l:result=system(a:cmd,a:1)
+    else
+      let l:result=system(a:cmd)
+    endif
+    call delete(l:bash_env)
+    if has("patch-8.0.1832")
+      " https://github.com/vim/vim/issues/1116
+      unlet $BASH_ENV
+    endif
+    return l:result
+  "catch /.*/
+    "echo v:exception
+  "endtry
+endf
 
 fu Cp2cb()
   " copies the contents of the unnamed register to OS clipboard;
   " NOTE: the system command will write out to a temp file
   " which is vim's tempname() function
   try
-    call Mktmpdir()
-    let @a=Mkbashenv()
-    call system("cp2cb",@")
-    call delete(@a)
-    unlet $BASH_ENV
+    call Systemcaller("cp2cb",@")
     echon "Copied " len(@") " characters"
   catch /.*/
     echo v:exception
