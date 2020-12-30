@@ -16,10 +16,24 @@ fu Mktmpdir()
   endif
 endf
 
+" use bash's BASH_ENV variable to source a temp file when any "system" function
+" is called to set ESH_TERM_AUTH_TOKEN in the shell
+fu Mkbashenv()
+  let @a=tempname()
+  call writefile([
+    \"ESH_TERM_AUTH_TOKEN=".g:ESH_TERM_AUTH_TOKEN
+    \],@a)
+  let $BASH_ENV=@a
+  return @a
+endf
+
 fu PasteCb()
   " paste contents of OS clipboard
   call Mktmpdir()
+  let @a=Mkbashenv()
   let @"=system("_esh_b zGetCb")
+  call delete(@a)
+  unlet $BASH_ENV
   call feedkeys(col("$")-col(".")==1 ? "p" : "P")
   redraw
   echon "Pasted " len(@") " characters"
@@ -32,7 +46,10 @@ fu Cp2cb()
   " which is vim's tempname() function
   try
     call Mktmpdir()
+    let @a=Mkbashenv()
     call system("cp2cb",@")
+    call delete(@a)
+    unlet $BASH_ENV
     echon "Copied " len(@") " characters"
   catch /.*/
     echo v:exception
