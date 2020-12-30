@@ -24,5 +24,6 @@ s() {
   eval "$(_esh_e)"
   # use existing $ESH_STY so that if inside gnu screen and the session
   # disconnects/reconnects that we can reference the latest ESH_PORT
-  _init_ctx $ESH_STY $ESH_PORT "$@" | sudo -H -u $user -s
+  #_init_ctx $ESH_STY $ESH_PORT "$@" | sudo -H -u $user -s
+  sudo -H -u $user bash -c "$(ESH_TERM_AUTH_TOKEN=$ESH_TERM_AUTH_TOKEN _init_ctx $ESH_STY $ESH_PORT $@)"
 }
