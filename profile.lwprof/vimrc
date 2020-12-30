@@ -54,12 +54,16 @@ fu Systemcaller(cmd,...)
     call delete(l:bash_env)
     if has("patch-8.0.1832")
       " https://github.com/vim/vim/issues/1116
-      unlet $BASH_ENV
+      call Unletbashenv()
     endif
     return l:result
   "catch /.*/
     "echo v:exception
   "endtry
+endf
+
+fu Unletbashenv()
+  unlet $BASH_ENV
 endf
 
 fu Cp2cb()
