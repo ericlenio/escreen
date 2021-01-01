@@ -5,6 +5,11 @@
 ssh() {
   # make sure SSH_AUTH_SOCK is properly set by sourcing _esh_e
   eval "$(_esh_e)"
+  if [ -z "$ESH_TERM_AUTH_TOKEN" ]; then
+    # this should set ESH_TERM_AUTH_TOKEN; perhaps this should move to
+    # _init_ctx?
+    _esh_y hello >/dev/null
+  fi
   [ ! -t 0 -o ! -t 1 ] && {
     # in a pipeline
     env ssh "$@"

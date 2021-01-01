@@ -30,23 +30,30 @@ _init_ctx() {
     if [ ${#ex[@]} = 0 ]; then
       ex+=(exec bash)
     fi
-    if [ ${#ex[@]} -ge 2 ] && [ "${ex[@]: -2:1}" = exec ] && [ "${ex[@]: -1:1}" = bash ]; then
-      # last 2 args of ex array are "exec" and "bash"
-      #
-      # set up a temp file to pass ESH_TERM_AUTH_TOKEN (we don't want to just
-      # export it, for better security)
-      printf 't=$(mktemp)\n'
-      printf '{\n'
-      printf '  echo ESH_TERM_AUTH_TOKEN=%s\n' $ESH_TERM_AUTH_TOKEN
-      printf '  echo "[ -t 1 ] && echo sourced $t"\n'
-      printf '  echo rm $t\n'
-      printf '} >$t\n'
-      ex+=(--init-file '$t' --noprofile -i)
-      #
-      # better method: use process substitution instead of a temp file: doesn't
-      # work on u8 though, and you have to deal with unquoting it
-      #ex+=(--init-file "<(echo ESH_TERM_AUTH_TOKEN=$ESH_TERM_AUTH_TOKEN)" --noprofile -i)
-    fi
+    # search ex array for "bash", and if found inject a little init script to
+    # pass along ESH_TERM_AUTH_TOKEN
+    local ex2=()
+    for((i=0;i<${#ex[@]};i++)); do
+      ex2+=("${ex[$i]}")
+      if [ "${ex[$i]}" = bash ]; then
+        ex2+=(--init-file '$'t$i)
+        #
+        # set up a temp file to pass ESH_TERM_AUTH_TOKEN (we don't want to just
+        # export it, for security reasons)
+        printf 't%s=$(mktemp)\n' $i
+        printf '{\n'
+        printf '  echo ESH_TERM_AUTH_TOKEN=%s\n' $ESH_TERM_AUTH_TOKEN
+        printf '  echo "[ -t 1 ] && echo sourced $t%s"\n' $i
+        printf '  echo rm $t%s\n' $i
+        printf '} >$t%s\n' $i
+        #
+        # possible better method: use process substitution instead of a temp
+        # file: does not work on u8 though, and you have to deal with unquoting
+        # it, something like:
+        # --init-file "<(echo ESH_TERM_AUTH_TOKEN=$ESH_TERM_AUTH_TOKEN)"
+      fi
+    done
+    ex=("${ex2[@]}")
     declare -p ESH_TMP ESH_STY ESH_USER ESH_TERM_PID ex
     declare -f _esh_e _esh_b _esh_l _esh_i _esh_y
     printf 'ESH_TERM_AUTH_TOKEN=%s ESH_PORT=%s _esh_i %s ESH_PORT </dev/null\n' $ESH_TERM_AUTH_TOKEN $p $ESH_STY
