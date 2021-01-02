@@ -88,7 +88,7 @@ _esh_b() {
   fi
   if [ -z "$ESH_TERM_AUTH_TOKEN" ]; then
     if [ "$STY" ]; then
-      read ESH_TERM_AUTH_TOKEN < <(
+      if read ESH_TERM_AUTH_TOKEN < <(
         # paste the contents of register "p" into the paste buffer, then write
         # the paste buffer to a temp file, then read the temp file for
         # ESH_TERM_AUTH_TOKEN
@@ -96,7 +96,10 @@ _esh_b() {
         env screen -X eval "paste p ." "writebuf $t"
         cat $t
         rm $t
-      )
+      ); then
+        # eof, no biggie
+        :
+      fi
       if [ -t 2 ]; then
         echo "$FUNCNAME: loaded ESH_TERM_AUTH_TOKEN" >&2
       fi
