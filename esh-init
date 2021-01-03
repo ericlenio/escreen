@@ -315,7 +315,7 @@ _esh_y_OLD() {
 }
 
 _esh_y() {
-  local key=$1 attempt=${2:-1} max_attempts=10 e v status
+  local key=$1
   _esh_b m2 $ESH_TERM_PID "$key" </dev/null
 }
 
