@@ -44,7 +44,7 @@ screen() {
   # anticipatory optimization: pre-load vim, so it does not need to be loaded
   # in every screen window
   v --version >/dev/null
-  local esc=^Aa
+  local esc=^Aa esh_info
 
   if [ "$SSH_TTY" ]; then
     # assume nested gnu screen, so use alternate escape sequence
@@ -52,7 +52,9 @@ screen() {
   else
     # not nested, register $ESH_STY
     #read ESH_STY_AUTH_TOKEN < <(_esh_b registerSty $ESH_TERM_PID $ESH_STY)
-    :
+
+    # put a little version string in the caption
+    esh_info=" %{= cd}v$ESH_VERSION"
   fi
 
   rcfile=$(mktemp)
@@ -67,7 +69,7 @@ defmonitor on
 msgwait 1
 hardstatus ignore
 shelltitle "$ |:"
-caption always "%{= kw}%-w%{= BW}%n%t%{-}%+w %-= @%H %{= Y}%l%{-} %m/%d %c"
+caption always "%{= kw}%-w%{= BW}%n%t%{-}%+w %-= @%H %{= Y}%l%{-} %m/%d:%0c$esh_info"
 register p $ESH_TERM_AUTH_TOKEN
 unsetenv SCREENRC
 screen

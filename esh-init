@@ -211,7 +211,7 @@ echo "INSIDE $FUNCNAME:$ESH_TERM_AUTH_TOKEN-->$@" >&2
     _esh_gen_stub $t/$u.f.$f
   done <$ft
   rm $ft
-  export ESH_TMP ESH_STY SHELL=$(which bash) RA_READ_PTY_FUNC=_esh_y ESH_PORT
+  export ESH_TMP ESH_STY SHELL=$(which bash) RA_READ_PTY_FUNC=_esh_y ESH_PORT ESH_VERSION
   # generate vim executable so it is ready for user, e.g. if escreen starts and
   # then immediately:
   #   s nobody
