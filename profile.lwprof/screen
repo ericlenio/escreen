@@ -50,8 +50,6 @@ screen() {
     # assume nested gnu screen, so use alternate escape sequence
     esc=^Ee
   else
-    # not nested, register $ESH_STY
-    #read ESH_STY_AUTH_TOKEN < <(_esh_b registerSty $ESH_TERM_PID $ESH_STY)
 
     # put a little version string in the caption
     esh_info=" %{= cd}v$ESH_VERSION"
@@ -59,7 +57,7 @@ screen() {
 
   rcfile=$(mktemp)
   cat << EOF >$rcfile
-bind / screen $ESH_EDITOR $ESH_PW_FILE
+bind / screen $ESH_EDITOR $(_esh_b ESH_PW_FILE)
 # bind "%" to take a screenshot, and open a new window to edit it
 bind % exec bash -c 'f=\$(mktemp) t=\$RANDOM; env screen -X hardcopy \$f; env screen -t \$t sh -c "$ESH_EDITOR \$f; rm \$f"; env screen -X select \$t'
 bind \040 windowlist -b
@@ -73,6 +71,7 @@ caption always "%{= kw}%-w%{= BW}%n%t%{-}%+w %-= @%H %{= Y}%l%{-} %m/%d:%0c$esh_
 register p $ESH_TERM_AUTH_TOKEN
 unsetenv SCREENRC
 screen
+screen bash -c '_esh_b registerSty $ESH_TERM_PID \$STY'
 screen rm $rcfile
 EOF
   # strip off "screen." prefix from $TERM to avoid "$TERM too long" issue

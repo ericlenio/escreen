@@ -44,6 +44,7 @@ _init_ctx() {
         printf '{\n'
         printf '  echo ESH_TERM_AUTH_TOKEN=%s\n' $ESH_TERM_AUTH_TOKEN
         printf '  echo "[ -t 1 ] && echo sourced $t%s"\n' $i
+        #printf '  echo "exec 7< <(echo \$ESH_TERM_AUTH_TOKEN)"\n'
         printf '  echo rm $t%s\n' $i
         printf '} >$t%s\n' $i
         #
@@ -77,7 +78,6 @@ _init_ctx() {
     #
     # user will interact with $SSH_TTY if detected (else gnu screen will not
     # work inside ssh sessions to openbsd), else just use /dev/tty
-echo 'echo '$FUNCNAME':"${ex[@]}" >&2'
     #echo '"${ex[@]}" <>${SSH_TTY:-/dev/tty}'
     echo '"${ex[@]}"'
   } | gzip -9c | openssl enc -a)

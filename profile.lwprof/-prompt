@@ -29,25 +29,13 @@
   fi
 
   if [ -z "$ESH_TERM_AUTH_TOKEN" ]; then
-    if [ "$STY" ]; then
-      read ESH_TERM_AUTH_TOKEN < <(
-        # paste the contents of register "p" into the paste buffer, then write
-        # the paste buffer to a temp file, then read the temp file for
-        # ESH_TERM_AUTH_TOKEN
-        t=$(mktemp)
-        env screen -X -p $WINDOW eval "paste p ." "writebuf $t"
-        cat $t
-        rm $t
-      )
-      echo "$FUNCNAME: loaded ESH_TERM_AUTH_TOKEN from register p:$ESH_TERM_AUTH_TOKEN" >&2
-    else
-      ESH_TERM_AUTH_TOKEN=$(_esh_y tat)
-      echo "$FUNCNAME: loaded ESH_TERM_AUTH_TOKEN from tat:$ESH_TERM_AUTH_TOKEN" >&2
-    fi
+    # this will load ESH_TERM_AUTH_TOKEN into the shell
+    _esh_b about
   fi
 
   if [ -z "$RA_USER_PASSWORD_64" ]; then
     read RA_USER_PASSWORD_64 < <(_esh_y _ra_get_ldap_pw)
   fi
+
 }
 export -f -- -prompt

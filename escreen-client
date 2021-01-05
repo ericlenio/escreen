@@ -11,4 +11,17 @@ while getopts $opts opt; do
   esac
 done
 
-exec node $ESH_HOME/client.js "$@"
+# old:
+#exec node $ESH_HOME/client.js "$@"
+
+
+# new, basically taking TerminalServer.js out of the equation:
+export ESH_USER=$USER
+export ESH_VERSION=$(<$ESH_HOME/esh-version)
+export ESH_TMP=/tmp/esh-$ESH_VERSION
+export ESH_PROFILE_DIR=$ESH_HOME/profile.lwprof
+source $ESH_HOME/esh-init
+read ESH_TERM_AUTH_TOKEN < <(ESH_TERM_AUTH_TOKEN=x _esh_b registerTerminal $$ $(tty))
+_esh_i $ESH_STY ESH_PORT
+e=$(ESH_TERM_AUTH_TOKEN=$ESH_TERM_AUTH_TOKEN _init_ctx -d $ESH_STY $ESH_PORT exec bash)
+eval "$e"

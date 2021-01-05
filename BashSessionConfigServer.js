@@ -48,28 +48,30 @@ class BashSessionConfigServer extends net.Server {
   init(ts,profileDir) {
     var self=this;
     this.ts=ts;
-    this.profileDir=profileDir;
+    return new Promise(function(resolve,reject) {
+      self.profileDir=profileDir;
 
-    this.readEscreenrc().then(function() {
-      self.listen(E_PORT,'127.0.0.1',function() {
-        console.log("BashSessionConfigServer is listening on port: "+E_PORT);
+      self.readEscreenrc().then(function() {
+        self.listen(E_PORT,'127.0.0.1',function() {
+          console.log("BashSessionConfigServer is listening on port: "+E_PORT);
+          // look for value first from .escreenrc, else fall back to default
+          process.env.ESH_PW_FILE=global.ESH_PW_FILE ||
+            util.format("%s/private/%s/passwords.gpg",process.env.ESH_HOME,process.env.ESH_USER);
+          resolve();
+        });
       });
-    });
 
-    // look for value first from .escreenrc, else fall back to default
-    process.env.ESH_PW_FILE=global.ESH_PW_FILE ||
-      util.format("%s/private/%s/passwords.gpg",process.env.ESH_HOME,process.env.ESH_USER);
-
-    this.on('connection',function(socket) {
-      socket.once("readable",function() {
-        self.handleLegacyRequest(socket);
+      self.on('connection',function(socket) {
+        socket.once("readable",function() {
+          self.handleLegacyRequest(socket);
+        });
       });
-    });
-    this.on('error',this.onError);
+      self.on('error',reject);
 
-    this.legacyHandlers={};
-    this.registerLegacyHanders();
-    this.registerOtherHandlers();
+      self.legacyHandlers={};
+      self.registerLegacyHanders();
+      self.registerOtherHandlers();
+    });
   }
 
   handleLegacyRequest(socket) {
@@ -101,8 +103,8 @@ class BashSessionConfigServer extends net.Server {
     }
     var authToken=hdr[0];
     var evtId=hdr[1];
-console.log("dbg:"+evtId+":"+authToken);
-    if (evtId!='tat') {
+    console.log("request:"+hdr);
+    if (evtId!='tat' && evtId!='registerTerminal') {
       if (!this.ts.isValidAuthToken(authToken)) {
         console.error("invalid auth token: %s (evtId: %s)",authToken,evtId);
         //setTimeout( function() { socket.end("bad auth token"); }, 3000 );
@@ -116,10 +118,9 @@ console.log("dbg:"+evtId+":"+authToken);
       }
       //authToken=this.ts.generateOneTimeAuthToken();
       //socket.write(authToken+"\n");
+      socket.write("E_AUTH_TOKEN_OK\n");
     }
-    socket.write("E_AUTH_TOKEN_OK\n");
     hdr.splice(0,2);
-    console.log(evtId+":"+hdr);
     hdr.unshift(socket);
     try {
       // Call the handler
@@ -130,10 +131,6 @@ console.log("dbg:"+evtId+":"+authToken);
     }
   }
 
-  onError(e) {
-    console.error("CAUGHT: "+e);
-  }
-
   registerLegacyHanders() {
     var self=this;
 
@@ -141,10 +138,31 @@ console.log("dbg:"+evtId+":"+authToken);
       socket.end("HELLO\n");
     });
 
-    //self.registerHandler("registerSty",function(socket,pid,sty) {
-      //var authToken=self.ts.registerSty(pid,sty);
-      //socket.end(authToken+"\n");
-    //});
+    self.registerHandler("registerTerminal",function(socket,pid,tty) {
+      self.ts.registerTerminal(pid,tty).then(function(authToken) {
+        socket.write("E_AUTH_TOKEN_OK\n");
+        socket.end(authToken+"\n");
+      }).catch(function(e) {
+        socket.end("E_ERR_REGISTER_TERMINAL\n");
+      });
+    });
+
+    self.registerHandler("deregisterTerminal",function(socket,pid) {
+      self.ts.deregisterTerminal(pid);
+      socket.end("E_TERM_DEREGISTERED\n");
+    });
+
+    self.registerHandler("ESH_PW_FILE",function(socket) {
+      socket.end(process.env.ESH_PW_FILE+"\n");
+    });
+
+    self.registerHandler("registerSty",function(socket,pid,sty) {
+      self.ts.registerSty(pid,sty).then(function(status) {
+        socket.end(status+"\n");
+      }).catch(function(e) {
+        socket.end("E_ERR_REGISTER_STY\n");
+      });
+    });
 
     /**
      * resolve a token/marker, which might be sensitive data (e.g. a password);
@@ -166,9 +184,17 @@ console.log("dbg:"+evtId+":"+authToken);
 
     // get ESH_TERM_AUTH_TOKEN
     self.registerHandler("tat",function(socket,pid,sty,windowId) {
-      self.ts.injectToTerminal(pid,"tat",sty,windowId).then(function(status) {
-        socket.end(status+"\n");
+      //self.ts.injectToTerminal(pid,"tat",sty,windowId).then(function(status) {
+        //socket.end(status+"\n");
+      //});
+      self.ts.resolveMarker(pid,"tat").then(function(value) {
+        socket.write("E_ENCRYPTED_AUTH_TOKEN\n");
+        socket.end(Buffer.from(value).toString('base64')+"\n");
       });
+    });
+
+    self.registerHandler("about",function(socket) {
+      socket.end("escreen "+process.env.ESH_VERSION+"\n");
     });
 
     /**
@@ -306,18 +332,15 @@ console.log("dbg:"+evtId+":"+authToken);
    * $HOME/.escreenrc.
    */
   readEscreenrc() {
-
     var escreenrc=util.format("%s/.escreenrc.gpg",process.env.HOME);
     if (fs.existsSync(escreenrc)) {
-      var p=child_process.spawn('gpg',['-d',escreenrc],{stdio:['ignore','pipe','inherit']});
-      p.on("error", function(e) {
-        console.error("readEscreenrc: "+e);
-      });
-      var s='';
-      p.stdout.on('data',function(buf) {
-        s+=buf.toString();
-      });
-      return new Promise(function(resolve) {
+      return new Promise(function(resolve,reject) {
+        var p=child_process.spawn('gpg',['-d',escreenrc],{stdio:['ignore','pipe','inherit']});
+        var s='';
+        p.stdout.on('data',function(buf) {
+          s+=buf.toString();
+        });
+        p.on("error",reject);
         p.on('exit',function() {
           eval(s);
           resolve();

@@ -1,6 +1,7 @@
 const child_process=require('child_process');
 const crypto=require('crypto');
 const fs=require('fs');
+const fsPromises=require('fs').promises;
 const http=require('http');
 const pty=require('node-pty');
 const os=require('os');
@@ -11,6 +12,7 @@ const ENCODING='utf8';
 const E_TERMINALS={};
 const E_ONE_TIME_AUTH_TOKENS={};
 const E_TERMINAL_AUTH_TOKENS={};
+const E_TERMINAL_AUTH_TOKENS_FILE=process.env.ESH_HOME+"/.escreen-server-auth-tokens.json";
 const E_GNU_SCREEN_AUTH_TOKENS={};
 const E_EXPIRE_AUTH_TOKENS_INTERVAL=300000;
 const E_AUTH_TOKENS_MAX_AGE=30000;
@@ -45,14 +47,16 @@ class TerminalServer extends http.Server {
 
   init(port) {
     var self=this;
-    this.listen(port,'127.0.0.1',function() {
-      console.log("TerminalServer is listening on port: "+port);
-    });
-
     this.on('request',this.satisfyRoute);
     this.on('upgrade',this.onUpgrade);
-    this.on('error',this.onError);
     setInterval(this.expireAuthTokens.bind(this),E_EXPIRE_AUTH_TOKENS_INTERVAL);
+    return new Promise(function(resolve,reject) {
+      self.on('error',reject);
+      self.listen(port,'127.0.0.1',function() {
+        console.log("TerminalServer is listening on port: "+port);
+        return self.loadTerminalAuthTokens().then(self.purgeInvalidTokens.bind(self)).then(resolve).catch(reject);
+      });
+    });
   }
 
   satisfyRoute(req,res) {
@@ -125,10 +129,7 @@ class TerminalServer extends http.Server {
     }
   }
 
-  onError(e) {
-    console.error("CAUGHT: "+e);
-  }
-
+  /*
   createTerminal(termType) {
     var self=this;
     var termAuthToken=this.generateTerminalAuthToken();
@@ -169,7 +170,9 @@ class TerminalServer extends http.Server {
     });
     return term;
   }
+  */
 
+  /*
   toggleLogging(term) {
     var status='on';
     term.isLogging=!term.isLogging;
@@ -189,6 +192,7 @@ class TerminalServer extends http.Server {
     }
     return status;
   }
+  */
 
   /*
   resolveMarkers(term,buf) {
@@ -248,7 +252,7 @@ class TerminalServer extends http.Server {
               return resolve(authToken);
             }
           }
-          resolve("no_term_auth_token");
+          resolve("E_NO_TERM_AUTH_TOKEN");
           break;
         case "hello":
           resolve("HELLO");
@@ -310,27 +314,56 @@ class TerminalServer extends http.Server {
     });
   }
 
-  //registerSty(pid,sty) {
-    //if (!(pid in E_TERMINALS)) {
-      //return "E_BAD_PID";
-    //}
-    //var term=E_TERMINALS[pid];
-    ////term.sty=sty;
-    ////console.log(`registerSty: STY=${sty} now registered to terminal: ${pid}`);
-    //var authToken=this.generateGnuScreenAuthToken(sty);
-    //return authToken;
-  //}
+  registerSty(pid,sty) {
+    if (!(pid in E_TERMINALS)) {
+      return "E_BAD_PID";
+    }
+    for (const [authToken,authTokenObj] of Object.entries(E_TERMINAL_AUTH_TOKENS)) {
+      if (pid==authTokenObj.pid) {
+        authTokenObj.sty=sty;
+        console.log(`registerSty: STY=${sty} now registered to terminal: ${pid}`);
+        return this.saveTerminalAuthTokens().then(function() {
+          return "E_REGISTERED_STY";
+        });
+      }
+    }
+    return Promise.resolve("E_ERR_REGISTER_STY");
+  }
 
+  registerTerminal(pid,tty) {
+    return this.generateTerminalAuthToken().then(function(authToken) {
+      E_TERMINALS[pid]={tty:tty};
+      E_TERMINAL_AUTH_TOKENS[authToken].pid=pid;
+      E_TERMINAL_AUTH_TOKENS[authToken].tty=tty;
+      return authToken;
+    });
+  }
+
+  deregisterTerminal(pid) {
+    delete E_TERMINALS[pid];
+    console.log("deregistered pid: "+pid);
+    for (const [authToken,authTokenObj] of Object.entries(E_TERMINAL_AUTH_TOKENS)) {
+      if (pid==authTokenObj.pid) {
+        delete E_TERMINAL_AUTH_TOKENS[authToken];
+        console.log("deregistered auth token: "+authToken);
+        break;
+      }
+    }
+  }
+
+  /*
   generateOneTimeAuthToken() {
     var otp=this.generateAuthToken(E_AUTH_TOKEN_TYPES.ONE_TIME);
     console.log("generateOneTimeAuthToken: "+Object.keys(E_ONE_TIME_AUTH_TOKENS).length+" active tokens");
     return otp;
   }
+  */
 
   generateTerminalAuthToken() {
-    var authToken=this.generateAuthToken(E_AUTH_TOKEN_TYPES.TERM);
-    console.log("generateTerminalAuthToken: "+Object.keys(E_TERMINAL_AUTH_TOKENS).length+" active tokens");
-    return authToken;
+    return this.generateAuthToken(E_AUTH_TOKEN_TYPES.TERM).then(function(authToken) {
+      console.log("generateTerminalAuthToken: "+Object.keys(E_TERMINAL_AUTH_TOKENS).length+" active tokens");
+      return authToken;
+    });
   }
 
   //generateGnuScreenAuthToken(sty) {
@@ -347,8 +380,9 @@ class TerminalServer extends http.Server {
     if (authToken in E_ONE_TIME_AUTH_TOKENS || authToken in E_TERMINAL_AUTH_TOKENS || authToken in E_GNU_SCREEN_AUTH_TOKENS) {
       return this.generateAuthToken(tokenType);
     }
-    this.registerAuthToken(authToken,tokenType,tokenConfig);
-    return authToken;
+    return this.registerAuthToken(authToken,tokenType,tokenConfig).then(function() {
+      return authToken;
+    });
   }
 
   /**
@@ -367,12 +401,78 @@ class TerminalServer extends http.Server {
         break;
       case E_AUTH_TOKEN_TYPES.TERM:
         registration.pid=undefined; // set later
+        registration.tty=undefined; // set later
         E_TERMINAL_AUTH_TOKENS[authToken]=registration;
+        return this.saveTerminalAuthTokens();
         break;
       case E_AUTH_TOKEN_TYPES.GNU_SCREEN:
         E_GNU_SCREEN_AUTH_TOKENS[authToken]=registration;
         break;
     }
+    return Promise.resolve();
+  }
+
+  loadTerminalAuthTokens() {
+    return fs.existsSync(E_TERMINAL_AUTH_TOKENS_FILE)
+      ? fsPromises.readFile(E_TERMINAL_AUTH_TOKENS_FILE).then(function(s) {
+          Object.assign(E_TERMINAL_AUTH_TOKENS,JSON.parse(s));
+          console.log("loadTerminalAuthTokens: E_TERMINAL_AUTH_TOKENS: "+JSON.stringify(E_TERMINAL_AUTH_TOKENS));
+        })
+      : Promise.resolve();
+  }
+
+  purgeInvalidTokens() {
+    var self=this;
+    var promises=[];
+    var needSave=false;
+    for (const [authToken,authTokenObj] of Object.entries(E_TERMINAL_AUTH_TOKENS)) {
+      if (authTokenObj.sty) {
+        promises.push(this.isAliveSty(authToken,authTokenObj.sty));
+        continue;
+      }
+      delete E_TERMINAL_AUTH_TOKENS[authToken];
+      needSave=true;
+    }
+    return Promise.all(promises).then(function(results) {
+      results.forEach(function(result) {
+        if (result.isAlive) {
+          console.log("purgeInvalidTokens: sty "+result.sty+" exists, keeping token "+result.authToken);
+        } else {
+          needSave=true;
+          console.log("purgeInvalidTokens: sty "+result.sty+" not found, deleting token "+result.authToken);
+          delete E_TERMINAL_AUTH_TOKENS[result.authToken];
+        }
+      });
+    }).then(function() {
+      if (needSave) {
+        return self.saveTerminalAuthTokens();
+      }
+    });
+  }
+
+  /**
+   * execute a simple command to test if GNU screen session exists
+   */
+  isAliveSty(authToken,sty) {
+    return new Promise(function(resolve,reject) {
+      var args=[
+        "-X",
+        "-S",
+        sty,
+        "version"
+      ];
+      var c=child_process.spawn('screen',args,{stdio:['ignore','ignore',process.stderr]});
+      c.on("error",reject);
+      c.on("exit",function(code,signal) {
+        resolve({sty:sty,isAlive:(code==0),authToken:authToken});
+      });
+    });
+  }
+
+  saveTerminalAuthTokens() {
+    return fsPromises.writeFile(E_TERMINAL_AUTH_TOKENS_FILE,JSON.stringify(E_TERMINAL_AUTH_TOKENS,null,1)).then(function() {
+      console.log("saveTerminalAuthTokens: finished saving");
+    });
   }
 
   isValidAuthToken(authToken) {

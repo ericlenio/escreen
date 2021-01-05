@@ -79,7 +79,7 @@ export -f _esh_e
 # around that ... netcat will be needed though
 _esh_b() {
   local status
-  if [ ${#FUNCNAME[@]} -gt 25 ]; then
+  if [ ${#FUNCNAME[@]} -gt 15 ]; then
     # this function recurses on itself, this is a safety switch to prevent a
     # fork bomb
     echo "$FUNCNAME: too many levels deep: $*" >&2
@@ -104,10 +104,10 @@ _esh_b() {
         echo "$FUNCNAME: loaded ESH_TERM_AUTH_TOKEN" >&2
       fi
     else
-      #ESH_TERM_AUTH_TOKEN=$(_esh_y tat)
-      ESH_TERM_AUTH_TOKEN=unknown
-      echo "please call $FUNCNAME from inside GNU screen: stack trace: ${FUNCNAME[*]}" >&2
-      return 1
+      echo "$FUNCNAME edge case outside GNU screen: stack trace: ${FUNCNAME[*]}" >&2
+      ESH_TERM_AUTH_TOKEN=x
+      # fix me: need more secure way to load ESH_TERM_AUTH_TOKEN
+      ESH_TERM_AUTH_TOKEN=$($FUNCNAME tat $ESH_TERM_PID)
     fi
   fi
   if [ -z "$ESH_TERM_AUTH_TOKEN" ]; then
@@ -117,6 +117,11 @@ _esh_b() {
   eval "$(_esh_e)"
   {
     read status
+    if [ "$status" = E_ENCRYPTED_AUTH_TOKEN ]; then
+      # to do: add better security here
+      openssl enc -d -A -a
+      return
+    fi
     if [ "$status" = E_BAD_AUTH_TOKEN ]; then
       echo "$FUNCNAME: bad auth token detected, retrying: $*" >&2
       # retry, unset ESH_TERM_AUTH_TOKEN to force it to refresh
@@ -192,7 +197,6 @@ _esh_l() {
 
 # shell init script here
 _esh_i() {
-echo "INSIDE $FUNCNAME:$ESH_TERM_AUTH_TOKEN-->$@" >&2
   local i=$HOME/.escreen_profile
   [ -f $i ] && . $i
   local t=$ESH_TMP u=$ESH_USER f=$(_esh_e -f)
@@ -328,9 +332,9 @@ ESH_CORE=$ESH_HOME/core
 export ESH_STY=$$
 export ESH_TERM_PID=$$
 
-if [ $# -gt 0 ]; then
-  ESH_TERM_AUTH_TOKEN=$1
-  _esh_i $ESH_STY ESH_PORT
-  e=$(ESH_TERM_AUTH_TOKEN=$ESH_TERM_AUTH_TOKEN _init_ctx -d $ESH_STY $ESH_PORT)
-  eval "$e"
-fi
+#if [ $# -gt 0 ]; then
+#  ESH_TERM_AUTH_TOKEN=$1
+#  _esh_i $ESH_STY ESH_PORT
+#  e=$(ESH_TERM_AUTH_TOKEN=$ESH_TERM_AUTH_TOKEN _init_ctx -d $ESH_STY $ESH_PORT)
+#  eval "$e"
+#fi
