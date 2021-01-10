@@ -104,12 +104,9 @@ _esh_b() {
       # paste the contents of register "p" into the paste buffer, then write
       # the paste buffer to a temp file, then read the temp file for
       # ESH_TERM_AUTH_TOKEN
-      #
-      # this is a little tricky - write out the GNU screen register to the
-      # fifo, and then below we immediately read the fifo; so this process
-      # substitution block doesn't actually produce anything for cat to read
       if read -d '' -t 3 ESH_TERM_AUTH_TOKEN < <(
-        cat <(env screen -X eval "paste p ." "writebuf $t") $t
+        env screen -X eval "paste p ." "writebuf $t" &
+        cat $t
       ); then
         # eof, no biggie
         :
