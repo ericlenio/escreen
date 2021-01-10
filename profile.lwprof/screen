@@ -10,7 +10,13 @@ screen() {
           local curr_sty=${STY:-some_value} pick_sty
           local stys=$(env screen -ls | grep -v $curr_sty | grep -vi attached | while read l; do
             if [[ "$l" =~ ^[[:blank:]]*([0-9]+\.[[:print:]]+) ]]; then
-              echo ${BASH_REMATCH[1]}
+              pick_sty=${BASH_REMATCH[1]}
+              t=$(mktemp)
+              env screen -X -S $pick_sty screen bash -c "echo \$ESH_VERSION > $t"
+              if [ $(<$t) = $ESH_VERSION ]; then
+                echo $pick_sty
+              fi
+              rm $t
             fi
           done)
           if [ -z "$stys" ]; then
@@ -24,7 +30,9 @@ screen() {
           fi
           if [[ $pick_sty =~ ^[0-9]+\.(.+) ]]; then
             eval "$(_esh_e)"
-            _esh_e ${BASH_REMATCH[1]} ESH_PORT SSH_AUTH_SOCK ESH_TERM_PID
+            ESH_TAT_HASH=$(printf $ESH_TERM_AUTH_TOKEN | openssl md5)
+            ESH_TAT_HASH=${ESH_TAT_HASH##*= }
+            _esh_e ${BASH_REMATCH[1]} ESH_PORT SSH_AUTH_SOCK ESH_TERM_PID ESH_TAT_HASH
             # strip off "screen." prefix from $TERM to avoid "$TERM too long" issue
             env screen -X -S $pick_sty register p $ESH_TERM_AUTH_TOKEN
             env TERM=${TERM#screen.} screen -d -r $pick_sty
@@ -57,6 +65,8 @@ screen() {
 
   rcfile=$(mktemp)
   cat << EOF >$rcfile
+#termcapinfo * '' u0=my_user0_string
+multiuser off
 bind / screen $ESH_EDITOR $(_esh_b ESH_PW_FILE)
 # bind "%" to take a screenshot, and open a new window to edit it
 bind % exec bash -c 'f=\$(mktemp) t=\$RANDOM; env screen -X hardcopy \$f; env screen -t \$t sh -c "$ESH_EDITOR \$f; rm \$f"; env screen -X select \$t'
@@ -67,7 +77,7 @@ defmonitor on
 msgwait 1
 hardstatus ignore
 shelltitle "$ |:"
-caption always "%{= kw}%-w%{= BW}%n%t%{-}%+w %-= @%H %{= Y}%l%{-} %m/%d:%0c$esh_info"
+caption always "%{= kw}%-w%{= BW}%n%t%{-}%+w %-= @%H %{= Y}%l%{-} %m/%d %0c$esh_info"
 register p $ESH_TERM_AUTH_TOKEN
 unsetenv SCREENRC
 screen

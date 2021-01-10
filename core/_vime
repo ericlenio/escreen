@@ -7,24 +7,21 @@ _vime() {
   local e=$ESH_TMP/$ESH_USER-vim
   export ESH_EDITOR=$e FCEDIT=$e VISUAL=$e EDITOR=$e
   [ ! -f $e -o -w $e ] && {
-    local p=$(cat <<'EOF'
-%s!/usr/bin/env bash
+    local p='#!/usr/bin/env bash
 [ "$1" = "--version" ] && exec vim "$@"
 %s
-if [ -z "$ESH_TERM_AUTH_TOKEN" ]; then
-  ESH_TERM_AUTH_TOKEN=$(_esh_y tat)
-fi
+#if [ -z "$ESH_TERM_AUTH_TOKEN" ]; then
+  #ESH_TERM_AUTH_TOKEN=$(_esh_y tat)
+#fi
 _esh_i </dev/null
 exec vim -S <(
-  # these next 2 echo statements to work around errors when invoking vim on Ubuntu 8
-  echo
-  echo '"'
+  # this printf statement to work around errors when invoking vim on Ubuntu 8
+  printf "\\n\\x22\\n"
   _vimrc
-  echo "let g:ESH_TERM_AUTH_TOKEN='$ESH_TERM_AUTH_TOKEN'"
+  printf "let g:ESH_TERM_AUTH_TOKEN=\x27%%s\x27\\n" $ESH_TERM_AUTH_TOKEN
 ) "$@"
-EOF
-)
-    printf "$p" '#' "$(declare -f _esh_e _esh_b _esh_l _esh_i _vimrc)" > $e
+'
+    printf "$p" "$(declare -f _esh_e _esh_b _esh_l _esh_i _vimrc)" > $e
     chmod 755 $e || {
       echo "ERROR: could not chmod $e: $?" >&2
       return 1

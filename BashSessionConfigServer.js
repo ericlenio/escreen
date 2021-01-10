@@ -27,6 +27,7 @@ const E_PORT=process.env.ESH_PORT;
 const E_HOUSEKEEPING_TIMER_INTERVAL=86400000;
 const E_ONE_OFF_SCRIPTS_DIR=process.env.ESH_HOME+"/private/"+process.env.ESH_USER+"/one-off-scripts";
 const ENCODING='utf8';
+const EVT_STATS={};
 
 class BashSessionConfigServer extends net.Server {
   constructor() {
@@ -61,7 +62,9 @@ class BashSessionConfigServer extends net.Server {
         });
       });
 
+      var n=0;
       self.on('connection',function(socket) {
+        socket.n=n++;
         socket.once("readable",function() {
           self.handleLegacyRequest(socket);
         });
@@ -71,11 +74,34 @@ class BashSessionConfigServer extends net.Server {
       self.legacyHandlers={};
       self.registerLegacyHanders();
       self.registerOtherHandlers();
+      //var handlers=Object.keys(self.legacyHandlers).sort();
+      //handlers.forEach(function(handlerId) {
+        //console.log("handler: "+handlerId);
+      //});
+      setInterval(function() {
+        var msg="";
+        Object.keys(EVT_STATS).sort().forEach(function(evtId) {
+          if (msg) {
+            msg+=", ";
+          }
+          msg+=evtId+":"+EVT_STATS[evtId];
+        });
+        console.log("EVT_STATS: "+msg);
+      },1000*60*60);
     });
   }
 
   handleLegacyRequest(socket) {
     var self=this;
+    socket.on("timeout",function() {
+      console.error("TIMEOUT, closing:"+this.n);
+      this.destroy("handleLegacyRequest: socket timeout");
+    });
+    socket.setTimeout(30*60*1000);
+    // add a default consumer of the readable part of the socket to make sure
+    // it will close
+    socket.on("data",function(buf){
+    });
     socket.on("error",function(e) {
       console.error("handleLegacyRequest socket error: "+e);
     });
@@ -103,15 +129,25 @@ class BashSessionConfigServer extends net.Server {
     }
     var authToken=hdr[0];
     var evtId=hdr[1];
-    console.log("request:"+hdr);
+    EVT_STATS[evtId]=evtId in EVT_STATS
+      ? EVT_STATS[evtId]+1
+      : 1;
+    console.log("request #"+socket.n+":"+hdr);
     if (evtId!='tat' && evtId!='registerTerminal') {
       if (!this.ts.isValidAuthToken(authToken)) {
-        console.error("invalid auth token: %s (evtId: %s)",authToken,evtId);
-        //setTimeout( function() { socket.end("bad auth token"); }, 3000 );
+        console.error("invalid auth token: %s (evtId: %s): "+socket.n,authToken,evtId);
         socket.write("E_BAD_AUTH_TOKEN\n");
+        // to do: modify handler naming convention so that for those handlers
+        // that do not stream we just immediately do socket.end(); otherwise
+        // you can run into block situation in some OS's (OpenBSD seems to be
+        // the main one)
+        if (evtId=='fpw') {
+          return socket.end();
+        }
         // mirror back original payload, so it can be re-used in the retry
         // logic of _esh_b
-        return socket.pipe(socket);
+        socket.pipe(socket);
+        return;
       }
       if (this.ts.isValidOneTimeAuthToken(authToken)) {
         this.ts.deleteAuthToken(authToken);
@@ -197,6 +233,10 @@ class BashSessionConfigServer extends net.Server {
       socket.end("escreen "+process.env.ESH_VERSION+"\n");
     });
 
+    self.registerHandler("stats",function(socket) {
+      socket.end(JSON.stringify(EVT_STATS,null,1));
+    });
+
     /**
      * get a list of all one off scripts
      */
@@ -276,12 +316,13 @@ class BashSessionConfigServer extends net.Server {
       var clipboardBytes=0;
 
       var platform=os.platform();
-      z.on("end", function() {
+      z.on("end",function() {
         var cp_prog=self.getOsProgram(E_OS_PROG_ENUM.COPY);
         var p=child_process.spawn(cp_prog[0], cp_prog.slice(1), {stdio:['pipe','ignore',process.stderr]});
         p.stdin.end(xselBuf);
-        p.on("error", function(e) {
-          socket.end(e);
+        p.on("error",function(e) {
+          console.error("setCb: p: "+e);
+          socket.end(e.toString());
         });
         p.on('exit',function(rc,signal) {
           socket.end();
@@ -290,24 +331,24 @@ class BashSessionConfigServer extends net.Server {
             // if small enough buffer, place into X Windows primary selection too for
             // convenience
             var p2=child_process.spawn("xsel",["-i","-p"],{stdio:['pipe',process.stdout,process.stderr]});
-            p2.on("error", function(e) {
+            p2.on("error",function(e) {
               console.error("setCb: xsel: "+e);
-              socket.end(e);
+              socket.end(e.toString());
             });
             p2.stdin.end(xselBuf);
           }
         });
       });
-      z.on("data", function(chunk) {
+      z.on("data",function(chunk) {
         clipboardBytes+=chunk.length;
         xselBuf+=new String(chunk);
         if (clipboardBytes==expectedLength) {
           z.end();
         }
       });
-      z.on("error", function(e) {
+      z.on("error",function(e) {
         console.error("setCb: z: "+e);
-        socket.end(e);
+        socket.end(e.toString());
       });
       socket.pipe(z);
     },true);
