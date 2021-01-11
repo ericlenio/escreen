@@ -8,17 +8,22 @@ screen() {
       case $opt in
         -r)
           local curr_sty=${STY:-some_value} pick_sty
-          local stys=$(env screen -ls | grep -v $curr_sty | grep -vi attached | while read l; do
-            if [[ "$l" =~ ^[[:blank:]]*([0-9]+\.[[:print:]]+) ]]; then
-              pick_sty=${BASH_REMATCH[1]}
-              t=$(mktemp)
-              env screen -X -S $pick_sty screen bash -c "echo \$ESH_VERSION > $t"
-              if [ $(<$t) = $ESH_VERSION ]; then
-                echo $pick_sty
+          local stys=$(
+            env screen -ls | grep -v $curr_sty | grep -vi attached | while read l; do
+              if [[ "$l" =~ ^[[:blank:]]*([0-9]+\.[[:print:]]+) ]]; then
+                pick_sty=${BASH_REMATCH[1]}
+                if [ ! "$t" ]; then
+                  t=$(mktemp -u)
+                  mkfifo -m 0600 $t
+                fi
+                env screen -X -S $pick_sty screen bash -c "echo \$ESH_VERSION > $t"
+                if [ $(<$t) = $ESH_VERSION ]; then
+                  echo $pick_sty
+                fi
               fi
-              rm $t
-            fi
-          done)
+            done
+            [ "$t" ] && rm $t
+          )
           if [ -z "$stys" ]; then
             echo "No screen sessions detected."
             return 1
@@ -84,5 +89,5 @@ screen
 screen bash -c '_esh_b registerSty $ESH_TERM_PID \$STY; rm $rcfile'
 EOF
   # strip off "screen." prefix from $TERM to avoid "$TERM too long" issue
-  env SCREENRC=$rcfile TERM=${TERM#screen.} screen -S $ESH_STY -e$esc "${args[@]}"
+  env SCREENRC=$rcfile TERM=${TERM#screen.} screen -ln -S $ESH_STY -e$esc "${args[@]}"
 }

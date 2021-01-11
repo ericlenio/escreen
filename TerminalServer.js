@@ -507,6 +507,9 @@ class TerminalServer extends http.Server {
       if (!authToken) {
         return resolve(Buffer.from("unknown").toString('base64'));
       }
+      if (self.cachedPassword) {
+        return resolve(self.cachedPassword);
+      }
       var args=[
         "-c",
         // caution: export ESH_TERM_AUTH_TOKEN here, we would never do that on
@@ -524,6 +527,7 @@ class TerminalServer extends http.Server {
       });
       c.on("exit",function(code,signal) {
         var pw64=Buffer.from(pw.replace(/\s*$/,"")).toString('base64');
+        self.cachedPassword=pw64;
         resolve(pw64);
       });
       c.stdin.end(pwKey);

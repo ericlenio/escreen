@@ -37,5 +37,7 @@
     read RA_USER_PASSWORD_64 < <(_esh_y _ra_get_ldap_pw)
   fi
 
+  # work around ubuntu hardcoding PS1
+  PS1="$ESH_PS1"
 }
 export -f -- -prompt

@@ -104,7 +104,7 @@ _esh_b() {
       # paste the contents of register "p" into the paste buffer, then write
       # the paste buffer to a temp file, then read the temp file for
       # ESH_TERM_AUTH_TOKEN
-      if read -d '' -t 3 ESH_TERM_AUTH_TOKEN < <(
+      if read -d '' ESH_TERM_AUTH_TOKEN < <(
         env screen -X eval "paste p ." "writebuf $t" &
         cat $t
       ); then
