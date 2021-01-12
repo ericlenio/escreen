@@ -78,6 +78,7 @@ export -f _esh_e
 # older shells may not be able to do the /dev/tcp/host/port trick, this works
 # around that ... netcat will be needed though
 _esh_b() {
+echo "_esh_b:$* >${FUNCNAME[*]}" >&2
   local status h
   if [ ${#FUNCNAME[@]} -gt 15 ]; then
     # this function recurses on itself, this is a safety switch to prevent a
@@ -151,7 +152,6 @@ _esh_b() {
     nc 127.0.0.1 $ESH_PORT < <(
       echo $ESH_TERM_AUTH_TOKEN "$*"
       if [ ! -t 0 ]; then
-echo "CAT:$* >${FUNCNAME[*]}" >&2
         cat
       fi
     )

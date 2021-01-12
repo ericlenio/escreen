@@ -13,6 +13,18 @@ _esh_bootstrap() {
     echo "$FUNCNAME: failed to load $f" >&2
     return 1
   fi
+
+  # inject the function into GNU screen environment so the next new window does
+  # not have to re-bootstrap the function: but seems to only work for shorter
+  # function definitions; and kind of hacky anyway
+  #local f3=BASH_FUNC_$f0%%
+  #if [ "$STY" ] && env | grep -q ^$f3; then
+    #f2="() {${f2#*{}"
+    ## must quote all dollar signs
+    #f2=${f2//$/\\$}
+    #env screen -X setenv $f3 "$f2"
+  #fi
+
   $f0 "$@"
 }
 export -f _esh_bootstrap
