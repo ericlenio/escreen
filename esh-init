@@ -243,7 +243,7 @@ _esh_i() {
   #   fc
   if [ -t 1 ]; then
     _vime
-    _esh_l $t/-prompt $p2
+    #_esh_l $t/-prompt $p2
     export PROMPT_COMMAND='-prompt'
   fi
   export -f _esh_e _esh_i _esh_b _esh_l _esh_y

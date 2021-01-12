@@ -13,4 +13,3 @@ _esh_gen_stub() {
     #unalias -- $funcname 2>/dev/null
   }
 }
-export -f _esh_gen_stub

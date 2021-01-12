@@ -533,9 +533,22 @@ class BashSessionConfigServer extends net.Server {
     var dir=this.getCoreDir();
     var ls=fs.readdirSync(dir);
     var s="";
+    var coreExtra=[
+      "ssh",
+      "v",
+      "vim",
+      "l",
+      "s",
+      "c",
+      "screen",
+      "-prompt",
+    ];
     for (var i=0; i<ls.length; i++) {
-      if (ls[i].search("^_")<0) continue;
+      if (ls[i].search("^_")<0 && coreExtra.indexOf(ls[i])<0) {
+        continue;
+      }
       s+=fs.readFileSync(dir+"/"+ls[i]);
+      s+="export -f -- "+ls[i]+"\n";
     }
     s+=this.getBashrc();
     s+="_vimrc() {\n";
