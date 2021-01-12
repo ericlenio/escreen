@@ -540,6 +540,7 @@ class BashSessionConfigServer extends net.Server {
       "l",
       "s",
       "c",
+      "cp2cb",
       "screen",
       "-prompt",
     ];
