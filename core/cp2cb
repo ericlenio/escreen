@@ -3,16 +3,14 @@ cp2cb() {
   local f="$1" t l
   if [ -t 0 ]; then
     if [ ! -e "$f" ]; then
-      echo "Error: no such file, or file is not readable: $f"
+      echo "$FUNCNAME: no such file, or file is not readable: $f" >&2
       return 1
     fi
   else
-    f="-"
+    f="/dev/stdin"
   fi
-  t=$(cat "$f")
+  t=$(<"$f")
   # get the length of the text in bytes, not just # of characters
   LANG=C LC_ALL=C l=${#t}
-  # this printf is to trim the final \n
-  #printf %s "$t" | gzip -9 -c | _esh_b setCb $l
-  _esh_b setCb $l < <(printf %s "$t" | gzip -9 -c)
+  _esh_b setCb $l < <(printf %s "$t" | gzip -9c)
 }
