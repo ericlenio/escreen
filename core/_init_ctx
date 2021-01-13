@@ -103,4 +103,3 @@ _init_ctx() {
   printf "exec bash -c '%s' -- " "$bootstr"
   echo $z_init_64
 }
-export -f _init_ctx
