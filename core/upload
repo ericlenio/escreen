@@ -10,17 +10,12 @@ upload() {
       echo "$FUNCNAME FAIL: $status" >&2
       return 1
     fi
-cat /dev/null > /tmp/l
     while true; do
       IFS='' read -s -d '' -n 1 c
-printf %s "$c" >> /tmp/l
       if [ "$c" = "$eot" ]; then
         break
       fi
       printf %s "$c"
-      #if [ "$c" = $'\n' ]; then
-        #break
-      #fi
     done
     IFS=$'\r|' read status upload_file upload_file_md5
     upload_file=$(basename "$upload_file")
@@ -53,26 +48,4 @@ printf %s "$c" >> /tmp/l
       done
     } | nc 127.0.0.1 $ESH_PORT
   )
-  return
-
-  # Use md5 to verify the file transferred correctly
-  local expected_md5=$(_esh_b getUploadFileHash $token)
-  if [ $setmode = 1 ]; then
-    chmod $mode "$upload_file"
-    echo "set mode: $mode"
-  fi
-  echo "Checking MD5 now ..."
-  local md5=$(openssl md5 -hex "$upload_file")
-  # md5 will look something like this:
-  # MD5(somefile)= 7f851736b8f86d8ee734a5d94bedf2f7
-  # remove the prefix
-  md5=${md5##*= }
-  # force to lowercase: OS X cannot do "md5=${md5,,}" so use tr
-  md5=$(echo $md5 | tr "[:upper:]" "[:lower:]")
-  if [ "$md5" != "$expected_md5" ]; then
-    echo "ERROR: md5 check failed for $upload_file"
-  else
-    echo "SUCCESS: MD5 check verified for $upload_file"
-  fi
-  _esh_b dropUploadToken $token
 }
