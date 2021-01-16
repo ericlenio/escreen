@@ -17,13 +17,32 @@ upload() {
       fi
       printf %s "$c"
     done
-    IFS=$'\r|' read status upload_file upload_file_md5
+    IFS=$'\r|' read status upload_file upload_file_md5 upload_file_size
     upload_file=$(basename "$upload_file")
     if [ "$status" != E_FILE_INFO ]; then
       echo "$status" >&2
       return 1
     fi
-    if ! gzip -d -c > "$upload_file"; then
+    set -o pipefail
+    if ! gzip -d -c | perl -pe '
+BEGIN {
+  $n=0;
+  $n2=0;
+  $s=shift @ARGV;
+  $freq=2**10*32;
+  printf STDERR "%10d/%10d",$n,$s;
+}
+END {
+  printf STDERR "\033[1G%10d",$n;
+  printf STDERR "\n";
+}
+$n+=length($_);
+$n2+=length($_);
+if ($n2 > $freq ) {
+  printf STDERR "\033[1G%10d",$n;
+  $n2=0;
+}
+' $upload_file_size > "$upload_file"; then
       echo "$FUNCNAME FAIL: $upload_file did not decompress through gzip" >&2
       return 1
     fi

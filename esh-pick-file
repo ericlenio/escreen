@@ -1,5 +1,5 @@
 #! /usr/bin/env bash
-basedir=/tmp
+basedir=$HOME
 cd $basedir
 read -e -p "pick a file: " f
 eot=$'\x04'
@@ -11,7 +11,9 @@ if [ -f "$f" ]; then
   fi
   md5=$(openssl md5 "$f")
   md5=${md5##*= }
-  printf "E_FILE_INFO|%s|%s\n" "$f" $md5
+  size=$(wc -c <"$f")
+  size=${size// /}
+  printf "E_FILE_INFO|%s|%s|%s\n" "$f" $md5 $size
   exit 0
 elif [ "$f" ]; then
   printf "E_NO_SUCH_FILE: %s\n" "$f"
