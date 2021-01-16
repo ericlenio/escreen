@@ -1,0 +1,16 @@
+ESH_HOME=$(node -r fs -e "console.log(fs.realpathSync(fs.realpathSync('$0')+'/..'))")
+export ESH_VERSION=$(<$ESH_HOME/esh-version)
+ESH_TMP=/tmp/esh-$ESH_VERSION
+
+ESH_USER=$USER
+ESH_PORT=2021
+
+opts="p:"
+while getopts $opts opt; do
+  case $opt in
+    p) ESH_PORT=$OPTARG
+      echo "NOTE: using port: $ESH_PORT"
+      ESH_TMP+=-$ESH_PORT
+      ;;
+  esac
+done

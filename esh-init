@@ -354,7 +354,7 @@ export ESH_STY=$$
 export ESH_TERM_PID=$$
 export ESH_USER=$USER
 export ESH_VERSION=$(<$ESH_HOME/esh-version)
-export ESH_TMP=/tmp/esh-$ESH_VERSION
+#export ESH_TMP=/tmp/esh-$ESH_VERSION
 export ESH_PROFILE_DIR=$ESH_HOME/profile.lwprof
 
 #if [ $# -gt 0 ]; then

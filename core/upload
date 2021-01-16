@@ -2,47 +2,59 @@
 # Upload a file from the system that launched escreen to the current running
 # shell's working directory.
 upload() {
-  #local ESH_NC="$ESH_NC"
-  # esh_port0 is ESH_PORT from the system that launched escreen
-  local esh_port0 esh_at0 sshuser
+  local status c upload_file upload_file_size upload_file_md5 last4 eot=$'\x04'
   eval "$(_esh_e)"
-  { IFS='|' read esh_port0 esh_at0 sshuser; } <<< $(_esh_b getEnv ESH_PORT ESH_AT ESH_USER)
-echo esh_port0:$esh_port0 esh_at0:$esh_at0 sshuser:$sshuser
-  local token=$(openssl rand -base64 4)
-  #
-  # Strategy: launch a shell back on originating escreen system and utilize
-  # bash's readline path autocomplete feature to pick a file.
-  #
-  SHELL=$(which sh) env ssh -t -q -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null \
-    -oProxyCommand='sh -c "{ echo $ESH_AT sshd; cat -u; } | nc 127.0.0.1 '$ESH_PORT'"' $sshuser@fakehost \
-    env bash -c '"read -p \"Logged in to \$(hostname). Pick a file to upload: \" -e f; [ -r \"\$f\" ] && [ ! -d \"\$f\" ] && { echo '$esh_at0' setUploadFilename '$token' \$(echo -n \"\$f\" | openssl enc -base64 -A) | nc 127.0.0.1 '$esh_port0'; } || { echo \"Not a file, or not readable: \$f\"; exit 1; }"' || return
-  local upload_file mode upload_file_size
-  { IFS='|' read upload_file mode upload_file_size; } <<< $(_esh_b getUploadFileInfo $token)
-  [ -z "$upload_file" ] && return
-  upload_file=$(basename "$upload_file")
-  echo "uploading now ..."
-  local setmode=0
-  # only set the mode if file did not previously exist (locally)
-  [ ! -f "$upload_file" ] && setmode=1
-  echo $ESH_AT getUploadFile $token | nc 127.0.0.1 $ESH_PORT | perl -pe '
-BEGIN {
-  $n=0;
-  $n2=0;
-  $s=shift @ARGV;
-  $freq=2**10*32;
-  printf STDERR "%10d/%10d",$n,$s;
-}
-END {
-  printf STDERR "\033[1G%10d",$n;
-  printf STDERR "\n";
-}
-$n+=length($_);
-$n2+=length($_);
-if ($n2 > $freq ) {
-  printf STDERR "\033[1G%10d",$n;
-  $n2=0;
-}
-' $upload_file_size > "$upload_file"
+  {
+    read status
+    if [ "$status" != E_AUTH_TOKEN_OK ]; then
+      echo "$FUNCNAME FAIL: $status" >&2
+      return 1
+    fi
+cat /dev/null > /tmp/l
+    while true; do
+      IFS='' read -s -d '' -n 1 c
+printf %s "$c" >> /tmp/l
+      if [ "$c" = "$eot" ]; then
+        break
+      fi
+      printf %s "$c"
+      #if [ "$c" = $'\n' ]; then
+        #break
+      #fi
+    done
+    IFS=$'\r|' read status upload_file upload_file_md5
+    upload_file=$(basename "$upload_file")
+    if [ "$status" != E_FILE_INFO ]; then
+      echo "$status" >&2
+      return 1
+    fi
+    if ! gzip -d -c > "$upload_file"; then
+      echo "$FUNCNAME FAIL: $upload_file did not decompress through gzip" >&2
+      return 1
+    fi
+    upload_file_md5a=$(openssl md5 "$upload_file")
+    upload_file_md5a=${upload_file_md5a##*= }
+    if [ $upload_file_md5 != $upload_file_md5a ]; then
+      echo >&2
+      echo "$FUNCNAME FAIL: md5 hash mismatch: expected $upload_file_md5, but got $upload_file_md5a" >&2
+      return 1
+    fi
+    echo SUCCESS
+    return 0
+  } < <(
+    {
+      echo $ESH_TERM_AUTH_TOKEN pickFile
+      while true; do
+        IFS='' read -s -d '' -n 1 c
+        printf %s "$c"
+        if [ "$c" = $'\n' ]; then
+          break
+        fi
+      done
+    } | nc 127.0.0.1 $ESH_PORT
+  )
+  return
+
   # Use md5 to verify the file transferred correctly
   local expected_md5=$(_esh_b getUploadFileHash $token)
   if [ $setmode = 1 ]; then

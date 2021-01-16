@@ -1,9 +1,13 @@
+const pty=require('node-pty');
+const zlib=require('zlib');
+
 module.exports=function(server) {
 
   // Simple cache for tracking individual upload requests
   var CACHE={};
   var fs=require('fs');
 
+  /* security risk!
   server.registerHandler("sshd",function(socket) {
     var child_process=require('child_process');
     var p=child_process.spawn("sudo",["/usr/sbin/sshd","-i"],
@@ -13,6 +17,48 @@ module.exports=function(server) {
       });
     socket.pipe(p.stdin);
     p.stdout.pipe(socket);
+  },true);
+  */
+
+  server.registerHandler("pickFile",function(socket) {
+    var pickFileScript=process.env.ESH_HOME+"/esh-pick-file";
+
+    var term=pty.spawn(pickFileScript,[],{
+      // note: node-pty will use "name" to set the terminal type
+      //name:process.env.TERM,
+      //encoding:ENCODING,
+      //handleFlowControl:true,
+      //cols:process.stdout.columns,
+      //rows:process.stdout.rows,
+      cwd:"/tmp",
+      //env:process.env,
+    });
+    var stdout='';
+    term.on('data',function data(buf) {
+      stdout+=buf;
+      socket.write(buf);
+    });
+    term.on('error',function(code) {
+      console.error("pickFileScript caught:"+code);
+    });
+    term.on('close',function(code,signal) {
+      console.log("pickFileScript close:"+term.pid)
+      if (code>0) {
+        return socket.end();
+      }
+      var eot="\x04";
+      var re=new RegExp(".*?"+eot+"(E_FILE_INFO.*?)\r\n","s");
+      var fileInfo=stdout.replace(re,"$1").split('|');
+      if (fileInfo==stdout) {
+        return socket.end();
+      }
+      console.log("upload fileInfo:"+JSON.stringify(fileInfo));
+      var uploadFile=fileInfo[1];
+      var z=zlib.createGzip({level:zlib.Z_BEST_COMPRESSION});
+      var fsstream=fs.createReadStream(uploadFile);
+      fsstream.pipe(z).pipe(socket);
+    });
+    socket.pipe(term);
   },true);
 
 
