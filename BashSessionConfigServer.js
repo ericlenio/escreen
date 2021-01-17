@@ -535,6 +535,8 @@ class BashSessionConfigServer extends net.Server {
     var s="";
     var coreExtra=[
       "ssh",
+      "sftp",
+      "scp",
       "v",
       "vim",
       "l",
@@ -543,6 +545,8 @@ class BashSessionConfigServer extends net.Server {
       "cp2cb",
       "screen",
       "-prompt",
+      "upload",
+      "download",
     ];
     for (var i=0; i<ls.length; i++) {
       if (ls[i].search("^_")<0 && coreExtra.indexOf(ls[i])<0) {
