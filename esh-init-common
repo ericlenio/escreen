@@ -1,4 +1,4 @@
-ESH_HOME=$(node -r fs -e "console.log(fs.realpathSync(fs.realpathSync('$0')+'/..'))")
+#ESH_HOME=$(node -r fs -e "console.log(fs.realpathSync(fs.realpathSync('$0')+'/..'))")
 export ESH_VERSION=$(<$ESH_HOME/esh-version)
 ESH_TMP=/tmp/esh-$ESH_VERSION
 

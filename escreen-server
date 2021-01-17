@@ -1,6 +1,7 @@
 #! /usr/bin/env bash
+ESH_HOME=$(node -r fs -e "console.log(fs.realpathSync(fs.realpathSync('$0')+'/..'))")
 
-source $(dirname $0)/esh-init-common
+source $ESH_HOME/esh-init-common
 
 [ ! -d $ESH_TMP ] && mkdir $ESH_TMP && chmod 1777 $ESH_TMP
 ESH_PROFILE_DIR=${!OPTIND:-$ESH_HOME/profile.lwprof}

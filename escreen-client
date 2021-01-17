@@ -2,7 +2,9 @@
 # old:
 #exec node $ESH_HOME/client.js "$@"
 
-source $(dirname $0)/esh-init-common
+ESH_HOME=$(node -r fs -e "console.log(fs.realpathSync(fs.realpathSync('$0')+'/..'))")
+
+source $ESH_HOME/esh-init-common
 
 source $ESH_HOME/esh-init
 read ESH_TERM_AUTH_TOKEN < <(ESH_TERM_AUTH_TOKEN=x _esh_b registerTerminal $$ $(tty))
