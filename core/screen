@@ -38,8 +38,12 @@ screen() {
             ESH_TAT_HASH=$(printf $ESH_TERM_AUTH_TOKEN | openssl md5)
             ESH_TAT_HASH=${ESH_TAT_HASH##*= }
             _esh_e ${BASH_REMATCH[1]} ESH_PORT SSH_AUTH_SOCK ESH_TERM_PID ESH_TAT_HASH
-            # strip off "screen." prefix from $TERM to avoid "$TERM too long" issue
             env screen -X -S $pick_sty register p $ESH_TERM_AUTH_TOKEN
+            if [ -z "$SSH_TTY" ]; then
+              # re-register top level GNU screen session
+              _esh_b registerSty $ESH_TERM_PID $pick_sty
+            fi
+            # strip off "screen." prefix from $TERM to avoid "$TERM too long" issue
             env TERM=${TERM#screen.} screen -d -r $pick_sty
             return $?
           else

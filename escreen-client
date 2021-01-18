@@ -2,7 +2,7 @@
 # old:
 #exec node $ESH_HOME/client.js "$@"
 
-ESH_HOME=$(node -r fs -e "console.log(fs.realpathSync(fs.realpathSync('$0')+'/..'))")
+export ESH_HOME=$(node -r fs -e "console.log(fs.realpathSync(fs.realpathSync('$0')+'/..'))")
 
 source $ESH_HOME/esh-init-common
 

@@ -1,0 +1,6 @@
+# vim:filetype=bash
+# run this to reload the core library - useful during testing of bugfixes or
+# new features
+_esh_reload() {
+  _esh_l $ESH_TMP/$ESH_USER.core
+}

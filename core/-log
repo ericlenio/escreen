@@ -48,6 +48,9 @@
     ".*\.log$"
     ".*\.log\.([0-9]+)$"
     ".*\.log\.([0-9]+)\.gz$"
+    "^[a-z]+$"
+    "^[a-z]+\.([0-9]+)$"
+    "^[a-z]+\.([0-9]+)\.gz$"
   )
   if [ "$logfile_prefix" ]; then
     local i candidate_logfile_list=($(sudo find /var/log ! -name '*.journal' -name "$logfile_prefix*" -type f)) logfile_list=() sort1 sort2 sort3 sort4 regex logdir matched logdir_slashes choice choice_list
