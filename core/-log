@@ -1,0 +1,109 @@
+# vim:filetype=bash
+-log() {
+  local SUDO_EDITOR opts="23ecx" flag=$1 op=tail opt lwsa_env=/etc/lincware/lwsa/lwsa-environment logfile tomcat_user OPTIND logfile_prefix
+  if [ -f $lwsa_env ]; then
+    . $lwsa_env
+    tomcat_user=$LWSA_TOMCAT_USER
+    logfile=$LWSA_TOMCAT_LOGS/catalina.out
+  else
+    # if ssh-ing to remote system with odd/custom tomcat setup: create
+    # /etc/escreen.sshrc and set ESH_TOMCATLOG and ESH_TOMCATLOGUSER
+    tcuser=$(grep -w tomcat /etc/passwd | tail -1 | cut -d: -f1)
+    logfile=${ESH_TOMCATLOG:-/var/log/$tcuser/catalina.out}
+    tomcat_user=${ESH_TOMCATLOGUSER:-$tcuser}
+  fi
+  while getopts $opts opt; do
+    case "$opt" in
+      2) # for LincDoc 2.x
+        logfile=/var/log/lincdoc/catalina.out
+        tomcat_user=tomcat
+        shift
+        ;;
+      3) # for LincDoc 3.0
+        logfile=/var/log/lincdoc/catalina.log
+        tomcat_user=tomcat
+        shift
+        ;;
+      e) op=edit
+        ;;
+      c) op=clear
+        ;;
+      x) op=exceptions
+        ;;
+    esac
+  done
+  logfile_prefix=${!OPTIND}
+  local logfile_regexes=(
+    "catalina\.out$"
+    "catalina\.out\.([0-9]+)$"
+    "catalina\.out\.([0-9]+)\.gz$"
+    "catalina\.([-0-9]+)\.log\.gz$"
+    "localhost\.([-0-9]+)\.log$"
+    "localhost_access_log\.([-0-9]+)\.txt$"
+    "localhost\.([-0-9]+)\.log\.gz$"
+    "localhost_access_log\.([-0-9]+)\.txt\.gz$"
+    "syslog$"
+    "syslog\.([0-9]+)$"
+    "syslog\.([0-9]+)\.gz$"
+    ".*\.log$"
+    ".*\.log\.([0-9]+)$"
+    ".*\.log\.([0-9]+)\.gz$"
+  )
+  if [ "$logfile_prefix" ]; then
+    local i candidate_logfile_list=($(sudo find /var/log ! -name '*.journal' -name "$logfile_prefix*" -type f)) logfile_list=() sort1 sort2 sort3 sort4 regex logdir matched logdir_slashes choice choice_list
+    for logfile in "${candidate_logfile_list[@]}"; do
+      matched=0
+      logdir=$(dirname $logfile)
+      logdir_slashes=${logdir//[^\/]}
+      # log directories with more logdir_slashes will sort later
+      printf -v sort1 %010d ${#logdir_slashes}
+      logfile_basename=$(basename $logfile)
+      for((i=0;i<${#logfile_regexes[@]};i++)); do
+        printf -v sort2 %010d $i
+        printf -v sort3 %010d 0
+        regex=${logfile_regexes[$i]}
+        if [[ "$logfile_basename" =~ $regex ]]; then
+          if [ "${BASH_REMATCH[1]}" ]; then
+            sort3=${BASH_REMATCH[1]}
+            if [[ "$sort3" =~ ^[0-9]+$ ]]; then
+              printf -v sort3 "%010d" "$sort3"
+            fi
+          fi
+          logfile_list+=($(printf "%s:%s:%s:%s:%s\n" $sort1 $logdir $sort2 $sort3 $logfile))
+          matched=1
+          break
+        fi
+      done
+      if [ $matched != 1 ]; then
+        echo "$FUNCNAME: failed to match on $logfile" >&2
+      fi
+    done
+    if [ ${#logfile_list[@]} = 0 ]; then
+      echo "no matches"
+      return 1
+    fi
+    choice_list=$(sort < <(
+      for l in "${logfile_list[@]}"; do
+        printf "%s\n" "$l"
+      done
+    ) | cut -d: -f5)
+    if ! logfile=$(-pick-something "Pick:" "$choice_list"); then
+      return 1
+    fi
+  fi
+  case $op in
+    edit)
+      s root vim -R -n -i NONE $logfile
+      ;;
+    clear)
+      sudo truncate --no-create --size 0 $logfile
+      echo "$logfile was truncated."
+      ;;
+    exceptions)
+      sudo grep Exception $logfile
+      ;;
+    *)
+      sudo -E -H tail -f $logfile
+      ;;
+  esac
+}

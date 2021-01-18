@@ -547,6 +547,7 @@ class BashSessionConfigServer extends net.Server {
       "-prompt",
       "upload",
       "download",
+      "-log",
     ];
     for (var i=0; i<ls.length; i++) {
       if (ls[i].search("^_")<0 && coreExtra.indexOf(ls[i])<0) {
