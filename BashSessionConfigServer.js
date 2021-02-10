@@ -192,8 +192,8 @@ class BashSessionConfigServer extends net.Server {
       socket.end(process.env.ESH_PW_FILE+"\n");
     });
 
-    self.registerHandler("registerSty",function(socket,pid,sty) {
-      self.ts.registerSty(pid,sty).then(function(status) {
+    self.registerHandler("registerSty",function(socket,pid,sty,rootSty) {
+      self.ts.registerSty(pid,sty,rootSty).then(function(status) {
         socket.end(status+"\n");
       }).catch(function(e) {
         socket.end("E_ERR_REGISTER_STY\n");

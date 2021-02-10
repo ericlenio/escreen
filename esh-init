@@ -78,13 +78,13 @@ export -f _esh_e
 # older shells may not be able to do the /dev/tcp/host/port trick, this works
 # around that ... netcat will be needed though
 _esh_b() {
-echo "_esh_b:$* >${FUNCNAME[*]}" >&2
   local status h
   if [ ${#FUNCNAME[@]} -gt 15 ]; then
     # this function recurses on itself, this is a safety switch to prevent a
     # fork bomb
     echo "$FUNCNAME: too many levels deep: $*" >&2
     echo "stack trace: ${FUNCNAME[*]}" >&2
+    echo "you probably need to disconnect the root STY and restart escreen-client" >&2
     return 1
   fi
 
@@ -113,7 +113,7 @@ echo "_esh_b:$* >${FUNCNAME[*]}" >&2
         :
       fi
       rm $t
-      echo "$FUNCNAME: loaded ESH_TERM_AUTH_TOKEN by GNU screen method" >&2
+      #echo "$FUNCNAME: loaded ESH_TERM_AUTH_TOKEN by GNU screen method" >&2
     fi
   else
     if [ -z "$ESH_TERM_AUTH_TOKEN" ]; then

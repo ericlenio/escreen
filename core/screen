@@ -1,7 +1,7 @@
 # vim:filetype=bash
 screen() {
   # make copy of original function args
-  local args=("$@") opt rcfile
+  local args=("$@") opt rcfile root_sty=$([ "$SSH_TTY" ] && echo 0 || echo 1)
   # Note: escreen sends "--", that is why we skip it here
   if [ "$1" != -- ]; then
     for opt in "$@"; do
@@ -39,10 +39,7 @@ screen() {
             ESH_TAT_HASH=${ESH_TAT_HASH##*= }
             _esh_e ${BASH_REMATCH[1]} ESH_PORT SSH_AUTH_SOCK ESH_TERM_PID ESH_TAT_HASH
             env screen -X -S $pick_sty register p $ESH_TERM_AUTH_TOKEN
-            if [ -z "$SSH_TTY" ]; then
-              # re-register top level GNU screen session
-              _esh_b registerSty $ESH_TERM_PID $pick_sty
-            fi
+            _esh_b registerSty $ESH_TERM_PID $pick_sty $root_sty
             # strip off "screen." prefix from $TERM to avoid "$TERM too long" issue
             env TERM=${TERM#screen.} screen -d -r $pick_sty
             return $?
@@ -63,11 +60,10 @@ screen() {
   v --version >/dev/null
   local esc=^Aa esh_info
 
-  if [ "$SSH_TTY" ]; then
+  if [ $root_sty = 0 ]; then
     # assume nested gnu screen, so use alternate escape sequence
     esc=^Ee
   else
-
     # put a little version string in the caption
     esh_info=" %{= cd}v$ESH_VERSION"
   fi
@@ -90,7 +86,7 @@ caption always "%{= kw}%-w%{= BW}%n%t%{-}%+w %-= @%H %{= Y}%l%{-} %m/%d %0c$esh_
 register p $ESH_TERM_AUTH_TOKEN
 unsetenv SCREENRC
 screen
-screen bash -c '_esh_b registerSty $ESH_TERM_PID \$STY; rm $rcfile'
+screen bash -c '_esh_b registerSty $ESH_TERM_PID \$STY $root_sty; rm $rcfile'
 EOF
   # strip off "screen." prefix from $TERM to avoid "$TERM too long" issue
   env SCREENRC=$rcfile TERM=${TERM#screen.} screen -ln -S $ESH_STY -e$esc "${args[@]}"
