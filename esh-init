@@ -352,7 +352,7 @@ export ESH_CORE=$ESH_HOME/core
 # given shell between various combinations of screen, sudo, and ssh
 export ESH_STY=$$
 export ESH_TERM_PID=$$
-#export ESH_USER=$USER
+export ESH_USER
 export ESH_VERSION=$(<$ESH_HOME/esh-version)
 #export ESH_TMP=/tmp/esh-$ESH_VERSION
 export ESH_PROFILE_DIR=$ESH_HOME/profile.lwprof
