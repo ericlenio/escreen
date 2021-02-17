@@ -341,6 +341,7 @@ _esh_y_OLD() {
 
 _esh_y() {
   local key=$1
+  eval "$(_esh_e)" </dev/null
   _esh_b m2 $ESH_TERM_PID "$key" </dev/null
 }
 
