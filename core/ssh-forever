@@ -1,0 +1,13 @@
+# vim:filetype=bash
+ssh-forever() (
+  local timeout=15 sleep=5
+  trap exit INT
+  while true; do
+    SECONDS=0
+    ssh -oConnectTimeout=$timeout "$@"
+    if [ $SECONDS = $timeout ]; then
+      printf "%s: sleep %ss and then will attempt to reconnect, or do control-c now to stop" $FUNCNAME $sleep
+    fi
+    sleep $sleep
+  done
+)

@@ -535,6 +535,7 @@ class BashSessionConfigServer extends net.Server {
     var s="";
     var coreExtra=[
       "ssh",
+      "ssh-forever",
       "sftp",
       "scp",
       "v",

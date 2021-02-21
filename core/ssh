@@ -21,7 +21,7 @@ echo "$FUNCNAME: need to load ESH_TERM_AUTH_TOKEN" >&2
   local OPTIND=1 last_arg=${@:$#} \
     ssh_legal_opts="1246ab:c:e:fgi:kl:m:no:p:qstvxACD:E:F:GI:J:KL:MNO:PQ:R:S:TVw:W:XYy" \
     OPTS arg1 h ssh_user_host cmdline_ssh_host sshrc rem_port c0 c1 sid
-  local -a ssh_opts
+  local -a ssh_cmd=(env ssh)
   [ -z "$last_arg" ] && {
     echo "no arguments to ssh?" >&2
     return 1
@@ -49,15 +49,15 @@ echo "$FUNCNAME: need to load ESH_TERM_AUTH_TOKEN" >&2
         return $?
         ;;
     esac
-    ssh_opts+=("-$arg1")
-    [ "$OPTARG" ] && ssh_opts+=("$OPTARG")
+    ssh_cmd+=("-$arg1")
+    [ "$OPTARG" ] && ssh_cmd+=("$OPTARG")
   done
   # after this shift, the ssh user@host should be left in $1 (assuming an
   # user@host was provided on the command line, which is most of the time)
   [ $OPTIND -gt 1 ] && shift $(($OPTIND-1))
   if [ $# = 0 ]; then
     # Might have done -V, allow to continue
-    env ssh "${ssh_opts[@]}"
+    "${ssh_cmd[@]}"
     return $?
   fi
   # should now have user@ssh_host left in function arguments, or just plain
@@ -67,16 +67,17 @@ echo "$FUNCNAME: need to load ESH_TERM_AUTH_TOKEN" >&2
   cmdline_ssh_host=${ssh_user_host##*@}
   h=$cmdline_ssh_host
   [ "$SSH_STY_LBL" ] && h=$SSH_STY_LBL
-  [ "$STY" ] && {
-    printf "\033k$h\033\134"
-    # restore screen window title when this function is interrupted, or just
-    # returns normally
-    trap 'printf "\033k${HOSTNAME}\033\134"; trap - INT RETURN' INT RETURN
+  _ssh_cleanup() {
+    [ "$STY" ] && printf "\033k${HOSTNAME}\033\134"
+    unset -f $FUNCNAME
+    trap - RETURN INT
   }
+  trap _ssh_cleanup RETURN
+  [ "$STY" ] && printf "\033k$h\033\134"
   # if anything left in the command line (and ssh option -t is not set), then
   # we just do straight through call to ssh.
   if [ $# -lt 0 ]; then
-    ssh_opts+=($ssh_user_host "$@")
+    ssh_cmd+=($ssh_user_host "$@")
   else
     #
     # We need an open port on the remote host. Pick a random port and hope it
@@ -133,16 +134,17 @@ echo "$FUNCNAME: need to load ESH_TERM_AUTH_TOKEN" >&2
     # if ssh-ing to localhost, and neither ProxyJump nor ProxyCommand are being
     # used, we can make a small optimization to re-use the current remoteadmin
     # server listening port
-    if [[ ! $cmdline_ssh_host =~ 127.0.0.1|localhost || "${ssh_opts[@]}" =~ ProxyJump|ProxyCommand ]]; then
+    if [[ ! $cmdline_ssh_host =~ 127.0.0.1|localhost || "${ssh_cmd[@]}" =~ ProxyJump|ProxyCommand ]]; then
       rem_port=$(( $RANDOM % 1000 + 56100 ))
-      ssh_opts+=(-R$rem_port:127.0.0.1:$ESH_PORT)
+      ssh_cmd+=(-R$rem_port:127.0.0.1:$ESH_PORT)
       sid=$ssh_user_host-$RANDOM
     else
       rem_port=$ESH_PORT
       sid=$ESH_STY
     fi
-    ssh_opts+=(-t -oServerAliveInterval=30 -oExitOnForwardFailure=yes $ssh_user_host)
+    ssh_cmd+=(-t -oServerAliveInterval=30 -oExitOnForwardFailure=yes $ssh_user_host)
   fi
-  $([ ${SSH_EXEC:-0} = 1 ] && echo exec) env ssh "${ssh_opts[@]}" $(ESH_TERM_AUTH_TOKEN=$ESH_TERM_AUTH_TOKEN _init_ctx $sid $rem_port "$@")
+  ssh_cmd+=($(ESH_TERM_AUTH_TOKEN=$ESH_TERM_AUTH_TOKEN _init_ctx $sid $rem_port "$@"))
+  "${ssh_cmd[@]}"
 }
 export -f ssh
