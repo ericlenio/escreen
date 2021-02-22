@@ -20,7 +20,7 @@ echo "$FUNCNAME: need to load ESH_TERM_AUTH_TOKEN" >&2
   }
   local OPTIND=1 last_arg=${@:$#} \
     ssh_legal_opts="1246ab:c:e:fgi:kl:m:no:p:qstvxACD:E:F:GI:J:KL:MNO:PQ:R:S:TVw:W:XYy" \
-    OPTS arg1 h ssh_user_host cmdline_ssh_host sshrc rem_port c0 c1 sid
+    OPTS arg1 h ssh_user_host cmdline_ssh_host sshrc rem_port c0 c1 sid rc
   local -a ssh_cmd=(env ssh)
   [ -z "$last_arg" ] && {
     echo "no arguments to ssh?" >&2
@@ -67,12 +67,6 @@ echo "$FUNCNAME: need to load ESH_TERM_AUTH_TOKEN" >&2
   cmdline_ssh_host=${ssh_user_host##*@}
   h=$cmdline_ssh_host
   [ "$SSH_STY_LBL" ] && h=$SSH_STY_LBL
-  _ssh_cleanup() {
-    [ "$STY" ] && printf "\033k${HOSTNAME}\033\134"
-    unset -f $FUNCNAME
-    trap - RETURN INT
-  }
-  trap _ssh_cleanup RETURN
   [ "$STY" ] && printf "\033k$h\033\134"
   # if anything left in the command line (and ssh option -t is not set), then
   # we just do straight through call to ssh.
@@ -146,5 +140,8 @@ echo "$FUNCNAME: need to load ESH_TERM_AUTH_TOKEN" >&2
   fi
   ssh_cmd+=($(ESH_TERM_AUTH_TOKEN=$ESH_TERM_AUTH_TOKEN _init_ctx $sid $rem_port "$@"))
   "${ssh_cmd[@]}"
+  rc=$?
+  [ "$STY" ] && printf "\033k${HOSTNAME}\033\134"
+  return $rc
 }
 export -f ssh
