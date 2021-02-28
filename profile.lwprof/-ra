@@ -22,7 +22,7 @@
 #trap "rm -f $stdout $cmds; echo $stdout was deleted" EXIT INT
 
 -ra() {
-  local exec ssh_params opts="he:u:j:drp" opt RA_SERVER_BASE_URL=${RA_SERVER_BASE_URL:-https://remoteadmin.private:3333} RA_SSH_USER=${RA_SSH_USER:-lincdoc} OPTIND=1
+  local exec ssh_params opts="he:u:j:drp" opt RA_SERVER_BASE_URL=${RA_SERVER_BASE_URL:-https://remoteadmin.private:3333} RA_SSH_USER=${RA_SSH_USER:-lincdoc} OPTIND=1 PATH="/usr/local/opt/curl/bin:$PATH"
   declare -a exec
   declare -a ssh_params
   local ssh_params_file=$HOME/.remoteadmin/ssh_options filter RA_SSH_PROXY_JUMP_HOST RA_MODE=ssh superuser=0
@@ -101,6 +101,13 @@
   #local pwkey="LincWare LDAP:$RA_USER"
   #local pw=$(pw "$pwkey")
   attempts=0
+  if [ -z "$RA_USER_PASSWORD_64" ]; then
+    _esh_b about
+  fi
+  if [ -z "$RA_USER_PASSWORD_64" ]; then
+    echo "$FUNCNAME: could not acquire RA_USER_PASSWORD_64" >&2
+    return 1
+  fi
   if ! pw=$(echo "$RA_USER_PASSWORD_64" | openssl enc -d -a -A); then
     echo "$FUNCNAME: could not acquire password" >&2
     return 1
