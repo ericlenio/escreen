@@ -40,13 +40,16 @@ _init_ctx() {
         #
         # set up a temp file to pass ESH_TERM_AUTH_TOKEN (we don't want to just
         # export it, for security reasons)
-        printf 't%s=$(mktemp)\n' $i
+        printf 'if t%s=$(mktemp); then\n' $i
         printf '{\n'
         printf '  echo ESH_TERM_AUTH_TOKEN=%s\n' $ESH_TERM_AUTH_TOKEN
-        printf '  echo "[ -t 1 ] && echo sourced $t%s"\n' $i
+        printf '  echo "[ -t 1 ] && echo _init_ctx: sourced $t%s"\n' $i
         #printf '  echo "exec 7< <(echo \$ESH_TERM_AUTH_TOKEN)"\n'
         printf '  echo rm $t%s\n' $i
         printf '} >$t%s\n' $i
+        printf 'else\n'
+        printf '  echo "_init_ctx error: mktemp failed, unable to set ESH_TERM_AUTH_TOKEN" >&2\n'
+        printf 'fi\n'
         #
         # possible better method: use process substitution instead of a temp
         # file: does not work on u8 though, and you have to deal with unquoting
