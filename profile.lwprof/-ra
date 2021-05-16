@@ -199,6 +199,10 @@
       fi
       if c=($(curl -k -f -s -S -H "$auth_hdr" -H "X-Ra-Agent-Id: $raAgentId" $RA_SERVER_BASE_URL/ra-get-shell-ctx)); then
         SSH_STY_LBL=$raHostname ssh -t -oProxyJump=remoteadmin@$RA_SSH_PROXY_JUMP_HOST -p $raSshPort $extra_params "$@" $RA_SSH_USER@127.0.0.1 "${c[@]}" exec bash
+#echo sshConfigFile:$sshConfigFile
+#SSH_STY_LBL=$raHostname ssh -oProxyJump=remoteadmin@$RA_SSH_PROXY_JUMP_HOST:2999 -p $raSshPort $extra_params "$@" $RA_SSH_USER@ra-local "${c[@]}" exec bash
+#env ssh -p 2999 remoteadmin@$RA_SSH_PROXY_JUMP_HOST ssh -F $sshConfigFile $extra_params "$@" $RA_SSH_USER@127.0.0.1 "${c[@]}" exec bash
+#ssh -t -p 2999 remoteadmin@$RA_SSH_PROXY_JUMP_HOST ssh -F $sshConfigFile $extra_params "$@" $RA_SSH_USER@127.0.0.1
       fi
       ;;
     psql)
