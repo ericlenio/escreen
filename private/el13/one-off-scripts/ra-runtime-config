@@ -11,14 +11,17 @@ auth_hdr=$(printf "Authorization: Basic %s" $auth)
 ra_agent_id_hdr="X-Ra-Agent-Id: remoteadmin.private/127.0.0.1"
 
 #url=https://remoteadmin.private:3001/ra-runtime-config
-url=https://remoteadmin.private:3333/ra-runtime-config
+#url=https://remoteadmin.private:3333/ra-runtime-config
 
+ra-runtime-config() {
 #code64=$(printf "JSON.stringify(self.config.RA_USER_AUTHORIZED_HOSTS,null,1)" | openssl enc -a -A)
 #code64=$(printf "self.config.RA_USER_AUTHORIZED_HOSTS['abdel.mawla']='issworld.com|americaninhomecare.com|discoveryliving|aomofny.com|ltc.admitplus.work|aplusdev.tsgrinc.com'" | openssl enc -a -A)
 #code64=$(printf "self.config.RA_USER_AUTHORIZED_HOSTS['paul.ratilla']='ltc.admitplus.work'" | openssl enc -a -A)
 #code64=$(printf "self.config.RA_CHECK_FOR_REBOOTS_NOTIFY='support_cc@lincware.com'" | openssl enc -a -A)
 #code64=$(printf "self.config.RA_USER_AUTHORIZED_HOSTS['mohammad.shahid'].push('admit.work')" | openssl enc -a -A)
-code64=$(printf "var a=['fundltc','altercare','tsgrinc'];self.config.RA_USER_AUTHORIZED_HOSTS['data.divincenzo']=a;" | openssl enc -a -A)
+#code64=$(printf "var a=['fundltc','altercare','tsgrinc'];self.config.RA_USER_AUTHORIZED_HOSTS['data.divincenzo']=a;" | openssl enc -a -A)
+#code64=$(printf "self.config.RA_USER_AUTHORIZED_HOSTS['abdel.mawla'].push('lincwareweb01test.altercareonline.com')" | openssl enc -a -A)
+code64=$(printf "self.config.RA_USER_AUTHORIZED_HOSTS['aarti.sharma'].push('lincwareweb01test.altercareonline.com')" | openssl enc -a -A)
 
 code64b=$(printf "
   var a=[];
@@ -31,3 +34,14 @@ code64b=$(printf "
 
 curl -v -f -X POST -H "$ra_agent_id_hdr" -H "Content-Type: application/json" -H "$auth_hdr" -d "{\"eval\":\"$code64\"}" $url
 #curl -v -X POST -H "$ra_agent_id_hdr" -H "Content-Type: application/json" -H "$auth_hdr" -d "{\"config\":{\"RA_USER_AUTHORIZED_HOSTS\":{\"eml\":\"my value\"}}}" $url
+}
+
+ra-set-log-threshold() {
+  url=https://remoteadmin.private:3001/$FUNCNAME
+  #logId=RaCronJobGatherAgentStatuses
+  logId=RaCron
+  threshold=trace
+  curl -v -f -X POST -H "$ra_agent_id_hdr" -H "Content-Type: application/json" -H "$auth_hdr" -d "{\"logId\":\"$logId\",\"threshold\":\"$threshold\"}" $url
+}
+
+ra-set-log-threshold
