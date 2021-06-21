@@ -115,7 +115,12 @@
   local raw agents auth=$(printf "%s:%s" "$RA_USER" "$pw" | openssl enc -a -A)
   local auth_hdr=$(printf "Authorization: Basic %s" $auth)
   local endpoint=$RA_SERVER_BASE_URL/ra-get-agents?superuser=$superuser
-  if ! raw=$(curl -k -S -s -f -H "Accept: text/plain" -H "$auth_hdr" -H "X-Ra-Agent-Id: remoteadmin.private/127.0.0.1" $endpoint); then
+  if ! [[ $RA_SERVER_BASE_URL =~ ://([-\.[:alnum:]]+) ]]; then
+    echo "could not parse hostname from endpoint: $RA_SERVER_BASE_URL" >&2
+    return 1
+  fi
+  local agt_id=${BASH_REMATCH[1]}/127.0.0.1
+  if ! raw=$(curl -k -S -s -f -H "Accept: text/plain" -H "$auth_hdr" -H "X-Ra-Agent-Id: $agt_id" $endpoint); then
     echo "$FUNCNAME: failed to read $endpoint" >&2
     return 1
   fi
