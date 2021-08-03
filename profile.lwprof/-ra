@@ -62,6 +62,11 @@
   if [ -z "$filter" ]; then
     filter="."
   fi
+  if [[ "$filter" =~ ^(([^:]+):)(([_[:alnum:]]+))$ ]]; then
+    raAgentId=${BASH_REMATCH[2]}
+    filter=$raAgentId
+    appCtx=${BASH_REMATCH[4]}
+  fi
   if ! [[ $RA_SERVER_BASE_URL =~ ://([-\.[:alnum:]]+) ]]; then
     echo "could not parse RA_SSH_PROXY_JUMP_HOST from endpoint: $RA_SERVER_BASE_URL" >&2
     return 1
@@ -119,6 +124,7 @@
     echo "could not parse hostname from endpoint: $RA_SERVER_BASE_URL" >&2
     return 1
   fi
+
   local agt_id=${BASH_REMATCH[1]}/127.0.0.1
   if ! raw=$(curl -k -S -s -f -H "Accept: text/plain" -H "$auth_hdr" -H "X-Ra-Agent-Id: $agt_id" $endpoint); then
     echo "$FUNCNAME: failed to read $endpoint" >&2
@@ -211,25 +217,41 @@
       fi
       ;;
     psql)
-      n=$((${#context[@]}-1))
       choice=0
+      n=$((${#context[@]}-1))
       if [ $n -ge 1 ]; then
-        local choice_list=$(
+        if [ -z "$appCtx" ]; then
+          local choice_list=$(
+            for ((i=0;i<=$n;i++)); do
+              printf "%s (%s/%s/%s)\n" ${context[$i]} ${ldVersion[$i]} ${database[$i]} ${username[$i]}
+            done
+          )
+          choice=$(-pick-something "Pick:" "$choice_list" 1) || {
+            echo "invalid choice" >&2
+            return 1
+          }
+        else
+          choice=-1
           for ((i=0;i<=$n;i++)); do
-            printf "%s (%s/%s/%s)\n" ${context[$i]} ${ldVersion[$i]} ${database[$i]} ${username[$i]}
+            if [ ${context[$i]} = $appCtx ]; then
+              choice=$i
+              break
+            fi
           done
-        )
-        choice=$(-pick-something "Pick:" "$choice_list" 1) || {
-          echo "invalid choice"
-          return 1
-        }
+          if [ $choice -lt 0 ]; then
+            echo "no such context: $appCtx" >&2
+            echo "available contexts: ${context[*]}" >&2
+            return 1
+          fi
+        fi
       fi
+      appCtx=${context[$choice]}
       PGDATABASE=${database[$choice]} \
         PGUSER=${username[$choice]} \
         PGHOST=${host[$choice]} \
         PGSSLMODE=require \
         PGPORT=${port[$choice]} \
-        PGOPTIONS="-c lw.raAgentId=$raAgentId/${context[$choice]}" \
+        PGOPTIONS="-c lw.raAgentId=$raAgentId/$appCtx}" \
         PGPASSWORD="$(echo ${password[$choice]} | openssl enc -d -a -A)" \
         psql -v PROMPT1="$raHostname:%n@%/>" "$@"
       ;;
