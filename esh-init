@@ -225,7 +225,7 @@ _esh_i() {
   local p0 p1 p2 ft=$(mktemp)
   eval $(< <(_esh_b fpw cbf </dev/null))
   if [ -z "$p0" ]; then
-    echo "no value for p0" >&2
+    echo "$FUNCNAME: no value for p0" >&2
     return 1
   fi
   if ! _esh_l $t/$u.core $p0; then

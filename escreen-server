@@ -9,7 +9,11 @@ ESH_PROFILE_DIR=${!OPTIND:-$ESH_HOME/profile.lwprof}
 # test that gpg-agent is up and running, if not this should get it going; note:
 # gpg pinentry/askpass may depend on TERM and/or DISPLAY
 if [ -t 0 ]; then
-  echo "hello world" | gpg --default-recipient-self -ae | gpg -d >/dev/null
+  tty=$(tty)
+  if ! echo "hello world" | gpg --default-recipient-self -ae | env GPG_TTY=$tty gpg -d >/dev/null; then
+    echo "ERROR: problem with gpg" >&2
+    exit 1
+  fi
 else
   echo "WARNING: gpg decryption may not work" >&2
 fi
