@@ -14,27 +14,45 @@ ra_agent_id_hdr="X-Ra-Agent-Id: remoteadmin.private/127.0.0.1"
 #url=https://remoteadmin.private:3333/ra-runtime-config
 
 ra-runtime-config() {
-#code64=$(printf "JSON.stringify(self.config.RA_USER_AUTHORIZED_HOSTS,null,1)" | openssl enc -a -A)
-#code64=$(printf "self.config.RA_USER_AUTHORIZED_HOSTS['abdel.mawla']='issworld.com|americaninhomecare.com|discoveryliving|aomofny.com|ltc.admitplus.work|aplusdev.tsgrinc.com'" | openssl enc -a -A)
-#code64=$(printf "self.config.RA_USER_AUTHORIZED_HOSTS['paul.ratilla']='ltc.admitplus.work'" | openssl enc -a -A)
-#code64=$(printf "self.config.RA_CHECK_FOR_REBOOTS_NOTIFY='support_cc@lincware.com'" | openssl enc -a -A)
-#code64=$(printf "self.config.RA_USER_AUTHORIZED_HOSTS['mohammad.shahid'].push('admit.work')" | openssl enc -a -A)
-#code64=$(printf "var a=['fundltc','altercare','tsgrinc'];self.config.RA_USER_AUTHORIZED_HOSTS['data.divincenzo']=a;" | openssl enc -a -A)
-#code64=$(printf "self.config.RA_USER_AUTHORIZED_HOSTS['abdel.mawla'].push('lincwareweb01test.altercareonline.com')" | openssl enc -a -A)
-code64=$(printf "self.config.RA_USER_AUTHORIZED_HOSTS['aarti.sharma'].push('lincwareweb01test.altercareonline.com')" | openssl enc -a -A)
+  url=https://remoteadmin.private:3001/ra-runtime-config
+  #code64=$(printf "JSON.stringify(self.config.RA_USER_AUTHORIZED_HOSTS,null,1)" | openssl enc -a -A)
+  #code64=$(printf "self.config.RA_USER_AUTHORIZED_HOSTS['abdel.mawla']='issworld.com|americaninhomecare.com|discoveryliving|aomofny.com|ltc.admitplus.work|aplusdev.tsgrinc.com'" | openssl enc -a -A)
+  #code64=$(printf "self.config.RA_USER_AUTHORIZED_HOSTS['paul.ratilla']='ltc.admitplus.work'" | openssl enc -a -A)
+  #code64=$(printf "self.config.RA_CHECK_FOR_REBOOTS_NOTIFY='support_cc@lincware.com'" | openssl enc -a -A)
+  #code64=$(printf "self.config.RA_USER_AUTHORIZED_HOSTS['mohammad.shahid'].push('admit.work')" | openssl enc -a -A)
+  #code64=$(printf "var a=['fundltc','altercare','tsgrinc'];self.config.RA_USER_AUTHORIZED_HOSTS['data.divincenzo']=a;" | openssl enc -a -A)
+  #code64=$(printf "self.config.RA_USER_AUTHORIZED_HOSTS['abdel.mawla'].push('lincwareweb01test.altercareonline.com')" | openssl enc -a -A)
+  #code64=$(printf "self.config.RA_USER_AUTHORIZED_HOSTS['aarti.sharma'].push('lincwareweb01test.altercareonline.com')" | openssl enc -a -A)
+  #code64=$(printf "console.log('ans:',self.config.RA_SYSTEM_SECRETS.systems['ldap.lincware.com'])" | openssl enc -a -A)
+  code64=$(printf "self.secrets.getSecretsForHost('ldap.lincware.com')" | openssl enc -a -A)
 
-code64b=$(printf "
-  var a=[];
-  for (var [sshPort,agent] of RaAgent.getAgents()) {
-    //a.push(agent.getUniqueId());
-    a.push(agent);
-  }
-  a
+  code64b=$(printf "
+    var a=[];
+    for (var [sshPort,agent] of RaAgent.getAgents()) {
+      //a.push(agent.getUniqueId());
+      a.push(agent);
+    }
+    a
 " | openssl enc -a -A)
 
-curl -v -f -X POST -H "$ra_agent_id_hdr" -H "Content-Type: application/json" -H "$auth_hdr" -d "{\"eval\":\"$code64\"}" $url
-#curl -v -X POST -H "$ra_agent_id_hdr" -H "Content-Type: application/json" -H "$auth_hdr" -d "{\"config\":{\"RA_USER_AUTHORIZED_HOSTS\":{\"eml\":\"my value\"}}}" $url
+  curl -S -f -X POST -H "$ra_agent_id_hdr" -H "Content-Type: application/json" -H "$auth_hdr" -d "{\"eval\":\"$code64\"}" $url
+  #curl -v -X POST -H "$ra_agent_id_hdr" -H "Content-Type: application/json" -H "$auth_hdr" -d "{\"config\":{\"RA_USER_AUTHORIZED_HOSTS\":{\"eml\":\"my value\"}}}" $url
 }
+
+attempt=1
+n=5
+set -e
+
+while true; do
+  for((i=1;i<=$n;i++)); do
+    ra-runtime-config &
+  done
+  for((i=1;i<=$n;i++)); do
+    wait %$i
+  done
+done
+echo "DONE"
+
 
 ra-set-log-threshold() {
   url=https://remoteadmin.private:3001/$FUNCNAME
@@ -44,4 +62,4 @@ ra-set-log-threshold() {
   curl -v -f -X POST -H "$ra_agent_id_hdr" -H "Content-Type: application/json" -H "$auth_hdr" -d "{\"logId\":\"$logId\",\"threshold\":\"$threshold\"}" $url
 }
 
-ra-set-log-threshold
+#ra-set-log-threshold
