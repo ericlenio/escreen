@@ -9,7 +9,7 @@ screen() {
         -r)
           local curr_sty=${STY:-some_value} pick_sty
           local stys=$(
-            env screen -ls | grep -v $curr_sty | grep -vi attached | while read l; do
+            env screen -ls | grep -v $curr_sty | while read l; do
               if [[ "$l" =~ ^[[:blank:]]*([0-9]+\.[[:print:]]+) ]]; then
                 pick_sty=${BASH_REMATCH[1]}
                 if [ ! "$t" ]; then
