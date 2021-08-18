@@ -37,6 +37,20 @@
     read RA_USER_PASSWORD_64 < <(_esh_y _ra_get_ldap_pw)
   fi
 
+  # 
+  # if not inside GNU screen, check that we have a shell EXIT handler to erase
+  # ESH_TERM_AUTH_TOKEN from all used GNU screen sessions
+  #
+  #if [ -z "$STY" -a -z "$(trap -p EXIT)" ]; then
+  #  _esh_exit() {
+  #    if [ "$ESH_STY" ]; then
+  #      # erase ESH_TERM_AUTH_TOKEN from screen session register
+  #      env screen -S $ESH_STY -X register p "" >/dev/null 2>&1
+  #    fi
+  #  }
+  #  trap _esh_exit EXIT
+  #fi
+
   # work around ubuntu hardcoding PS1
   PS1="$ESH_PS1"
 }

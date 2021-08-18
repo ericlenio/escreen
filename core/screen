@@ -85,6 +85,7 @@ shelltitle "$ |:"
 caption always "%{= kw}%-w%{= BW}%n%t%{-}%+w %-= @%H %{= Y}%l%{-} %m/%d %0c$esh_info"
 register p $ESH_TERM_AUTH_TOKEN
 unsetenv SCREENRC
+screen bash -c _esh_keyserver
 screen
 screen bash -c '_esh_b registerSty $ESH_TERM_PID \$STY $root_sty; rm $rcfile'
 EOF

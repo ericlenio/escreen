@@ -146,8 +146,8 @@ class BashSessionConfigServer extends net.Server {
         }
         // mirror back original payload, so it can be re-used in the retry
         // logic of _esh_b
-        socket.pipe(socket);
-        return;
+        //return socket.pipe(socket);
+        return socket.end();
       }
       if (this.ts.isValidOneTimeAuthToken(authToken)) {
         this.ts.deleteAuthToken(authToken);
@@ -317,6 +317,7 @@ class BashSessionConfigServer extends net.Server {
 
       var platform=os.platform();
       z.on("end",function() {
+//console.log("setCb:END")
         var cp_prog=self.getOsProgram(E_OS_PROG_ENUM.COPY);
         var p=child_process.spawn(cp_prog[0], cp_prog.slice(1), {stdio:['pipe','ignore',process.stderr]});
         p.stdin.end(xselBuf);
@@ -340,6 +341,7 @@ class BashSessionConfigServer extends net.Server {
         });
       });
       z.on("data",function(chunk) {
+//console.log("setCb:CHUNK:",expectedLength,clipboardBytes,(chunk ? chunk.toString() : chunk))
         clipboardBytes+=chunk.length;
         xselBuf+=new String(chunk);
         if (clipboardBytes==expectedLength) {

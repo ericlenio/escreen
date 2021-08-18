@@ -235,10 +235,10 @@ class TerminalServer extends http.Server {
    */
   resolveMarker(pid,marker) {
     var self=this;
-    if (!(pid in E_TERMINALS)) {
-      return Promise.resolve("E_BAD_PID");
-    }
-    var term=E_TERMINALS[pid];
+    //if (!(pid in E_TERMINALS)) {
+      //return Promise.resolve("E_BAD_PID");
+    //}
+    //var term=E_TERMINALS[pid];
     return new Promise(function(resolve,reject) {
       switch(marker) {
         case "log":
@@ -469,7 +469,7 @@ class TerminalServer extends http.Server {
           var maxInactiveHours=24;
           var diffMs=now-E_TERMINAL_AUTH_TOKENS[result.authToken].lastAccessed;
           var diffHrs=maxInactiveHours-(diffMs/1000/60/60).toFixed(2);
-          if (diffHrs>maxInactiveHours) {
+          if (diffHrs<0 || diffHrs>maxInactiveHours) {
             needSave=true;
             console.log("purgeInvalidTokens: root sty "+result.rootSty+" not found, deleting token "+result.authToken);
             delete E_TERMINAL_AUTH_TOKENS[result.authToken];
@@ -540,6 +540,7 @@ class TerminalServer extends http.Server {
         reject(msg);
       }
       var authToken;
+      /*
       for (const [authToken1,authTokenObj] of Object.entries(E_TERMINAL_AUTH_TOKENS)) {
         if (pid==authTokenObj.pid) {
           authToken=authToken1;
@@ -549,9 +550,11 @@ class TerminalServer extends http.Server {
       if (!authToken) {
         return resolve(Buffer.from("unknown").toString('base64'));
       }
+      */
       if (self.cachedPassword) {
         return resolve(self.cachedPassword);
       }
+authToken=Object.keys(E_TERMINAL_AUTH_TOKENS)[0];
       var args=[
         "-c",
         // caution: export ESH_TERM_AUTH_TOKEN here, we would never do that on

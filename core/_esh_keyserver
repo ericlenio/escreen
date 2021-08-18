@@ -1,0 +1,43 @@
+# vim:filetype=bash
+_esh_keyserver() {
+  local fifo=$(mktemp -u) port=1055 line default_content="FAIL" content secret='SECRET' authorized=0
+
+  # calling "_esh_b about" will trigger the setting of ESH_TERM_AUTH_TOKEN
+  _esh_b about
+  echo "$FUNCNAME: check ESH_TERM_AUTH_TOKEN=$ESH_TERM_AUTH_TOKEN"
+
+  # set up bidirectional pipe (idea from
+  # https://unix.stackexchange.com/a/227981)
+  mkfifo $fifo
+  ( : <$fifo & ) # avoid deadlock on opening pipe
+  exec 4>$fifo 3<$fifo
+  rm $fifo
+
+  trap 'trap - RETURN INT; echo "$FUNCNAME: stopping now"; exec 3>&- 4>&-; return' RETURN INT
+
+  echo "listening on port: $port"
+  while true; do
+    content="$default_content"
+    while read line; do
+      line=${line//$'\r'/}
+      echo "line:$line<"
+      if [[ "$line" =~ ^X-Escreen-Auth:\ (.*) ]]; then
+        auth_token=${BASH_REMATCH[1]}
+        case "$auth_token" in
+          "$ESH_TERM_AUTH_TOKEN")
+            authorized=1
+            content="$secret"
+            ;;
+        esac
+      fi
+      if [ -z "$line" ]; then
+        # we have reached the end of the request headers, send back the
+        # response
+        #
+        # IMPORTANT: print everything in 1 statement, otherwise we can get
+        # deadlock
+        printf 'HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: %s\r\nCache-Control: public, max-age=0\r\nConnection: close\r\n\r\n%s' ${#content} "$content" >&4
+      fi
+    done < <(nc -l 127.0.0.1 $port <&3)
+  done
+}

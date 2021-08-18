@@ -90,15 +90,16 @@ _esh_b() {
 
   eval "$(_esh_e)" </dev/null
 
-  if [ "$STY" ]; then
-    if [ "$ESH_TAT_HASH" -a "$ESH_TERM_AUTH_TOKEN" ]; then
-      h=$(printf $ESH_TERM_AUTH_TOKEN | openssl md5)
-      h=${h##*= }
-      if [ $h != $ESH_TAT_HASH ]; then
-        unset ESH_TERM_AUTH_TOKEN
-        echo "$FUNCNAME: auth token hash mismatch, force reload token" >&2
-      fi
+  if [ "$ESH_TAT_HASH" -a "$ESH_TERM_AUTH_TOKEN" ]; then
+    h=$(printf $ESH_TERM_AUTH_TOKEN | openssl md5)
+    h=${h##*= }
+    if [ $h != $ESH_TAT_HASH ]; then
+      unset ESH_TERM_AUTH_TOKEN
+      echo "$FUNCNAME: auth token hash mismatch, force reload token" >&2
     fi
+  fi
+
+  if [ "$STY" ]; then
     if [ -z "$ESH_TERM_AUTH_TOKEN" ]; then
       t=$(mktemp -u)
       mkfifo -m 0600 $t
