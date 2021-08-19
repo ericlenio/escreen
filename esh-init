@@ -79,7 +79,7 @@ export -f _esh_e
 # around that ... netcat will be needed though
 _esh_b() {
   local status h
-  if [ ${#FUNCNAME[@]} -gt 15 ]; then
+  if [ ${#FUNCNAME[@]} -gt 10 ]; then
     # this function recurses on itself, this is a safety switch to prevent a
     # fork bomb
     echo "$FUNCNAME: too many levels deep: $*" >&2
@@ -97,6 +97,10 @@ _esh_b() {
       unset ESH_TERM_AUTH_TOKEN
       echo "$FUNCNAME: auth token hash mismatch, force reload token" >&2
     fi
+  fi
+  
+  if [ "$SUDO_USER" ]; then
+    :
   fi
 
   if [ "$STY" ]; then

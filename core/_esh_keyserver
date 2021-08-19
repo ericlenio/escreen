@@ -17,10 +17,8 @@ _esh_keyserver() {
   rm $fifo
 
   trap 'trap - RETURN INT USR1; echo "$FUNCNAME: stopping now"; exec 3>&- 4>&-; return' RETURN INT
-
-  trap 'echo received USR1: re-read ESH_TERM_AUTH_TOKEN now; ESH_TERM_AUTH_TOKEN=zzz; _esh_b about </dev/null' USR1
-
-  echo "listening on port: $port"
+  trap 'echo received USR1: re-read ESH_TERM_AUTH_TOKEN now; _esh_b about </dev/null' USR1
+  echo "pid $$ listening on port: $port"
 
   while true; do
     content=""
@@ -31,7 +29,7 @@ _esh_keyserver() {
       nc_rc=$line
       if [[ "$nc_rc" =~ ^[0-9]+$ ]] && [ $nc_rc -gt 0 ]; then
         nc_fails=$(($nc_fails+1))
-        if [ $nc_fails -ge 10 ]; then
+        if [ $nc_fails -ge 5 ]; then
           printf "%s: too many failures, giving up\n" $FUNCNAME >&2
           read -p "press return to quit $FUNCNAME" </dev/tty
           return 1
