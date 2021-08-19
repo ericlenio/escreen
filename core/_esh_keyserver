@@ -1,10 +1,13 @@
 # vim:filetype=bash
 _esh_keyserver() {
-  local fifo=$(mktemp -u) port=1055 line default_content="FAIL" content secret='SECRET' authorized=0
+  local fifo=$(mktemp -u) port=${1:-1055} line content http_code http_status nc_fails=0 ESH_TERM_AUTH_TOKEN_ORIG ESH_TERM_AUTH_TOKEN_PASSED
 
   # calling "_esh_b about" will trigger the setting of ESH_TERM_AUTH_TOKEN
-  _esh_b about
-  echo "$FUNCNAME: check ESH_TERM_AUTH_TOKEN=$ESH_TERM_AUTH_TOKEN"
+  [ -z "$ESH_TERM_AUTH_TOKEN" ] && _esh_b about
+  #
+  # hold the original value of ESH_TERM_AUTH_TOKEN in ESH_TERM_AUTH_TOKEN_ORIG,
+  # 
+  ESH_TERM_AUTH_TOKEN_ORIG=$ESH_TERM_AUTH_TOKEN
 
   # set up bidirectional pipe (idea from
   # https://unix.stackexchange.com/a/227981)
@@ -13,22 +16,39 @@ _esh_keyserver() {
   exec 4>$fifo 3<$fifo
   rm $fifo
 
-  trap 'trap - RETURN INT; echo "$FUNCNAME: stopping now"; exec 3>&- 4>&-; return' RETURN INT
+  trap 'trap - RETURN INT USR1; echo "$FUNCNAME: stopping now"; exec 3>&- 4>&-; return' RETURN INT
+
+  trap 'echo received USR1: re-read ESH_TERM_AUTH_TOKEN now; ESH_TERM_AUTH_TOKEN=zzz; _esh_b about </dev/null' USR1
 
   echo "listening on port: $port"
+
   while true; do
-    content="$default_content"
-    while read line; do
+    content=""
+    http_code=401
+    http_status=unauthorized
+    while read line || {
+      # check if nc failed
+      nc_rc=$line
+      if [[ "$nc_rc" =~ ^[0-9]+$ ]] && [ $nc_rc -gt 0 ]; then
+        nc_fails=$(($nc_fails+1))
+        if [ $nc_fails -ge 10 ]; then
+          printf "%s: too many failures, giving up\n" $FUNCNAME >&2
+          read -p "press return to quit $FUNCNAME" </dev/tty
+          return 1
+        fi
+        printf "nc fail: %s\n" $nc_rc >&2
+        sleep 1
+      fi
+      break
+    }; do
       line=${line//$'\r'/}
-      echo "line:$line<"
       if [[ "$line" =~ ^X-Escreen-Auth:\ (.*) ]]; then
-        auth_token=${BASH_REMATCH[1]}
-        case "$auth_token" in
-          "$ESH_TERM_AUTH_TOKEN")
-            authorized=1
-            content="$secret"
-            ;;
-        esac
+        ESH_TERM_AUTH_TOKEN_PASSED=${BASH_REMATCH[1]}
+        if [ "$ESH_TERM_AUTH_TOKEN_PASSED" = "$ESH_TERM_AUTH_TOKEN_ORIG" ]; then
+          http_code=200
+          http_status=OK
+          content=$ESH_TERM_AUTH_TOKEN
+        fi
       fi
       if [ -z "$line" ]; then
         # we have reached the end of the request headers, send back the
@@ -36,8 +56,12 @@ _esh_keyserver() {
         #
         # IMPORTANT: print everything in 1 statement, otherwise we can get
         # deadlock
-        printf 'HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: %s\r\nCache-Control: public, max-age=0\r\nConnection: close\r\n\r\n%s' ${#content} "$content" >&4
+        printf 'HTTP/1.1 %s %s\r\nContent-Type: text/plain\r\nContent-Length: %s\r\nCache-Control: public, max-age=0\r\nConnection: close\r\n\r\n%s' \
+          $http_code \
+          $http_status \
+          ${#content} \
+          "$content" >&4
       fi
-    done < <(nc -l 127.0.0.1 $port <&3)
+    done < <(nc -l 127.0.0.1 $port <&3; printf $?)
   done
 }
