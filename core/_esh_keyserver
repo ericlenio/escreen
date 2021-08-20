@@ -1,6 +1,6 @@
 # vim:filetype=bash
 _esh_keyserver() {
-  local fifo=$(mktemp -u) port=${1:-1055} line content http_code http_status nc_fails=0 ESH_TERM_AUTH_TOKEN_ORIG ESH_TERM_AUTH_TOKEN_PASSED
+  local fifo=$(mktemp -u) port=${1:-1055} line content http_code http_status nc_fails=0 ESH_TERM_AUTH_TOKEN_ORIG ESH_TERM_AUTH_TOKEN_PASSED http_user
 
   # calling "_esh_b about" will trigger the setting of ESH_TERM_AUTH_TOKEN
   [ -z "$ESH_TERM_AUTH_TOKEN" ] && _esh_b about
@@ -47,11 +47,14 @@ _esh_keyserver() {
           http_status=OK
           content=$ESH_TERM_AUTH_TOKEN
         fi
+      elif [[ "$line" =~ ^X-Escreen-User:\ (.*) ]]; then
+        http_user=${BASH_REMATCH[1]}
       fi
       if [ -z "$line" ]; then
         # we have reached the end of the request headers, send back the
         # response
         #
+        printf "%s %s %s %s\n" $(date +%T) $http_code $http_status $http_user
         # IMPORTANT: print everything in 1 statement, otherwise we can get
         # deadlock
         printf 'HTTP/1.1 %s %s\r\nContent-Type: text/plain\r\nContent-Length: %s\r\nCache-Control: public, max-age=0\r\nConnection: close\r\n\r\n%s' \

@@ -90,6 +90,14 @@ _esh_b() {
 
   eval "$(_esh_e)" </dev/null
 
+  if [ "$ESH_TAT_HASH" -a "$ESH_SUDO_STY" -a "$ESH_TERM_AUTH_TOKEN" ]; then
+    # sudo in effect, and gnu screen, so force refresh ESH_TERM_AUTH_TOKEN from
+    # _esh_keyserver
+    if ! ESH_TERM_AUTH_TOKEN=$(curl -s -S -f -H "X-Escreen-User: $USER" -H "X-Escreen-Auth: $ESH_TERM_AUTH_TOKEN" http://127.0.0.1:1055); then
+      echo "$FUNCNAME: curl failed" >&2
+    fi
+  fi
+
   if [ "$ESH_TAT_HASH" -a "$ESH_TERM_AUTH_TOKEN" ]; then
     h=$(printf $ESH_TERM_AUTH_TOKEN | openssl md5)
     h=${h##*= }
@@ -99,10 +107,6 @@ _esh_b() {
     fi
   fi
   
-  if [ "$SUDO_USER" ]; then
-    :
-  fi
-
   if [ "$STY" ]; then
     if [ -z "$ESH_TERM_AUTH_TOKEN" ]; then
       t=$(mktemp -u)

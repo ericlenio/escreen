@@ -21,7 +21,7 @@ endf
 fu Mkbashenv()
   let @a=tempname()
   call writefile([
-    \"ESH_TERM_AUTH_TOKEN=$(curl -H 'X-Escreen-Auth: ".g:ESH_TERM_AUTH_TOKEN."' http://127.0.0.1:1055)"
+    \"ESH_TERM_AUTH_TOKEN=".g:ESH_TERM_AUTH_TOKEN
     \],@a)
   let $BASH_ENV=@a
   return @a
