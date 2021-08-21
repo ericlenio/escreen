@@ -34,7 +34,7 @@ screen() {
             return 0
           fi
           if [ $(echo "$stys" | wc -l) = 1 ]; then
-            pick_sty="$stys"
+            pick_sty_line="$stys"
           elif ! pick_sty_line=$(-pick-something "Resume which session?" "$stys"); then
             return $?
           fi
