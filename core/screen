@@ -58,7 +58,10 @@ screen() {
   # anticipatory optimization: pre-load vim, so it does not need to be loaded
   # in every screen window
   v --version >/dev/null
-  local esc=^Aa esh_info
+  local esc=^Aa esh_info keyserver_port=1054
+  # switch port if root, so we can allow concurrent gnu screen sessions for
+  # root and 1 other user
+  [ $EUID = 0 ] && keyserver_port=1055
 
   if [ $root_sty = 0 ]; then
     # assume nested gnu screen, so use alternate escape sequence
@@ -69,6 +72,7 @@ screen() {
   fi
 
   rcfile=$(mktemp)
+  export ESH_KEYSERVER_URL=http://127.0.0.1:$keyserver_port
   cat << EOF >$rcfile
 #termcapinfo * '' u0=my_user0_string
 multiuser off
@@ -85,7 +89,7 @@ shelltitle "$ |:"
 caption always "%{= kw}%-w%{= BW}%n%t%{-}%+w %-= @%H %{= Y}%l%{-} %m/%d %0c$esh_info"
 register p $ESH_TERM_AUTH_TOKEN
 unsetenv SCREENRC
-screen bash -c _esh_keyserver
+screen 10 bash -c "_esh_keyserver $keyserver_port"
 screen
 screen bash -c '_esh_b registerSty $ESH_TERM_PID \$STY $root_sty; rm $rcfile'
 EOF
