@@ -29,8 +29,7 @@
   fi
 
   if [ -z "$ESH_TERM_AUTH_TOKEN" ]; then
-    # this will load ESH_TERM_AUTH_TOKEN into the shell
-    _esh_b about
+    _esh_at
   fi
 
   if [ -z "$RA_USER_PASSWORD_64" ]; then
