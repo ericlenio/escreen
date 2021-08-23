@@ -21,7 +21,7 @@ exec vim -S <(
   printf "let g:ESH_TERM_AUTH_TOKEN=\x27%%s\x27\\n" $ESH_TERM_AUTH_TOKEN
 ) "$@"
 '
-    printf "$p" "$(declare -f _esh_e _esh_b _esh_l _esh_i _vimrc)" > $e
+    printf "$p" "$(declare -f _esh_e _esh_b _esh_l _esh_i _vimrc _esh_at)" > $e
     chmod 755 $e || {
       echo "ERROR: could not chmod $e: $?" >&2
       return 1

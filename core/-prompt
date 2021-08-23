@@ -3,6 +3,10 @@
 # logic to execute with bash's PROMPT_COMMAND
 #
 -prompt() {
+  # unexport ESH_TERM_AUTH_TOKEN, for security: gnu screen will briefly export
+  # it for every new window
+  export -n ESH_TERM_AUTH_TOKEN
+
   # use DEBUG trap to load environment vars from _esh_e before every command is
   # run; only set the trap if we detect DEBUG has no signal handler yet
   #
@@ -26,10 +30,6 @@
     # why we put this logic to run in PROMPT_COMMAND and not _esh_i
     shopt -u expand_aliases
     unalias -a
-  fi
-
-  if [ -z "$ESH_TERM_AUTH_TOKEN" ]; then
-    _esh_at
   fi
 
   if [ -z "$RA_USER_PASSWORD_64" ]; then

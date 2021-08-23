@@ -80,7 +80,7 @@ _esh_at() {
   if [ $hash_mismatch = 1 -a "$ESH_SUDO_STY" ]; then
     # sudo in effect, and we are in gnu screen, so force refresh
     # ESH_TERM_AUTH_TOKEN from _esh_keyserver
-    if ! ESH_TERM_AUTH_TOKEN=$(curl -s -S -f -H "X-Escreen-User: $USER" -H "X-Escreen-Auth: $ESH_TERM_AUTH_TOKEN" $ESH_KEYSERVER_URL); then
+    if ! ESH_TERM_AUTH_TOKEN=$(curl -s -S -f -H "X-Escreen-User: $USER" -H "X-Escreen-Auth: $ESH_TERM_AUTH_TOKEN" $ESH_KEYSERVER_URL/get-auth-token); then
       echo "$FUNCNAME: curl failed" >&2
     fi
   fi

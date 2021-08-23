@@ -22,6 +22,13 @@ s() {
   }
 
   eval "$(_esh_e)"
+
+  if [ "$STY" ] && ! curl -f -s -S $ESH_KEYSERVER_URL/hello >/dev/null; then
+    echo "auth token server not detected, launching now"
+    env screen -X screen 10 bash -c "_esh_keyserver ${ESH_KEYSERVER_URL##*:}"
+    env screen -X prev
+  fi
+
   # use existing $ESH_STY, and $STY (assume sudo sessions will never invoke GNU
   # screen), so that if inside gnu screen and the session
   # disconnects/reconnects that we can reference the latest ESH_PORT and

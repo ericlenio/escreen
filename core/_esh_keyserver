@@ -1,6 +1,6 @@
 # vim:filetype=bash
 _esh_keyserver() {
-  local fifo=$(mktemp -u) port=${1:-1055} line content http_code http_status nc_fails=0 ESH_TERM_AUTH_TOKEN_ORIG ESH_TERM_AUTH_TOKEN_PASSED http_user
+  local fifo=$(mktemp -u) port=${1:-1055} line response_body http_code http_status nc_fails=0 ESH_TERM_AUTH_TOKEN_ORIG ESH_TERM_AUTH_TOKEN_PASSED http_user req_path
 
   [ -z "$ESH_TERM_AUTH_TOKEN" ] && _esh_at
   #
@@ -20,7 +20,8 @@ _esh_keyserver() {
   echo "pid $$ listening on port: $port"
 
   while true; do
-    content=""
+    response_body=""
+    req_path="/"
     http_code=401
     http_status=unauthorized
     while read line || {
@@ -44,23 +45,34 @@ _esh_keyserver() {
         if [ "$ESH_TERM_AUTH_TOKEN_PASSED" = "$ESH_TERM_AUTH_TOKEN_ORIG" ]; then
           http_code=200
           http_status=OK
-          content=$ESH_TERM_AUTH_TOKEN
         fi
       elif [[ "$line" =~ ^X-Escreen-User:\ (.*) ]]; then
         http_user=${BASH_REMATCH[1]}
+      elif [[ "$line" =~ ^GET\ ([^[:space:]]*) ]]; then
+        req_path=${BASH_REMATCH[1]}
       fi
       if [ -z "$line" ]; then
         # we have reached the end of the request headers, send back the
         # response
         #
-        printf "%s %s %s %s\n" $(date +%T) $http_code $http_status $http_user
+        if [ "$req_path" = /hello ]; then
+          # /hello does not require any authentication
+          http_code=200
+          http_status=OK
+          response_body="HELLO"
+        elif [ "$req_path" = /get-auth-token ]; then
+          if [ $http_code = 200 ]; then
+            response_body=$ESH_TERM_AUTH_TOKEN
+          fi
+        fi
+        printf "%s %s %s %s %s\n" $(date +%T) $req_path $http_code $http_status $http_user
         # IMPORTANT: print everything in 1 statement, otherwise we can get
         # deadlock
         printf 'HTTP/1.1 %s %s\r\nContent-Type: text/plain\r\nContent-Length: %s\r\nCache-Control: public, max-age=0\r\nConnection: close\r\n\r\n%s' \
           $http_code \
           $http_status \
-          ${#content} \
-          "$content" >&4
+          ${#response_body} \
+          "$response_body" >&4
       fi
     done < <(nc -l 127.0.0.1 $port <&3; printf $?)
   done
