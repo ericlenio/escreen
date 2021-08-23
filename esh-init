@@ -62,53 +62,31 @@ _esh_e() {
 }
 export -f _esh_e
 
-# bootstrapping function: 1st arg is an event ID that the server will inspect
-# and run appropriate event handler for; event IDs starting with "z" send back
-# a gzip'd response from the server.
-#_esh_b() {
-  #exec 3<>/dev/tcp/localhost/$ESH_PORT
-  #echo $ESH_AT "$*" >&3
-  ## Send stdin of this function to esh server (like with cp2cb). This next
-  ## cat may show "Resource temporarily unavailable" under certain
-  ## conditions, if so generally just set stdin of caller to </dev/null.
-  #[ ! -t 0 ] && cat >&3
-  #[ ${1:0:1} = z ] && gzip -d -c <&3 || cat <&3
-  #exec 3<&- 3>&-
-#}
-# older shells may not be able to do the /dev/tcp/host/port trick, this works
-# around that ... netcat will be needed though
-_esh_b() {
-  local status h
-  if [ ${#FUNCNAME[@]} -gt 10 ]; then
-    # this function recurses on itself, this is a safety switch to prevent a
-    # fork bomb
-    echo "$FUNCNAME: too many levels deep: $*" >&2
-    echo "stack trace: ${FUNCNAME[*]}" >&2
-    echo "you probably need to disconnect the root STY and restart escreen-client" >&2
-    return 1
-  fi
-
+# _esh_at: ensure that ESH_TERM_AUTH_TOKEN is set
+_esh_at() {
+  local h hash_mismatch=0
   eval "$(_esh_e)" </dev/null
 
-  if [ "$ESH_TAT_HASH" -a "$ESH_SUDO_STY" -a "$ESH_TERM_AUTH_TOKEN" ]; then
+  if [ "$ESH_TAT_HASH" -a "$ESH_TERM_AUTH_TOKEN" ]; then
+    h=$(printf $ESH_TERM_AUTH_TOKEN | openssl md5)
+    h=${h##*= }
+    if [ $h != $ESH_TAT_HASH ]; then
+      #unset ESH_TERM_AUTH_TOKEN
+      echo "$FUNCNAME: auth token hash mismatch, force reload token" >&2
+      hash_mismatch=1
+    fi
+  fi
+
+  if [ $hash_mismatch = 1 -a "$ESH_SUDO_STY" ]; then
     # sudo in effect, and we are in gnu screen, so force refresh
     # ESH_TERM_AUTH_TOKEN from _esh_keyserver
     if ! ESH_TERM_AUTH_TOKEN=$(curl -s -S -f -H "X-Escreen-User: $USER" -H "X-Escreen-Auth: $ESH_TERM_AUTH_TOKEN" $ESH_KEYSERVER_URL); then
       echo "$FUNCNAME: curl failed" >&2
     fi
   fi
-
-  if [ "$ESH_TAT_HASH" -a "$ESH_TERM_AUTH_TOKEN" ]; then
-    h=$(printf $ESH_TERM_AUTH_TOKEN | openssl md5)
-    h=${h##*= }
-    if [ $h != $ESH_TAT_HASH ]; then
-      unset ESH_TERM_AUTH_TOKEN
-      echo "$FUNCNAME: auth token hash mismatch, force reload token" >&2
-    fi
-  fi
   
   if [ "$STY" ]; then
-    if [ -z "$ESH_TERM_AUTH_TOKEN" ]; then
+    if [ -z "$ESH_TERM_AUTH_TOKEN" -o $hash_mismatch = 1 ]; then
       t=$(mktemp -u)
       mkfifo -m 0600 $t
       # paste the contents of register "p" into the paste buffer, then write
@@ -129,7 +107,7 @@ _esh_b() {
       echo "$FUNCNAME edge case outside GNU screen: stack trace: ${FUNCNAME[*]}" >&2
       ESH_TERM_AUTH_TOKEN=x
       # fix me: need more secure way to load ESH_TERM_AUTH_TOKEN
-      ESH_TERM_AUTH_TOKEN=$($FUNCNAME tat $ESH_TERM_PID)
+      ESH_TERM_AUTH_TOKEN=$(_esh_b tat $ESH_TERM_PID)
     fi
   fi
 
@@ -137,6 +115,35 @@ _esh_b() {
     echo "missing ESH_TERM_AUTH_TOKEN: stack trace: ${FUNCNAME[*]}" >&2
     return 1
   fi
+}
+
+# bootstrapping function: 1st arg is an event ID that the server will inspect
+# and run appropriate event handler for; event IDs starting with "z" send back
+# a gzip'd response from the server.
+#_esh_b() {
+  #exec 3<>/dev/tcp/localhost/$ESH_PORT
+  #echo $ESH_AT "$*" >&3
+  ## Send stdin of this function to esh server (like with cp2cb). This next
+  ## cat may show "Resource temporarily unavailable" under certain
+  ## conditions, if so generally just set stdin of caller to </dev/null.
+  #[ ! -t 0 ] && cat >&3
+  #[ ${1:0:1} = z ] && gzip -d -c <&3 || cat <&3
+  #exec 3<&- 3>&-
+#}
+# older shells may not be able to do the /dev/tcp/host/port trick, this works
+# around that ... netcat will be needed though
+_esh_b() {
+  local status
+  if [ ${#FUNCNAME[@]} -gt 10 ]; then
+    # this function recurses on itself, this is a safety switch to prevent a
+    # fork bomb
+    echo "$FUNCNAME: too many levels deep: $*" >&2
+    echo "stack trace: ${FUNCNAME[*]}" >&2
+    echo "you probably need to disconnect the root STY and restart escreen-client" >&2
+    return 1
+  fi
+
+  [ "$1" != tat ] && _esh_at
 
   {
     read status
@@ -255,7 +262,7 @@ _esh_i() {
     #_esh_l $t/-prompt $p2
     export PROMPT_COMMAND='-prompt'
   fi
-  export -f _esh_e _esh_i _esh_b _esh_l _esh_y
+  export -f _esh_e _esh_i _esh_b _esh_l _esh_y _esh_at
   #export -n ESH_AT ESH_TERM_AUTH_TOKEN
 }
 

@@ -2,8 +2,7 @@
 _esh_keyserver() {
   local fifo=$(mktemp -u) port=${1:-1055} line content http_code http_status nc_fails=0 ESH_TERM_AUTH_TOKEN_ORIG ESH_TERM_AUTH_TOKEN_PASSED http_user
 
-  # calling "_esh_b about" will trigger the setting of ESH_TERM_AUTH_TOKEN
-  [ -z "$ESH_TERM_AUTH_TOKEN" ] && _esh_b about
+  [ -z "$ESH_TERM_AUTH_TOKEN" ] && _esh_at
   #
   # hold the original value of ESH_TERM_AUTH_TOKEN in ESH_TERM_AUTH_TOKEN_ORIG,
   # 
@@ -17,7 +16,7 @@ _esh_keyserver() {
   rm $fifo
 
   trap 'trap - RETURN INT USR1; echo "$FUNCNAME: stopping now"; exec 3>&- 4>&-; return' RETURN INT
-  trap 'echo received USR1: re-read ESH_TERM_AUTH_TOKEN now; _esh_b about </dev/null' USR1
+  trap 'echo received USR1: re-read ESH_TERM_AUTH_TOKEN now; _esh_at </dev/null' USR1
   echo "pid $$ listening on port: $port"
 
   while true; do
