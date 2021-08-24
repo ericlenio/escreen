@@ -20,6 +20,11 @@ endf
 " is called to set ESH_TERM_AUTH_TOKEN in the shell
 fu Mkbashenv()
   let @a=tempname()
+  if len(g:ESH_TERM_AUTH_TOKEN) == 0
+    echohl WarningMsg
+    echon "WARNING: ESH_TERM_AUTH_TOKEN is unset\n"
+    echohl None
+  endif
   call writefile([
     \"ESH_TERM_AUTH_TOKEN=".g:ESH_TERM_AUTH_TOKEN
     \],@a)

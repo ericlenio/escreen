@@ -101,7 +101,6 @@ _esh_at() {
       fi
       rm $t
       #echo "$FUNCNAME: loaded ESH_TERM_AUTH_TOKEN by GNU screen method" >&2
-echo ">>>$FUNCNAME: loaded ESH_TERM_AUTH_TOKEN:$ESH_TERM_AUTH_TOKEN" >&2
     fi
   else
     if [ -z "$ESH_TERM_AUTH_TOKEN" ]; then

@@ -10,9 +10,9 @@ _vime() {
     local p='#!/usr/bin/env bash
 [ "$1" = "--version" ] && exec vim "$@"
 %s
-#if [ -z "$ESH_TERM_AUTH_TOKEN" ]; then
-  #ESH_TERM_AUTH_TOKEN=$(_esh_y tat)
-#fi
+if [ -z "$ESH_TERM_AUTH_TOKEN" ]; then
+  _esh_at
+fi
 _esh_i </dev/null
 exec vim -S <(
   # this printf statement to work around errors when invoking vim on Ubuntu 8

@@ -71,10 +71,14 @@ echo START ESH_TERM_AUTH_TOKEN:$ESH_TERM_AUTH_TOKEN >&2
           /refresh-auth-token)
             # /refresh-auth-token does not require any authentication
             http_code=200
-            http_status=OK
-            response_body="OK"
+            local old_token=$ESH_TERM_AUTH_TOKEN
             _esh_at
-echo NOW ESH_TERM_AUTH_TOKEN:$ESH_TERM_AUTH_TOKEN >&2
+            if [ "$old_token" = $ESH_TERM_AUTH_TOKEN ]; then
+              http_status="WARN_TOKEN_NOT_UPDATED"
+            else
+              http_status="OK_TOKEN_UPDATED"
+            fi
+            response_body="$http_status"
             ;;
         esac
         printf "%s %s %s %s %s\n" $(date +%T) $req_path $http_code $http_status $http_user
