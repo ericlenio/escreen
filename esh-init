@@ -64,13 +64,13 @@ export -f _esh_e
 
 # _esh_at: ensure that ESH_TERM_AUTH_TOKEN is set
 _esh_at() {
-  local h hash_mismatch=0
+  local hash hash_mismatch=0
   eval "$(_esh_e)" </dev/null
 
-  if [ "$ESH_TAT_HASH" -a "$ESH_TERM_AUTH_TOKEN" ]; then
-    h=$(printf $ESH_TERM_AUTH_TOKEN | openssl md5)
-    h=${h##*= }
-    if [ $h != $ESH_TAT_HASH ]; then
+  if [ "$ESH_TAT_HASH" ]; then
+    hash=$(printf $ESH_TERM_AUTH_TOKEN | openssl md5)
+    hash=${hash##*= }
+    if [ $hash != $ESH_TAT_HASH ]; then
       #unset ESH_TERM_AUTH_TOKEN
       echo "$FUNCNAME: auth token hash mismatch, force reload token" >&2
       hash_mismatch=1
@@ -101,6 +101,7 @@ _esh_at() {
       fi
       rm $t
       #echo "$FUNCNAME: loaded ESH_TERM_AUTH_TOKEN by GNU screen method" >&2
+echo ">>>$FUNCNAME: loaded ESH_TERM_AUTH_TOKEN:$ESH_TERM_AUTH_TOKEN" >&2
     fi
   else
     if [ -z "$ESH_TERM_AUTH_TOKEN" ]; then

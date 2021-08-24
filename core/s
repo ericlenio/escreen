@@ -25,8 +25,9 @@ s() {
 
   if [ "$STY" ] && ! curl -f -s -S $ESH_KEYSERVER_URL/hello >/dev/null; then
     echo "auth token server not detected, launching now"
-    env screen -X screen 10 bash -c "_esh_keyserver ${ESH_KEYSERVER_URL##*:}"
-    env screen -X prev
+    # launch auth token server in window 10, then immediately come back to
+    # previous ("prev") window where sudo is about to run
+    env screen -X eval "screen 10 bash -c '_esh_keyserver ${ESH_KEYSERVER_URL##*:}'" "prev"
   fi
 
   # use existing $ESH_STY, and $STY (assume sudo sessions will never invoke GNU

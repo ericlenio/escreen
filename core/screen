@@ -1,45 +1,53 @@
 # vim:filetype=bash
 screen() {
   # make copy of original function args
-  local args=("$@") opt rcfile root_sty=$([ "$SSH_TTY" ] && echo 0 || echo 1)
+  local args=("$@") opt rcfile root_sty=$([ "$SSH_TTY" ] && echo 0 || echo 1) keyserver_port=1054
+  export ESH_KEYSERVER_URL=http://127.0.0.1:$keyserver_port
+  # switch port if root, so we can allow concurrent gnu screen sessions for
+  # root and 1 other user
+  [ $EUID = 0 ] && keyserver_port=1055
   # Note: escreen sends "--", that is why we skip it here
   if [ "$1" != -- ]; then
     for opt in "$@"; do
       case $opt in
         -r)
-          local curr_sty=${STY:-some_value} pick_sty
+          local curr_sty=${STY:-some_value} pick_sty pick_sty_line esh_sty
           local stys=$(
-            env screen -ls | grep -v $curr_sty | while read l; do
-              if [[ "$l" =~ ^[[:blank:]]*([0-9]+\.[[:print:]]+) ]]; then
+            while read l; do
+              if [[ "$l" =~ ^[[:blank:]]*([0-9]+\.[^[:blank:]]+)[[:blank:]]+([[:print:]]+) ]]; then
                 pick_sty=${BASH_REMATCH[1]}
+                pick_sty_status=${BASH_REMATCH[2]}
                 if [ ! "$t" ]; then
                   t=$(mktemp -u)
                   mkfifo -m 0600 $t
                 fi
                 env screen -X -S $pick_sty screen bash -c "echo \$ESH_VERSION > $t"
                 if [ $(<$t) = $ESH_VERSION ]; then
-                  echo $pick_sty
+                  echo "$pick_sty $pick_sty_status"
                 fi
               fi
-            done
+            done < <(env screen -ls | grep -v $curr_sty)
             [ "$t" ] && rm $t
           )
           if [ -z "$stys" ]; then
             echo "No screen sessions detected."
-            return 1
+            return 0
           fi
           if [ $(echo "$stys" | wc -l) = 1 ]; then
             pick_sty="$stys"
-          elif ! pick_sty=$(-pick-something "Resume which session?" "$stys"); then
+          elif ! pick_sty_line=$(-pick-something "Resume which session?" "$stys"); then
             return $?
           fi
-          if [[ $pick_sty =~ ^[0-9]+\.(.+) ]]; then
+          if [[ $pick_sty_line =~ ^([0-9]+\.([^[:blank:]]+)) ]]; then
+            pick_sty=${BASH_REMATCH[1]}
+            esh_sty=${BASH_REMATCH[2]}
             eval "$(_esh_e)"
             ESH_TAT_HASH=$(printf $ESH_TERM_AUTH_TOKEN | openssl md5)
             ESH_TAT_HASH=${ESH_TAT_HASH##*= }
-            _esh_e ${BASH_REMATCH[1]} ESH_PORT SSH_AUTH_SOCK ESH_TERM_PID ESH_TAT_HASH
+            _esh_e $esh_sty ESH_PORT SSH_AUTH_SOCK ESH_TERM_PID ESH_TAT_HASH
             env screen -X -S $pick_sty register p $ESH_TERM_AUTH_TOKEN
-            _esh_b registerSty $ESH_TERM_PID $pick_sty $root_sty
+            curl -v $ESH_KEYSERVER_URL/refresh-auth-token
+            #_esh_b registerSty $ESH_TERM_PID $pick_sty $root_sty
             # strip off "screen." prefix from $TERM to avoid "$TERM too long" issue
             env TERM=${TERM#screen.} screen -d -r $pick_sty
             return $?
@@ -58,10 +66,7 @@ screen() {
   # anticipatory optimization: pre-load vim, so it does not need to be loaded
   # in every screen window
   v --version >/dev/null
-  local esc=^Aa esh_info keyserver_port=1054
-  # switch port if root, so we can allow concurrent gnu screen sessions for
-  # root and 1 other user
-  [ $EUID = 0 ] && keyserver_port=1055
+  local esc=^Aa esh_info
 
   if [ $root_sty = 0 ]; then
     # assume nested gnu screen, so use alternate escape sequence
@@ -72,7 +77,6 @@ screen() {
   fi
 
   rcfile=$(mktemp)
-  export ESH_KEYSERVER_URL=http://127.0.0.1:$keyserver_port
   cat << EOF >$rcfile
 #termcapinfo * '' u0=my_user0_string
 multiuser off

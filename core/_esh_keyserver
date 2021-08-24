@@ -7,6 +7,7 @@ _esh_keyserver() {
   # hold the original value of ESH_TERM_AUTH_TOKEN in ESH_TERM_AUTH_TOKEN_ORIG,
   # 
   ESH_TERM_AUTH_TOKEN_ORIG=$ESH_TERM_AUTH_TOKEN
+echo START ESH_TERM_AUTH_TOKEN:$ESH_TERM_AUTH_TOKEN >&2
 
   # set up bidirectional pipe (idea from
   # https://unix.stackexchange.com/a/227981)
@@ -55,18 +56,29 @@ _esh_keyserver() {
         # we have reached the end of the request headers, send back the
         # response
         #
-        if [ "$req_path" = /hello ]; then
-          # /hello does not require any authentication
-          http_code=200
-          http_status=OK
-          response_body="HELLO"
-        elif [ "$req_path" = /get-auth-token ]; then
-          if [ $http_code = 200 ]; then
-            response_body=$ESH_TERM_AUTH_TOKEN
-          fi
-        fi
+        case "$req_path" in
+          /hello)
+            # /hello does not require any authentication
+            http_code=200
+            http_status=OK
+            response_body="HELLO"
+            ;;
+          /get-auth-token)
+            if [ $http_code = 200 ]; then
+              response_body=$ESH_TERM_AUTH_TOKEN
+            fi
+            ;;
+          /refresh-auth-token)
+            # /refresh-auth-token does not require any authentication
+            http_code=200
+            http_status=OK
+            response_body="OK"
+            _esh_at
+echo NOW ESH_TERM_AUTH_TOKEN:$ESH_TERM_AUTH_TOKEN >&2
+            ;;
+        esac
         printf "%s %s %s %s %s\n" $(date +%T) $req_path $http_code $http_status $http_user
-        # IMPORTANT: print everything in 1 statement, otherwise we can get
+        # IMPORTANT: send the response in 1 statement, otherwise we can get
         # deadlock
         printf 'HTTP/1.1 %s %s\r\nContent-Type: text/plain\r\nContent-Length: %s\r\nCache-Control: public, max-age=0\r\nConnection: close\r\n\r\n%s' \
           $http_code \
