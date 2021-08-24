@@ -7,7 +7,6 @@ _esh_atserver() {
   # hold the original value of ESH_TERM_AUTH_TOKEN in ESH_TERM_AUTH_TOKEN_ORIG,
   # 
   ESH_TERM_AUTH_TOKEN_ORIG=$ESH_TERM_AUTH_TOKEN
-echo START ESH_TERM_AUTH_TOKEN:$ESH_TERM_AUTH_TOKEN >&2
 
   # set up bidirectional pipe (idea from
   # https://unix.stackexchange.com/a/227981)
