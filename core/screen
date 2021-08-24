@@ -2,7 +2,7 @@
 screen() {
   # make copy of original function args
   local args=("$@") opt rcfile root_sty=$([ "$SSH_TTY" ] && echo 0 || echo 1) keyserver_port=1054
-  export ESH_KEYSERVER_URL=http://127.0.0.1:$keyserver_port
+  export ESH_ATSERVER_URL=http://127.0.0.1:$keyserver_port
   # switch port if root, so we can allow concurrent gnu screen sessions for
   # root and 1 other user
   [ $EUID = 0 ] && keyserver_port=1055
@@ -46,7 +46,7 @@ screen() {
             ESH_TAT_HASH=${ESH_TAT_HASH##*= }
             _esh_e $esh_sty ESH_PORT SSH_AUTH_SOCK ESH_TERM_PID ESH_TAT_HASH
             env screen -X -S $pick_sty register p $ESH_TERM_AUTH_TOKEN
-            curl -v $ESH_KEYSERVER_URL/refresh-auth-token
+            curl -v $ESH_ATSERVER_URL/refresh-auth-token
             #_esh_b registerSty $ESH_TERM_PID $pick_sty $root_sty
             # strip off "screen." prefix from $TERM to avoid "$TERM too long" issue
             env TERM=${TERM#screen.} screen -d -r $pick_sty
@@ -93,7 +93,6 @@ shelltitle "$ |:"
 caption always "%{= kw}%-w%{= BW}%n%t%{-}%+w %-= @%H %{= Y}%l%{-} %m/%d %0c$esh_info"
 register p $ESH_TERM_AUTH_TOKEN
 unsetenv SCREENRC
-#screen 10 bash -c "_esh_keyserver $keyserver_port"
 screen bash -c "ESH_TERM_AUTH_TOKEN=$ESH_TERM_AUTH_TOKEN exec bash"
 bind c screen bash -c "ESH_TERM_AUTH_TOKEN=$ESH_TERM_AUTH_TOKEN exec bash"
 #screen bash -c '_esh_b registerSty $ESH_TERM_PID \$STY $root_sty; rm $rcfile'

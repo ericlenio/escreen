@@ -1,5 +1,5 @@
 # vim:filetype=bash
-_esh_keyserver() {
+_esh_atserver() {
   local fifo=$(mktemp -u) port=${1:-1055} line response_body http_code http_status nc_fails=0 ESH_TERM_AUTH_TOKEN_ORIG ESH_TERM_AUTH_TOKEN_PASSED http_user req_path
 
   [ -z "$ESH_TERM_AUTH_TOKEN" ] && _esh_at
