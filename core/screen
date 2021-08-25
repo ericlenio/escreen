@@ -45,7 +45,10 @@ screen() {
             ESH_TAT_HASH=$(printf $ESH_TERM_AUTH_TOKEN | openssl md5)
             ESH_TAT_HASH=${ESH_TAT_HASH##*= }
             _esh_e $esh_sty ESH_PORT SSH_AUTH_SOCK ESH_TERM_PID ESH_TAT_HASH
-            env screen -X -S $pick_sty register p $ESH_TERM_AUTH_TOKEN
+            if ! env screen -X -S $pick_sty register p $ESH_TERM_AUTH_TOKEN; then
+              echo "$FUNCNAME: failed to register ESH_TERM_AUTH_TOKEN on STY=$pick_sty" >&2
+              return 1
+            fi
             curl -v $ESH_ATSERVER_URL/refresh-auth-token
             #_esh_b registerSty $ESH_TERM_PID $pick_sty $root_sty
             # strip off "screen." prefix from $TERM to avoid "$TERM too long" issue
