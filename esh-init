@@ -65,10 +65,17 @@ export -f _esh_e
 # _esh_at: ensure that ESH_TERM_AUTH_TOKEN is set
 _esh_at() {
   local hash hash_mismatch=0
+
+  if [ "$1" = hash ]; then
+    ESH_TAT_HASH=$(printf "$ESH_TERM_AUTH_TOKEN" | openssl md5)
+    ESH_TAT_HASH=${ESH_TAT_HASH##*= }
+    return
+  fi
+
   eval "$(_esh_e)" </dev/null
 
   if [ "$ESH_TAT_HASH" ]; then
-    hash=$(printf $ESH_TERM_AUTH_TOKEN | openssl md5)
+    hash=$(printf "$ESH_TERM_AUTH_TOKEN" | openssl md5)
     hash=${hash##*= }
     if [ $hash != $ESH_TAT_HASH ]; then
       #unset ESH_TERM_AUTH_TOKEN
@@ -154,8 +161,7 @@ _esh_b() {
     fi
     if [ "$status" = E_BAD_AUTH_TOKEN ]; then
       echo "$FUNCNAME: bad auth token detected, retrying: $*" >&2
-      # retry, unset ESH_TERM_AUTH_TOKEN to force it to refresh
-      unset ESH_TERM_AUTH_TOKEN
+      _esh_at hash
       $FUNCNAME "$@"
       return $?
     fi
