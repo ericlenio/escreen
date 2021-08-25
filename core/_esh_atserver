@@ -1,12 +1,11 @@
 # vim:filetype=bash
 _esh_atserver() {
-  local fifo=$(mktemp -u) port=${1:-1055} line response_body http_code http_status nc_fails=0 ESH_TERM_AUTH_TOKEN_ORIG ESH_TERM_AUTH_TOKEN_PASSED http_user req_path
+  local i fifo=$(mktemp -u) port=${1:-1055} line response_body http_code http_status nc_fails=0 ESH_TERM_AUTH_TOKEN_PASSED http_user req_path
 
   [ -z "$ESH_TERM_AUTH_TOKEN" ] && _esh_at
-  #
-  # hold the original value of ESH_TERM_AUTH_TOKEN in ESH_TERM_AUTH_TOKEN_ORIG,
-  # 
-  ESH_TERM_AUTH_TOKEN_ORIG=$ESH_TERM_AUTH_TOKEN
+  # valid_local_auth_tokens: a list of any token that can authenticate to this
+  # little web server
+  local valid_local_auth_tokens=($ESH_TERM_AUTH_TOKEN)
 
   # set up bidirectional pipe (idea from
   # https://unix.stackexchange.com/a/227981)
@@ -42,10 +41,13 @@ _esh_atserver() {
       line=${line//$'\r'/}
       if [[ "$line" =~ ^X-Escreen-Auth:\ (.*) ]]; then
         ESH_TERM_AUTH_TOKEN_PASSED=${BASH_REMATCH[1]}
-        if [ "$ESH_TERM_AUTH_TOKEN_PASSED" = "$ESH_TERM_AUTH_TOKEN_ORIG" -o "$ESH_TERM_AUTH_TOKEN_PASSED" = "$ESH_TERM_AUTH_TOKEN" ]; then
-          http_code=200
-          http_status=OK
-        fi
+        for ((i=0;i<${#valid_local_auth_tokens[@]};i++)); do
+          if [ "$ESH_TERM_AUTH_TOKEN_PASSED" = "${valid_local_auth_tokens[$i]}" ]; then
+            http_code=200
+            http_status=OK
+            break
+          fi
+        done
       elif [[ "$line" =~ ^X-Escreen-User:\ (.*) ]]; then
         http_user=${BASH_REMATCH[1]}
       elif [[ "$line" =~ ^GET\ ([^[:space:]]*) ]]; then
@@ -76,6 +78,7 @@ _esh_atserver() {
               http_status="WARN_TOKEN_NOT_UPDATED"
             else
               http_status="OK_TOKEN_UPDATED"
+              valid_local_auth_tokens+=($ESH_TERM_AUTH_TOKEN)
             fi
             response_body="$http_status"
             ;;
