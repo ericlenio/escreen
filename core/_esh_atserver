@@ -42,7 +42,7 @@ _esh_atserver() {
       line=${line//$'\r'/}
       if [[ "$line" =~ ^X-Escreen-Auth:\ (.*) ]]; then
         ESH_TERM_AUTH_TOKEN_PASSED=${BASH_REMATCH[1]}
-        if [ "$ESH_TERM_AUTH_TOKEN_PASSED" = "$ESH_TERM_AUTH_TOKEN_ORIG" ]; then
+        if [ "$ESH_TERM_AUTH_TOKEN_PASSED" = "$ESH_TERM_AUTH_TOKEN_ORIG" -o "$ESH_TERM_AUTH_TOKEN_PASSED" = "$ESH_TERM_AUTH_TOKEN" ]; then
           http_code=200
           http_status=OK
         fi
