@@ -64,58 +64,65 @@ export -f _esh_e
 
 # _esh_at: ensure that ESH_TERM_AUTH_TOKEN is set
 _esh_at() {
-  local hash hash_mismatch=0
+  local hash force_new_at=0
 
-  if [ "$1" = hash ]; then
-    ESH_TAT_HASH=$(printf "$ESH_TERM_AUTH_TOKEN" | openssl md5)
-    ESH_TAT_HASH=${ESH_TAT_HASH##*= }
+  if [ "$1" = force_new_at ]; then
+    force_new_at=1
+  elif [ "$1" = hash ]; then
+    hash=$(printf "$ESH_TERM_AUTH_TOKEN" | openssl md5)
+    hash=${hash##*= }
+    echo $hash
     return
+  else
+    if [ -z "$ESH_TERM_AUTH_TOKEN" ]; then
+      force_new_at=1
+    fi
   fi
 
   eval "$(_esh_e)" </dev/null
 
-  if [ "$ESH_TAT_HASH" ]; then
-    hash=$(printf "$ESH_TERM_AUTH_TOKEN" | openssl md5)
-    hash=${hash##*= }
+  if [ $force_new_at = 0 -a "$ESH_TAT_HASH" ]; then
+    hash=$(_esh_at hash)
     if [ $hash != $ESH_TAT_HASH ]; then
       #unset ESH_TERM_AUTH_TOKEN
       echo "$FUNCNAME: auth token hash mismatch, force reload token" >&2
-      hash_mismatch=1
+      force_new_at=1
     fi
   fi
 
-  if [ $hash_mismatch = 1 -a "$ESH_SUDO_STY" ]; then
+  if [ $force_new_at = 1 -a "$ESH_SUDO_STY" ]; then
     # sudo in effect, and we are in gnu screen, so force refresh
     # ESH_TERM_AUTH_TOKEN from _esh_atserver
     if ! ESH_TERM_AUTH_TOKEN=$(curl -s -S -f -H "X-Escreen-User: $USER" -H "X-Escreen-Auth: $ESH_TERM_AUTH_TOKEN" $ESH_ATSERVER_URL/get-auth-token); then
       echo "$FUNCNAME: curl failed" >&2
     fi
+    return
   fi
   
+  if [ $force_new_at = 0 ]; then
+    return
+  fi
+
   if [ "$STY" ]; then
-    if [ -z "$ESH_TERM_AUTH_TOKEN" -o $hash_mismatch = 1 ]; then
-      t=$(mktemp -u)
-      mkfifo -m 0600 $t
-      # paste the contents of register "p" into the paste buffer, then write
-      # the paste buffer to a temp file, then read the temp file for
-      # ESH_TERM_AUTH_TOKEN
-      if read -d '' ESH_TERM_AUTH_TOKEN < <(
-        env screen -X eval "paste p ." "writebuf $t" &
-        cat $t
-      ); then
-        # eof, no biggie
-        :
-      fi
-      rm $t
-      #echo "$FUNCNAME: loaded ESH_TERM_AUTH_TOKEN by GNU screen method" >&2
+    t=$(mktemp -u)
+    mkfifo -m 0600 $t
+    # paste the contents of register "p" into the paste buffer, then write
+    # the paste buffer to a temp file, then read the temp file for
+    # ESH_TERM_AUTH_TOKEN
+    if read -d '' ESH_TERM_AUTH_TOKEN < <(
+      env screen -X eval "paste p ." "writebuf $t" &
+      cat $t
+    ); then
+      # eof, no biggie
+      :
     fi
+    rm $t
+    #echo "$FUNCNAME: loaded ESH_TERM_AUTH_TOKEN by GNU screen method" >&2
   else
-    if [ -z "$ESH_TERM_AUTH_TOKEN" ]; then
-      echo "$FUNCNAME edge case outside GNU screen: stack trace: ${FUNCNAME[*]}" >&2
-      ESH_TERM_AUTH_TOKEN=x
-      # fix me: need more secure way to load ESH_TERM_AUTH_TOKEN
-      ESH_TERM_AUTH_TOKEN=$(_esh_b tat $ESH_TERM_PID)
-    fi
+    echo "$FUNCNAME edge case outside GNU screen: stack trace: ${FUNCNAME[*]}" >&2
+    ESH_TERM_AUTH_TOKEN=x
+    # fix me: need more secure way to load ESH_TERM_AUTH_TOKEN
+    ESH_TERM_AUTH_TOKEN=$(_esh_b tat $ESH_TERM_PID)
   fi
 
   if [ -z "$ESH_TERM_AUTH_TOKEN" ]; then
@@ -161,7 +168,7 @@ _esh_b() {
     fi
     if [ "$status" = E_BAD_AUTH_TOKEN ]; then
       echo "$FUNCNAME: bad auth token detected, retrying: $*" >&2
-      _esh_at hash
+      _esh_at force_new_at
       $FUNCNAME "$@"
       return $?
     fi

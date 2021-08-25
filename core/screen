@@ -42,7 +42,7 @@ screen() {
             pick_sty=${BASH_REMATCH[1]}
             esh_sty=${BASH_REMATCH[2]}
             eval "$(_esh_e)"
-            _esh_at hash
+            ESH_TAT_HASH=$(_esh_at hash)
             _esh_e $esh_sty ESH_PORT SSH_AUTH_SOCK ESH_TERM_PID ESH_TAT_HASH
             if ! env screen -X -S $pick_sty register p $ESH_TERM_AUTH_TOKEN; then
               echo "$FUNCNAME: failed to register ESH_TERM_AUTH_TOKEN on STY=$pick_sty" >&2
