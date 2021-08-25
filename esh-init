@@ -90,20 +90,17 @@ _esh_at() {
     fi
   fi
 
-  if [ $force_new_at = 1 -a "$ESH_SUDO_STY" ]; then
+  if [ $force_new_at = 0 ]; then
+    return
+  fi
+
+  if [ "$ESH_SUDO_STY" ]; then
     # sudo in effect, and we are in gnu screen, so force refresh
     # ESH_TERM_AUTH_TOKEN from _esh_atserver
     if ! ESH_TERM_AUTH_TOKEN=$(curl -s -S -f -H "X-Escreen-User: $USER" -H "X-Escreen-Auth: $ESH_TERM_AUTH_TOKEN" $ESH_ATSERVER_URL/get-auth-token); then
       echo "$FUNCNAME: curl failed" >&2
     fi
-    return
-  fi
-  
-  if [ $force_new_at = 0 ]; then
-    return
-  fi
-
-  if [ "$STY" ]; then
+  elif [ "$STY" ]; then
     t=$(mktemp -u)
     mkfifo -m 0600 $t
     # paste the contents of register "p" into the paste buffer, then write
@@ -158,6 +155,8 @@ _esh_b() {
   fi
 
   [ "$1" != tat ] && _esh_at
+
+  eval "$(_esh_e)" </dev/null
 
   {
     read status
