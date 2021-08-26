@@ -36,15 +36,16 @@ fu PasteCb()
   " paste contents of OS clipboard
   try
     let [@",l:stderr]=Systemcaller("_esh_b zGetCb")
-    call feedkeys(col("$")-col(".")==1 ? "p" : "P")
-    "redraw
     if len(l:stderr) > 0
       echohl WarningMsg
       echon join(l:stderr," ")
       echohl None
       echon " "
+    else
+      call feedkeys(col("$")-col(".")==1 ? "p" : "P")
+      "redraw
+      echon "pasted " len(@") " characters"
     endif
-    echon "pasted " len(@") " characters"
   catch /.*/
     echo v:exception
   endtry
@@ -93,8 +94,15 @@ fu Cp2cb()
   " NOTE: the system command will write out to a temp file
   " which is vim's tempname() function
   try
-    call Systemcaller("cp2cb",@")
-    echon "Copied " len(@") " characters"
+    let [l:stdout,l:stderr]=Systemcaller("cp2cb",@")
+    if len(l:stderr) > 0
+      echohl WarningMsg
+      echon join(l:stderr," ")
+      echohl None
+      echon " "
+    else
+      echon "Copied " len(@") " characters"
+    endif
   catch /.*/
     echo v:exception
   endtry

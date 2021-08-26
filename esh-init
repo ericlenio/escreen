@@ -145,7 +145,7 @@ _esh_at() {
 # around that ... netcat will be needed though
 _esh_b() {
   local status
-  if [ ${#FUNCNAME[@]} -gt 10 ]; then
+  if [ ${#FUNCNAME[@]} -gt 5 ]; then
     # this function recurses on itself, this is a safety switch to prevent a
     # fork bomb
     echo "$FUNCNAME: too many levels deep: $*" >&2
