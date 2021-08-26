@@ -50,7 +50,6 @@ screen() {
             fi
             if ! curl -v -f -S $ESH_ATSERVER_URL/refresh-auth-token; then
               echo "$FUNCNAME: failed call to /refresh-auth-token" >&2
-              return 1
             fi
             #_esh_b registerSty $ESH_TERM_PID $pick_sty $root_sty
             # strip off "screen." prefix from $TERM to avoid "$TERM too long" issue
