@@ -166,10 +166,11 @@ _esh_b() {
       return
     fi
     if [ "$status" = E_BAD_AUTH_TOKEN ]; then
-      echo "$FUNCNAME: bad auth token detected, retrying: $*" >&2
-      _esh_at force_new_at
-      $FUNCNAME "$@"
-      return $?
+      echo "${FUNCNAME[*]} (args: $*): E_BAD_AUTH_TOKEN" >&2
+      #_esh_at force_new_at
+      #$FUNCNAME "$@"
+      #return $?
+      return 1
     fi
     if [ ${1:0:1} = z ]; then
       gzip -dc

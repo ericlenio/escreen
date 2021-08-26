@@ -133,6 +133,8 @@ class BashSessionConfigServer extends net.Server {
       ? EVT_STATS[evtId]+1
       : 1;
     console.log("request #"+socket.n+":"+hdr);
+    hdr.splice(0,2);
+    hdr.unshift(socket);
     if (evtId!='tat' && evtId!='registerTerminal') {
       if (!this.ts.isValidAuthToken(authToken)) {
         console.error("invalid auth token: %s (evtId: %s): "+socket.n,authToken,evtId);
@@ -144,10 +146,7 @@ class BashSessionConfigServer extends net.Server {
         if (evtId=='fpw') {
           return socket.end();
         }
-        // mirror back original payload, so it can be re-used in the retry
-        // logic of _esh_b
-        //return socket.pipe(socket);
-        return socket.end();
+        return socket.destroy();
       }
       if (this.ts.isValidOneTimeAuthToken(authToken)) {
         this.ts.deleteAuthToken(authToken);
@@ -156,8 +155,6 @@ class BashSessionConfigServer extends net.Server {
       //socket.write(authToken+"\n");
       socket.write("E_AUTH_TOKEN_OK\n");
     }
-    hdr.splice(0,2);
-    hdr.unshift(socket);
     try {
       // Call the handler
       this.legacyHandlers[evtId].apply(this,hdr);
