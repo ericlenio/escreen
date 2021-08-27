@@ -116,10 +116,11 @@ _esh_at() {
     rm $t
     #echo "$FUNCNAME: loaded ESH_TERM_AUTH_TOKEN by GNU screen method" >&2
   else
-    echo "$FUNCNAME edge case outside GNU screen: stack trace: ${FUNCNAME[*]}" >&2
-    ESH_TERM_AUTH_TOKEN=x
-    # fix me: need more secure way to load ESH_TERM_AUTH_TOKEN
-    ESH_TERM_AUTH_TOKEN=$(_esh_b tat $ESH_TERM_PID)
+echo "$FUNCNAME ERROR edge case outside GNU screen: stack trace: ${FUNCNAME[*]}" >&2
+    #ESH_TERM_AUTH_TOKEN=x
+    ## fix me: need more secure way to load ESH_TERM_AUTH_TOKEN
+    #ESH_TERM_AUTH_TOKEN=$(_esh_b tat $ESH_TERM_PID)
+    return 1
   fi
 
   if [ -z "$ESH_TERM_AUTH_TOKEN" ]; then
