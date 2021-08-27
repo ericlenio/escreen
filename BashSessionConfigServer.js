@@ -216,6 +216,7 @@ class BashSessionConfigServer extends net.Server {
     });
 
     // get ESH_TERM_AUTH_TOKEN
+    /*
     self.registerHandler("tat",function(socket,pid,sty,windowId) {
       //self.ts.injectToTerminal(pid,"tat",sty,windowId).then(function(status) {
         //socket.end(status+"\n");
@@ -225,6 +226,7 @@ class BashSessionConfigServer extends net.Server {
         socket.end(Buffer.from(value).toString('base64')+"\n");
       });
     });
+    */
 
     self.registerHandler("about",function(socket) {
       socket.end("escreen "+process.env.ESH_VERSION+"\n");

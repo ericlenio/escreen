@@ -26,6 +26,7 @@
   declare -a exec
   declare -a ssh_params
   local ssh_params_file=$HOME/.remoteadmin/ssh_options filter RA_SSH_PROXY_JUMP_HOST RA_MODE=ssh superuser=0
+  local appCtx raAgentId
 
   usage() {
     echo "Usage: -ra [-hdr] [filter [ssh args ...]]"
