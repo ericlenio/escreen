@@ -97,8 +97,9 @@ shelltitle "$ |:"
 caption always "%{= kw}%-w%{= BW}%n%t%{-}%+w %-= @%H %{= Y}%l%{-} %m/%d %0c$esh_info"
 register p $ESH_TERM_AUTH_TOKEN
 unsetenv SCREENRC
-screen bash -c "ESH_TERM_AUTH_TOKEN=$ESH_TERM_AUTH_TOKEN exec bash"
-bind c screen bash -c "ESH_TERM_AUTH_TOKEN=$ESH_TERM_AUTH_TOKEN exec bash"
+screen
+#screen bash -c "ESH_TERM_AUTH_TOKEN=$ESH_TERM_AUTH_TOKEN exec bash"
+#bind c screen bash -c "ESH_TERM_AUTH_TOKEN=$ESH_TERM_AUTH_TOKEN exec bash"
 #screen bash -c '_esh_b registerSty $ESH_TERM_PID \$STY $root_sty; rm $rcfile'
 EOF
   # strip off "screen." prefix from $TERM to avoid "$TERM too long" issue
