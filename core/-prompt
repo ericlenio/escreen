@@ -5,6 +5,10 @@
 -prompt() {
   if [ -z "$ESH_TERM_AUTH_TOKEN" ]; then
     _esh_at force_new_at
+    if [ "$ESH_ATSERVER_PID" ]; then
+      curl $ESH_ATSERVER_URL/set-sty?STY=$STY
+      trap "kill -USR1 $ESH_ATSERVER_PID; exit" EXIT
+    fi
   fi
 
   # use DEBUG trap to load environment vars from _esh_e before every command is

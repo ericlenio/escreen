@@ -80,6 +80,13 @@ screen() {
     esh_info=" %{= cd}v$ESH_VERSION"
   fi
 
+  #if ! curl -f -s $ESH_ATSERVER_URL/hello; then
+    #_esh_atserver ${ESH_ATSERVER_URL##*:} &
+    #export ESH_ATSERVER_PID=$!
+  #else
+    #export ESH_ATSERVER_PID=$(curl -f -s $ESH_ATSERVER_URL/get-pid)
+  #fi
+
   rcfile=$(mktemp)
   cat << EOF >$rcfile
 #termcapinfo * '' u0=my_user0_string

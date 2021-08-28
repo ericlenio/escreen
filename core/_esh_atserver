@@ -1,6 +1,9 @@
 # vim:filetype=bash
+#
+# auth token web server
+#
 _esh_atserver() {
-  local i fifo=$(mktemp -u) port=${1:-1055} line response_body http_code http_status nc_fails=0 ESH_TERM_AUTH_TOKEN_PASSED http_user req_path
+  local i fifo=$(mktemp -u) port=${1:-1055} line response_body http_code http_status nc_fails=0 ESH_TERM_AUTH_TOKEN_PASSED http_user req_path nc_rc req_body req_type post_content_length
 
   [ -z "$ESH_TERM_AUTH_TOKEN" ] && _esh_at
   # valid_local_auth_tokens: a list of any token that can authenticate to this
@@ -15,14 +18,20 @@ _esh_atserver() {
   rm $fifo
 
   trap 'trap - RETURN INT USR1; echo "$FUNCNAME: stopping now"; exec 3>&- 4>&-; return' RETURN INT
-  trap 'echo received USR1: re-read ESH_TERM_AUTH_TOKEN now; _esh_at </dev/null' USR1
+  #trap 'echo received USR1: re-read ESH_TERM_AUTH_TOKEN now; _esh_at </dev/null' USR1
+  trap 'echo received USR1; if ! env screen -X windowlist; then exit; fi' USR1
   echo "pid $$ listening on port: $port"
 
   while true; do
     response_body=""
     req_path="/"
+    req_type=""
+    req_body=""
     http_code=401
+    post_content_length=""
     http_status=unauthorized
+    # read each line of the http request from the listening netcat process that
+    # is stdin for this "while" loop
     while read line || {
       # check if nc failed
       nc_rc=$line
@@ -39,7 +48,7 @@ _esh_atserver() {
       break
     }; do
       line=${line//$'\r'/}
-      if [[ "$line" =~ ^X-Escreen-Auth:\ (.*) ]]; then
+      if [[ "$line" =~ ^X-Escreen-Auth:\ ([^[:blank:]]+) ]]; then
         ESH_TERM_AUTH_TOKEN_PASSED=${BASH_REMATCH[1]}
         for ((i=0;i<${#valid_local_auth_tokens[@]};i++)); do
           if [ "$ESH_TERM_AUTH_TOKEN_PASSED" = "${valid_local_auth_tokens[$i]}" ]; then
@@ -48,21 +57,38 @@ _esh_atserver() {
             break
           fi
         done
-      elif [[ "$line" =~ ^X-Escreen-User:\ (.*) ]]; then
+      elif [[ "$line" =~ ^X-Escreen-User:\ ([^[:blank:]]+) ]]; then
         http_user=${BASH_REMATCH[1]}
-      elif [[ "$line" =~ ^GET\ ([^[:space:]]*) ]]; then
-        req_path=${BASH_REMATCH[1]}
+      elif [[ "$line" =~ ^(GET|POST)\ ([^[:space:]]*) ]]; then
+        req_type=${BASH_REMATCH[1]}
+        req_path=${BASH_REMATCH[2]}
+      elif [[ "$line" =~ ^Content-Length:\ ([0-9]+) ]]; then
+        post_content_length=${BASH_REMATCH[1]}
       fi
       if [ -z "$line" ]; then
         # we have reached the end of the request headers, send back the
         # response
         #
+        if [ "$req_type" = POST ]; then
+          read -N $post_content_length req_body
+        fi
         case "$req_path" in
           /hello)
             # /hello does not require any authentication
             http_code=200
             http_status=OK
             response_body="HELLO"
+            ;;
+          /get-pid)
+            http_code=200
+            http_status=OK
+            response_body="$$"
+            ;;
+          /set-sty)
+            if [ $http_code = 200 ] && [[ "$req_body" =~ ^STY=([^[:blank:]]+) ]]; then
+              STY=${BASH_REMATCH[1]}
+              echo "/set-sty: new STY value: $STY"
+            fi
             ;;
           /get-auth-token)
             if [ $http_code = 200 ]; then
@@ -73,7 +99,7 @@ _esh_atserver() {
             # /refresh-auth-token does not require any authentication
             http_code=200
             local old_token=$ESH_TERM_AUTH_TOKEN
-            _esh_at
+            STY=$ESH_STY _esh_at
             if [ "$old_token" = $ESH_TERM_AUTH_TOKEN ]; then
               http_status="WARN_TOKEN_NOT_UPDATED"
             else
