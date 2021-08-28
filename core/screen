@@ -80,12 +80,13 @@ screen() {
     esh_info=" %{= cd}v$ESH_VERSION"
   fi
 
-  #if ! curl -f -s $ESH_ATSERVER_URL/hello; then
-    #_esh_atserver ${ESH_ATSERVER_URL##*:} &
-    #export ESH_ATSERVER_PID=$!
-  #else
-    #export ESH_ATSERVER_PID=$(curl -f -s $ESH_ATSERVER_URL/get-pid)
-  #fi
+  if ! curl -f -s $ESH_ATSERVER_URL/hello; then
+    local atserver_logfile=$ESH_TMP/atserver-${ESH_ATSERVER_URL##*:}.log
+    _esh_atserver ${ESH_ATSERVER_URL##*:} >$atserver_logfile 2>&1 </dev/null &
+    export ESH_ATSERVER_PID=$!
+  else
+    export ESH_ATSERVER_PID=$(curl -f -s $ESH_ATSERVER_URL/get-pid)
+  fi
 
   rcfile=$(mktemp)
   cat << EOF >$rcfile

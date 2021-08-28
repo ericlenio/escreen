@@ -6,8 +6,8 @@
   if [ -z "$ESH_TERM_AUTH_TOKEN" ]; then
     _esh_at force_new_at
     if [ "$ESH_ATSERVER_PID" ]; then
-      curl $ESH_ATSERVER_URL/set-sty?STY=$STY
-      trap "kill -USR1 $ESH_ATSERVER_PID; exit" EXIT
+      curl -d STY=$STY -H "X-Escreen-Auth: $ESH_TERM_AUTH_TOKEN" -H "X-Escreen-User: $USER" $ESH_ATSERVER_URL/set-sty
+      trap "kill -USR1 -$ESH_ATSERVER_PID; exit" EXIT
     fi
   fi
 

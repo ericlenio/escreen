@@ -18,8 +18,7 @@ _esh_atserver() {
   rm $fifo
 
   trap 'trap - RETURN INT USR1; echo "$FUNCNAME: stopping now"; exec 3>&- 4>&-; return' RETURN INT
-  #trap 'echo received USR1: re-read ESH_TERM_AUTH_TOKEN now; _esh_at </dev/null' USR1
-  trap 'echo received USR1; if ! env screen -X windowlist; then exit; fi' USR1
+  trap 'if ! env screen -S $STY -X unsetenv NO_SUCH_VARIABLE >/dev/null; then trap - USR1; echo $FUNCNAME: QUIT; exit; fi' USR1
   echo "pid $$ listening on port: $port"
 
   while true; do
@@ -70,7 +69,7 @@ _esh_atserver() {
         # response
         #
         if [ "$req_type" = POST ]; then
-          read -N $post_content_length req_body
+          read -n $post_content_length req_body
         fi
         case "$req_path" in
           /hello)
