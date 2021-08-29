@@ -17,14 +17,15 @@ screen() {
               if [[ "$l" =~ ^[[:blank:]]*([0-9]+\.[^[:blank:]]+)[[:blank:]]+([[:print:]]+) ]]; then
                 pick_sty=${BASH_REMATCH[1]}
                 pick_sty_status=${BASH_REMATCH[2]}
-                if [ ! "$t" ]; then
-                  t=$(mktemp -u)
-                  mkfifo -m 0600 $t
-                fi
-                env screen -X -S $pick_sty screen bash -c "echo \$ESH_VERSION > $t"
-                if [ $(<$t) = $ESH_VERSION ]; then
-                  echo "$pick_sty $pick_sty_status"
-                fi
+                #if [ ! "$t" ]; then
+                  #t=$(mktemp -u)
+                  #mkfifo -m 0600 $t
+                #fi
+                #env screen -X -S $pick_sty screen bash -c "echo \$ESH_VERSION > $t"
+                #if [ $(<$t) = $ESH_VERSION ]; then
+                  #echo "$pick_sty $pick_sty_status"
+                #fi
+                echo "$pick_sty $pick_sty_status"
               fi
             done < <(env screen -ls | grep -v $curr_sty)
             [ "$t" ] && rm $t
@@ -38,9 +39,13 @@ screen() {
           elif ! pick_sty_line=$(-pick-something "Resume which session?" "$stys"); then
             return $?
           fi
-          if [[ $pick_sty_line =~ ^([0-9]+\.([^[:blank:]]+)) ]]; then
+          if [[ $pick_sty_line =~ ^([0-9]+\.([-\.[:alnum:]]+)) ]]; then
             pick_sty=${BASH_REMATCH[1]}
             esh_sty=${BASH_REMATCH[2]}
+            echo "OK resuming $pick_sty. Once the password is entered, remove it from the session, then disconnect."
+            if ! env TERM=${TERM#screen.} screen -d -r $pick_sty; then
+              return 1
+            fi
             eval "$(_esh_e)"
             ESH_TAT_HASH=$(_esh_at hash)
             _esh_e $esh_sty ESH_PORT SSH_AUTH_SOCK ESH_TERM_PID ESH_TAT_HASH

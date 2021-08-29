@@ -84,7 +84,7 @@ _esh_atserver() {
             response_body="$$"
             ;;
           /set-sty)
-            if [ $http_code = 200 ] && [[ "$req_body" =~ ^STY=([\.[:alnum:]]+) ]]; then
+            if [ $http_code = 200 ] && [[ "$req_body" =~ ^STY=([-\.[:alnum:]]+) ]]; then
               export STY=${BASH_REMATCH[1]}
               echo "/set-sty: new STY value: $STY"
             fi

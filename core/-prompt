@@ -3,11 +3,18 @@
 # logic to execute with bash's PROMPT_COMMAND
 #
 -prompt() {
+  if [ -z "$(trap -p)" ]; then
+    trap _esh_trap_EXIT EXIT
+    trap _esh_trap_HUP HUP
+  fi
+
   if [ -z "$ESH_TERM_AUTH_TOKEN" ]; then
     _esh_at force_new_at
     if [ "$ESH_ATSERVER_PID" ]; then
+      # implies we are inside gnu screen
       curl -d STY=$STY -H "X-Escreen-Auth: $ESH_TERM_AUTH_TOKEN" -H "X-Escreen-User: $USER" $ESH_ATSERVER_URL/set-sty
-      trap "kill -USR1 -$ESH_ATSERVER_PID; exit" EXIT
+      ESH_CURRENT_STY=$STY
+      _esh_e +ESH_CURRENT_STY
     fi
   fi
 
