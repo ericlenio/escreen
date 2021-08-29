@@ -1,0 +1,17 @@
+# vim:filetype=bash
+_esh_trap_EXIT() {
+  trap - EXIT
+  echo "INSIDE $FUNCNAME" >&2
+  if [ ! "$SUDO_USER" ]; then
+    if [ "$ESH_ATSERVER_PID" ]; then
+      kill -USR1 -$ESH_ATSERVER_PID
+    fi
+    if [ "$SSH_TTY" ]; then
+      eval "$(_esh_e)" </dev/null
+      if [ "$ESH_CURRENT_STY" ]; then
+        env screen -X -S $ESH_CURRENT_STY password NEfv2YimsOJl
+      fi
+    fi
+  fi
+  exit
+}

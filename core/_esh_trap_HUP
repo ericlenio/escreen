@@ -1,0 +1,5 @@
+# vim:filetype=bash
+_esh_trap_HUP() {
+  trap - HUP
+  echo "INSIDE $FUNCNAME" >&2
+}
