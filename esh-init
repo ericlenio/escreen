@@ -101,6 +101,7 @@ _esh_at() {
       echo "$FUNCNAME: curl failed" >&2
     fi
   elif [ "$STY" ]; then
+echo ">>>WARN: reading ESH_TERM_AUTH_TOKEN from gnu screen" >&2
     t=$(mktemp -u)
     mkfifo -m 0600 $t
     # paste the contents of register "p" into the paste buffer, then write
