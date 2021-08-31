@@ -92,9 +92,10 @@ screen() {
 
   rcfile=$(mktemp)
   bootfunc() {
-    ESH_TERM_AUTH_TOKEN=$1
+    tty=$1
     shift
-    bash -c "$(ESH_TERM_AUTH_TOKEN=$ESH_TERM_AUTH_TOKEN _init_ctx $@)"
+    read ESH_TERM_AUTH_TOKEN
+    exec bash -c "$(ESH_TERM_AUTH_TOKEN=$ESH_TERM_AUTH_TOKEN _init_ctx $@)" <$tty
   }
   export -f bootfunc
 
@@ -114,8 +115,8 @@ shelltitle "$ |:"
 caption always "%{= kw}%-w%{= BW}%n%t%{-}%+w %-= @%H %{= Y}%l%{-} %m/%d %0c$esh_info"
 register p $ESH_TERM_AUTH_TOKEN
 unsetenv SCREENRC
-screen bash -c "bootfunc $ESH_TERM_AUTH_TOKEN $ESH_STY $ESH_PORT"
-bind c screen bash -c "bootfunc $ESH_TERM_AUTH_TOKEN $ESH_STY $ESH_PORT"
+screen bash -c "bootfunc \$(tty) $ESH_STY $ESH_PORT < <(echo $ESH_TERM_AUTH_TOKEN)"
+bind c screen bash -c "bootfunc \$(tty) $ESH_STY $ESH_PORT < <(echo $ESH_TERM_AUTH_TOKEN)"
 screen rm $rcfile
 EOF
   # strip off "screen." prefix from $TERM to avoid "$TERM too long" issue
