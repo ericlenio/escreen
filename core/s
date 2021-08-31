@@ -28,5 +28,10 @@ s() {
   # disconnects/reconnects that we can reference the latest ESH_PORT and
   # ESH_TERM_AUTH_TOKEN
   #sudo -H -u $user bash -c "$(declare -p STY 2>/dev/null || echo :);$(ESH_TERM_AUTH_TOKEN=$ESH_TERM_AUTH_TOKEN _init_ctx $ESH_STY $ESH_PORT $@)"
-  sudo -H -u $user bash -c "$(ESH_SUDO_STY=$STY ESH_TERM_AUTH_TOKEN=$ESH_TERM_AUTH_TOKEN _init_ctx $ESH_STY $ESH_PORT $@)"
+  local tmpfile=$(mktemp -u)
+  rm -f $tmpfile
+  mkfifo -m 0644 $tmpfile
+  ESH_SUDO_STY=$STY ESH_TERM_AUTH_TOKEN=$ESH_TERM_AUTH_TOKEN _init_ctx -d $ESH_STY $ESH_PORT $@ > $tmpfile &
+  sudo -H -u $user bash $tmpfile
+  rm -f $tmpfile
 }
