@@ -1,7 +1,7 @@
 # vim:filetype=bash
 screen() {
   # make copy of original function args
-  local args=("$@") opt rcfile root_sty=$([ "$SSH_TTY" ] && echo 0 || echo 1) keyserver_port=1054
+  local args=("$@") opt rcfile root_sty=$([ "$SSH_TTY" ] && echo 0 || echo 1) keyserver_port=1054 os=$(uname)
   export ESH_ATSERVER_URL=http://127.0.0.1:$keyserver_port
   # switch port if root, so we can allow concurrent gnu screen sessions for
   # root and 1 other user
@@ -42,9 +42,12 @@ screen() {
           if [[ $pick_sty_line =~ ^([0-9]+\.([-\.[:alnum:]]+)) ]]; then
             pick_sty=${BASH_REMATCH[1]}
             esh_sty=${BASH_REMATCH[2]}
-            echo "OK resuming $pick_sty. Once the password is entered, remove it from the session, then disconnect."
-            if ! env TERM=${TERM#screen.} screen -d -r $pick_sty; then
-              return 1
+            if [ $os != OpenBSD ]; then
+              # as of OpenBSD 6.9, gnu screen password support is not working
+              echo "OK resuming $pick_sty. Once the password is entered, remove it from the session, then disconnect."
+              if ! env TERM=${TERM#screen.} screen -d -r $pick_sty; then
+                return 1
+              fi
             fi
             eval "$(_esh_e)"
             ESH_TAT_HASH=$(_esh_at hash)
@@ -92,9 +95,14 @@ screen() {
 
   rcfile=$(mktemp)
   bootfunc() {
-    tty=$1
-    shift
+    local tty=$1 register=$2
+    shift 2
     read ESH_TERM_AUTH_TOKEN
+    if [ $register = 1 ]; then
+      curl -d STY=$STY -H "X-Escreen-Auth: $ESH_TERM_AUTH_TOKEN" -H "X-Escreen-User: $USER" $ESH_ATSERVER_URL/set-sty
+      ESH_CURRENT_STY=$STY
+      _esh_e +ESH_CURRENT_STY
+    fi
     exec bash -c "$(ESH_TERM_AUTH_TOKEN=$ESH_TERM_AUTH_TOKEN _init_ctx $@)" <$tty
   }
   export -f bootfunc
@@ -115,8 +123,8 @@ shelltitle "$ |:"
 caption always "%{= kw}%-w%{= BW}%n%t%{-}%+w %-= @%H %{= Y}%l%{-} %m/%d %0c$esh_info"
 register p $ESH_TERM_AUTH_TOKEN
 unsetenv SCREENRC
-screen bash -c "bootfunc \$(tty) $ESH_STY $ESH_PORT < <(echo $ESH_TERM_AUTH_TOKEN)"
-bind c screen bash -c "bootfunc \$(tty) $ESH_STY $ESH_PORT < <(echo $ESH_TERM_AUTH_TOKEN)"
+screen bash -c "bootfunc \$(tty) 1 $ESH_STY $ESH_PORT < <(echo $ESH_TERM_AUTH_TOKEN)"
+bind c screen bash -c "bootfunc \$(tty) 0 $ESH_STY $ESH_PORT < <(echo $ESH_TERM_AUTH_TOKEN)"
 screen rm $rcfile
 EOF
   # strip off "screen." prefix from $TERM to avoid "$TERM too long" issue
