@@ -31,7 +31,7 @@ s() {
   local tmpfile=$(mktemp -u)
   rm -f $tmpfile
   mkfifo -m 0644 $tmpfile
-  ESH_SUDO_STY=$STY ESH_TERM_AUTH_TOKEN=$ESH_TERM_AUTH_TOKEN _init_ctx -d $ESH_STY $ESH_PORT $@ > $tmpfile &
+  ESH_SUDO_STY=$STY ESH_TERM_AUTH_TOKEN=$ESH_TERM_AUTH_TOKEN _init_ctx $ESH_STY $ESH_PORT $@ > $tmpfile &
   sudo -H -u $user bash $tmpfile
   rm -f $tmpfile
 }
