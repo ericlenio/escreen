@@ -4,12 +4,18 @@ _esh_trap_EXIT() {
   echo "INSIDE $FUNCNAME" >&2
   if [ ! "$SUDO_USER" ]; then
     if [ "$ESH_ATSERVER_PID" ]; then
+      # signal auth token server so it can check if it can stop itself
+      # (basically, check if the current gnu screen session has stopped)
       kill -USR1 -$ESH_ATSERVER_PID
     fi
     if [ "$SSH_TTY" ]; then
       eval "$(_esh_e)" </dev/null
       if [ "$ESH_CURRENT_STY" ]; then
-        env screen -X -S $ESH_CURRENT_STY password NEfv2YimsOJl
+        local os=$(uname)
+        if [ $os != OpenBSD ]; then
+          # as of OpenBSD 6.9, gnu screen password support is not working
+          env screen -X -S $ESH_CURRENT_STY password HIaVMGDwznpBE
+        fi
       fi
     fi
   fi

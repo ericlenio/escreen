@@ -18,8 +18,14 @@ _esh_atserver() {
   rm $fifo
 
   trap 'trap - RETURN INT USR1; echo "$FUNCNAME: stopping now"; exec 3>&- 4>&-; return' RETURN INT
-  trap 'if ! env screen -S "$STY" -X unsetenv NO_SUCH_VARIABLE >/dev/null; then trap - USR1; echo $FUNCNAME: QUIT; exit; fi' USR1
-  echo "pid $$ listening on port: $port"
+
+  # signal this process with USR1 to run a little check to see if gnu screen is
+  # still active, and if not active exit the auth token web server
+  #
+  # sleep a little to make sure gnu screen is really exited when the last
+  # window exits
+  trap 'sleep 1; if ! env screen -S "$STY" -X unsetenv NO_SUCH_VARIABLE >/dev/null; then trap - USR1; echo $FUNCNAME: QUIT; exit; fi' USR1
+  printf "%s auth token web server pid %s listening on port: %s\n" "$(date '+%D %T')" $$ $port
 
   while true; do
     response_body=""
@@ -108,7 +114,7 @@ _esh_atserver() {
             response_body="$http_status"
             ;;
         esac
-        printf "%s %s %s %s %s\n" $(date +%T) $req_path $http_code $http_status $http_user
+        printf "%s %s %s %s %s\n" "$(date '+%D %T')" $req_path $http_code $http_status $http_user
         # IMPORTANT: send the response in 1 statement, otherwise we can get
         # deadlock
         printf 'HTTP/1.1 %s %s\r\nContent-Type: text/plain\r\nContent-Length: %s\r\nCache-Control: public, max-age=0\r\nConnection: close\r\n\r\n%s' \

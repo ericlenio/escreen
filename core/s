@@ -29,6 +29,9 @@ s() {
   # ESH_TERM_AUTH_TOKEN
   #sudo -H -u $user bash -c "$(declare -p STY 2>/dev/null || echo :);$(ESH_TERM_AUTH_TOKEN=$ESH_TERM_AUTH_TOKEN _init_ctx $ESH_STY $ESH_PORT $@)"
   local tmpfile=$(mktemp -u)
+  # force /tmp as the directory for tmpfile, on MacOS the default directory
+  # might be unreadable by the sudo user
+  tmpfile=/tmp/$(basename $tmpfile)
   rm -f $tmpfile
   mkfifo -m 0644 $tmpfile
   ESH_SUDO_STY=$STY ESH_TERM_AUTH_TOKEN=$ESH_TERM_AUTH_TOKEN _init_ctx $ESH_STY $ESH_PORT $@ > $tmpfile &
