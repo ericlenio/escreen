@@ -58,7 +58,7 @@ _init_ctx() {
       fi
     done
     ex=("${ex2[@]}")
-    declare -p ESH_TMP ESH_STY ESH_USER ESH_TERM_PID ESH_VERSION ESH_SUDO_STY ESH_ATSERVER_URL ex
+    declare -p ESH_TMP ESH_STY ESH_USER ESH_TERM_PID ESH_VERSION ESH_SUDO_STY ESH_ATSERVER_URL ex 2>/dev/null
     declare -f _esh_e _esh_b _esh_l _esh_i _esh_y _esh_at
     printf 'ESH_TERM_AUTH_TOKEN=%s ESH_PORT=%s _esh_i %s ESH_PORT </dev/null\n' $ESH_TERM_AUTH_TOKEN $p $ESH_STY
     # layer in all current shell functions with function name prefix
