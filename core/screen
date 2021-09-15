@@ -86,8 +86,9 @@ screen() {
   fi
 
   if ! curl -f -s $ESH_ATSERVER_URL/hello; then
-    local atserver_logfile=$ESH_TMP/atserver-${ESH_ATSERVER_URL##*:}.log
-    _esh_atserver ${ESH_ATSERVER_URL##*:} >$atserver_logfile 2>&1 </dev/null &
+    local atserver_port=${ESH_ATSERVER_URL##*:}
+    local atserver_logfile=$ESH_TMP/$USER-atserver-$atserver_port.log
+    _esh_atserver $atserver_port >$atserver_logfile 2>&1 </dev/null &
     export ESH_ATSERVER_PID=$!
   else
     export ESH_ATSERVER_PID=$(curl -f -s $ESH_ATSERVER_URL/get-pid)
