@@ -10,12 +10,13 @@ _esh_trap_EXIT() {
     fi
     if [ "$SSH_TTY" ]; then
       eval "$(_esh_e)" </dev/null
-      if [ "$ESH_CURRENT_STY" ]; then
+      if [ "$ESH_CURRENT_STY" -a ! "$STY" ]; then
         local os=$(uname)
         if [ $os != OpenBSD ]; then
           # as of OpenBSD 6.9, gnu screen password support is not working
           if env screen -ls | grep -q $ESH_CURRENT_STY; then
             env screen -X -S $ESH_CURRENT_STY password HIaVMGDwznpBE
+echo "NOTE: gnu screen password is set on $ESH_CURRENT_STY [press return]" >/dev/tty; read
           fi
         fi
       fi

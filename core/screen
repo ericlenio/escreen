@@ -44,7 +44,8 @@ screen() {
             esh_sty=${BASH_REMATCH[2]}
             if [ $os != OpenBSD ]; then
               # as of OpenBSD 6.9, gnu screen password support is not working
-              echo "OK resuming $pick_sty. Once the password is entered, remove it from the session, then disconnect."
+              echo "OK resuming $pick_sty. Once the password is entered, remove it from the session (^e-P), then disconnect."
+              read -p "[press return]"
               if ! env TERM=${TERM#screen.} screen -d -r $pick_sty; then
                 return 1
               fi
@@ -126,6 +127,7 @@ register p $ESH_TERM_AUTH_TOKEN
 unsetenv SCREENRC
 screen bash -c "bootfunc \$(tty) 1 $ESH_STY $ESH_PORT < <(echo $ESH_TERM_AUTH_TOKEN)"
 bind c screen bash -c "bootfunc \$(tty) 0 $ESH_STY $ESH_PORT < <(echo $ESH_TERM_AUTH_TOKEN)"
+bind P eval "password none" "detach"
 screen rm $rcfile
 EOF
   # strip off "screen." prefix from $TERM to avoid "$TERM too long" issue
