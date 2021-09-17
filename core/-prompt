@@ -6,6 +6,9 @@
   if [ -z "$(trap -p)" ]; then
     trap _esh_trap_EXIT EXIT
     trap _esh_trap_HUP HUP
+    # set default trap on USR1: this signal is used to control the auth token
+    # server, but on MacOS the default USR1 handler will end the shell
+    trap "echo '$FUNCNAME: caught USR1' >/dev/tty" USR1
   fi
 
   if [ -z "$ESH_TERM_AUTH_TOKEN" ]; then

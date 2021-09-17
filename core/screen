@@ -1,7 +1,7 @@
 # vim:filetype=bash
 screen() {
   # make copy of original function args
-  local args=("$@") opt rcfile root_sty=$([ "$SSH_TTY" ] && echo 0 || echo 1) keyserver_port=1054 os=$(uname)
+  local args=("$@") opt rcfile root_sty=$([ "$SSH_TTY" ] && echo 0 || echo 1) keyserver_port=1054 os=$(uname) resume_msg_window_id=39
   export ESH_ATSERVER_URL=http://127.0.0.1:$keyserver_port
   # switch port if root, so we can allow concurrent gnu screen sessions for
   # root and 1 other user
@@ -42,14 +42,26 @@ screen() {
           if [[ $pick_sty_line =~ ^([0-9]+\.([-\.[:alnum:]]+)) ]]; then
             pick_sty=${BASH_REMATCH[1]}
             esh_sty=${BASH_REMATCH[2]}
-            if [ $os != OpenBSD ]; then
-              # as of OpenBSD 6.9, gnu screen password support is not working
-              echo "OK resuming $pick_sty. Once the password is entered, remove it from the session (^e-P), then disconnect."
-              read -p "[press return]"
-              if ! env TERM=${TERM#screen.} screen -d -r $pick_sty; then
-                return 1
+            if [ "$SSH_TTY" ]; then
+              if [ $os != OpenBSD ]; then
+                # as of OpenBSD 6.9, gnu screen password support is not working
+
+                # test if the screen session is password protected
+                if env screen -Q -S $pick_sty windows >/dev/null; then
+                  read -p "$pick_sty does NOT have a password set [press return]"
+                else
+                  echo "Resuming $pick_sty. Once the password is entered, remove it from the session (^e-P), then disconnect."
+                  read -p "[press return]"
+                  if ! env TERM=${TERM#screen.} screen -d -r $pick_sty; then
+                    return $?
+                  fi
+                  # kill the "resume message" window
+                  env screen -X -S $pick_sty at $resume_msg_window_id kill
+                fi
               fi
             fi
+            ESH_CURRENT_STY=$pick_sty
+            _esh_e +ESH_CURRENT_STY
             eval "$(_esh_e)"
             ESH_TAT_HASH=$(_esh_at hash)
             _esh_e $esh_sty ESH_PORT SSH_AUTH_SOCK ESH_TERM_PID ESH_TAT_HASH
@@ -57,7 +69,7 @@ screen() {
               echo "$FUNCNAME: failed to register ESH_TERM_AUTH_TOKEN on STY=$pick_sty" >&2
               return 1
             fi
-            if ! curl -v -f -S $ESH_ATSERVER_URL/refresh-auth-token; then
+            if ! curl -v -f -S --connect-timeout 5 $ESH_ATSERVER_URL/refresh-auth-token; then
               echo "$FUNCNAME: failed call to /refresh-auth-token" >&2
             fi
             #_esh_b registerSty $ESH_TERM_PID $pick_sty $root_sty
@@ -86,13 +98,13 @@ screen() {
     esh_info=" %{= cd}v$ESH_VERSION"
   fi
 
-  if ! curl -f -s $ESH_ATSERVER_URL/hello; then
+  if ! curl -f -s --connect-timeout 5 $ESH_ATSERVER_URL/hello; then
     local atserver_port=${ESH_ATSERVER_URL##*:}
     local atserver_logfile=$ESH_TMP/$USER-atserver-$atserver_port.log
     _esh_atserver $atserver_port >$atserver_logfile 2>&1 </dev/null &
     export ESH_ATSERVER_PID=$!
   else
-    export ESH_ATSERVER_PID=$(curl -f -s $ESH_ATSERVER_URL/get-pid)
+    export ESH_ATSERVER_PID=$(curl -f -s -S --connect-timeout 5 $ESH_ATSERVER_URL/get-pid)
   fi
 
   rcfile=$(mktemp)
@@ -101,13 +113,33 @@ screen() {
     shift 2
     read ESH_TERM_AUTH_TOKEN
     if [ $register = 1 ]; then
-      curl -d STY=$STY -H "X-Escreen-Auth: $ESH_TERM_AUTH_TOKEN" -H "X-Escreen-User: $USER" $ESH_ATSERVER_URL/set-sty
+      curl --connect-timeout 5 -d STY=$STY -H "X-Escreen-Auth: $ESH_TERM_AUTH_TOKEN" -H "X-Escreen-User: $USER" $ESH_ATSERVER_URL/set-sty
       ESH_CURRENT_STY=$STY
       _esh_e +ESH_CURRENT_STY
     fi
     exec bash -c "$(ESH_TERM_AUTH_TOKEN=$ESH_TERM_AUTH_TOKEN _init_ctx $@)" <$tty
   }
   export -f bootfunc
+
+  _func_binder() {
+    # treat arg 1 as a function name, then re-declare the function with the
+    # remaining arguments bound as parameters to the original function
+    local funcname=$1
+    shift
+    eval "$funcname() { _$(declare -f $funcname); _$funcname $@; }"
+  }
+
+  resume_msg() {
+    read -p "*** please press the \"password clear\" key sequence ($1-P) ***"
+  }
+  _func_binder resume_msg $esc
+  export -f resume_msg
+
+  lockscreen() {
+    env screen -X eval "password HIaVMGDwznpBE" "screen $1 bash -c resume_msg" "select $1"
+  }
+  _func_binder lockscreen $resume_msg_window_id
+  export -f lockscreen
 
   cat << EOF >$rcfile
 #termcapinfo * '' u0=my_user0_string

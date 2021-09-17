@@ -15,8 +15,8 @@ _esh_trap_EXIT() {
         if [ $os != OpenBSD ]; then
           # as of OpenBSD 6.9, gnu screen password support is not working
           if env screen -ls | grep -q $ESH_CURRENT_STY; then
-            env screen -X -S $ESH_CURRENT_STY password HIaVMGDwznpBE
-echo "NOTE: gnu screen password is set on $ESH_CURRENT_STY [press return]" >/dev/tty; read
+            env screen -X -S $ESH_CURRENT_STY screen bash -c lockscreen
+            echo "NOTE: gnu screen password is set on $ESH_CURRENT_STY [press return]" >/dev/tty
           fi
         fi
       fi
