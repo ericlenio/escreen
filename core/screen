@@ -123,19 +123,20 @@ screen() {
   }
 
   bootfunc() {
-    local curl_max_time=$1 register=$2
+    local curl_max_time=$1 register=$2 my_tty
     read ESH_TERM_AUTH_TOKEN
+    read my_tty
     if [ $register = 1 ]; then
       if ! curl -f --max-time $curl_max_time -d STY=$STY -H "X-Escreen-Auth: $ESH_TERM_AUTH_TOKEN" -H "X-Escreen-User: $USER" $ESH_ATSERVER_URL/set-sty; then
         echo "$FUNCNAME: failed to call $ESH_ATSERVER_URL/set-sty" >&2
-        read -p "[press return]" </dev/tty
+        read -p "[press return]" <$my_tty
       else
         echo "successfully registered $STY to $ESH_ATSERVER_URL/set-sty"
         ESH_CURRENT_STY=$STY
         _esh_e +ESH_CURRENT_STY
       fi
     fi
-    exec bash -c "$(ESH_TERM_AUTH_TOKEN=$ESH_TERM_AUTH_TOKEN _init_ctx $ESH_STY $ESH_PORT)" </dev/tty
+    exec bash -c "$(ESH_TERM_AUTH_TOKEN=$ESH_TERM_AUTH_TOKEN _init_ctx $ESH_STY $ESH_PORT)" <$my_tty
   }
   _func_binder bootfunc $curl_max_time
   export -f bootfunc
@@ -153,6 +154,8 @@ screen() {
   export -f lockscreen
 
   cat << EOF >$rcfile
+screen bash -c "bootfunc 1 < <(echo $ESH_TERM_AUTH_TOKEN; tty)"
+bind c screen bash -c "bootfunc 0 < <(echo $ESH_TERM_AUTH_TOKEN; tty)"
 #termcapinfo * '' u0=my_user0_string
 multiuser off
 bind / screen $ESH_EDITOR $(_esh_b ESH_PW_FILE)
@@ -168,8 +171,6 @@ shelltitle "$ |:"
 caption always "%{= kw}%-w%{= BW}%n%t%{-}%+w %-= @%H %{= Y}%l%{-} %m/%d %0c$esh_info"
 register p $ESH_TERM_AUTH_TOKEN
 unsetenv SCREENRC
-screen bash -c "bootfunc 1 < <(echo $ESH_TERM_AUTH_TOKEN)"
-bind c screen bash -c "bootfunc 0 < <(echo $ESH_TERM_AUTH_TOKEN)"
 bind P eval "password none" "detach"
 screen rm $rcfile
 EOF
