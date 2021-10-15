@@ -97,9 +97,9 @@
   fi
 
   if [ -z "$RA_USER" ]; then
-    read -p "What is your remoteadmin username? " RA_USER
+    read -p "What is your remoteadmin username? " RA_USER </dev/tty
     [ -z "$RA_USER" ] && return 1
-    read -p "Confirm: username is \"$RA_USER\" (y/n, default is y)? " yesno
+    read -p "Confirm: username is \"$RA_USER\" (y/n, default is y)? " yesno </dev/tty
     [ "$yesno" -a "$yesno" != y ] && return
     _esh_e +RA_USER
   fi
