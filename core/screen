@@ -1,7 +1,7 @@
 # vim:filetype=bash
 screen() {
   # make copy of original function args
-  local args=("$@") opt rcfile root_sty=$([ "$SSH_TTY" ] && echo 0 || echo 1) keyserver_port=1054 os=$(uname) resume_msg_window_id=39
+  local args=("$@") opt rcfile root_sty=$([ "$SSH_TTY" ] && echo 0 || echo 1) keyserver_port=1054 os=$(uname) resume_msg_window_id=39 curl_max_time=3
   export ESH_ATSERVER_URL=http://127.0.0.1:$keyserver_port
   # switch port if root, so we can allow concurrent gnu screen sessions for
   # root and 1 other user
@@ -39,7 +39,8 @@ screen() {
           elif ! pick_sty_line=$(-pick-something "Resume which session?" "$stys"); then
             return $?
           fi
-          if [[ $pick_sty_line =~ ^([0-9]+\.([-\.[:alnum:]]+)) ]]; then
+          local refresh_token=0
+          if [[ $pick_sty_line =~ ^([0-9]+\.([-\.@[:alnum:]]+)) ]]; then
             pick_sty=${BASH_REMATCH[1]}
             esh_sty=${BASH_REMATCH[2]}
             if [ "$SSH_TTY" ]; then
@@ -57,6 +58,7 @@ screen() {
                   fi
                   # kill the "resume message" window
                   env screen -X -S $pick_sty at $resume_msg_window_id kill
+                  refresh_token=1
                 fi
               fi
             fi
@@ -69,8 +71,11 @@ screen() {
               echo "$FUNCNAME: failed to register ESH_TERM_AUTH_TOKEN on STY=$pick_sty" >&2
               return 1
             fi
-            if ! curl -v -f -S --connect-timeout 5 $ESH_ATSERVER_URL/refresh-auth-token; then
-              echo "$FUNCNAME: failed call to /refresh-auth-token" >&2
+            if [ $refresh_token = 1 ]; then
+              if ! curl -v -f -S --max-time $curl_max_time $ESH_ATSERVER_URL/refresh-auth-token; then
+                echo "$FUNCNAME: failed call to /refresh-auth-token" >&2
+                read -p "[press return to continue]"
+              fi
             fi
             #_esh_b registerSty $ESH_TERM_PID $pick_sty $root_sty
             # strip off "screen." prefix from $TERM to avoid "$TERM too long" issue
@@ -98,36 +103,42 @@ screen() {
     esh_info=" %{= cd}v$ESH_VERSION"
   fi
 
-  if ! curl -f -s --connect-timeout 5 $ESH_ATSERVER_URL/hello; then
+  if ! curl -f -s -S --max-time $curl_max_time $ESH_ATSERVER_URL/hello; then
     local atserver_port=${ESH_ATSERVER_URL##*:}
     local atserver_logfile=$ESH_TMP/$USER-atserver-$atserver_port.log
     _esh_atserver $atserver_port >$atserver_logfile 2>&1 </dev/null &
     export ESH_ATSERVER_PID=$!
   else
-    export ESH_ATSERVER_PID=$(curl -f -s -S --connect-timeout 5 $ESH_ATSERVER_URL/get-pid)
+    export ESH_ATSERVER_PID=$(curl -f -s -S --max-time $curl_max_time $ESH_ATSERVER_URL/get-pid)
   fi
 
   rcfile=$(mktemp)
-  bootfunc() {
-    local tty=$1 register=$2
-    shift 2
-    read ESH_TERM_AUTH_TOKEN
-    if [ $register = 1 ]; then
-      curl --connect-timeout 5 -d STY=$STY -H "X-Escreen-Auth: $ESH_TERM_AUTH_TOKEN" -H "X-Escreen-User: $USER" $ESH_ATSERVER_URL/set-sty
-      ESH_CURRENT_STY=$STY
-      _esh_e +ESH_CURRENT_STY
-    fi
-    exec bash -c "$(ESH_TERM_AUTH_TOKEN=$ESH_TERM_AUTH_TOKEN _init_ctx $@)" <$tty
-  }
-  export -f bootfunc
 
   _func_binder() {
     # treat arg 1 as a function name, then re-declare the function with the
     # remaining arguments bound as parameters to the original function
     local funcname=$1
     shift
-    eval "$funcname() { _$(declare -f $funcname); _$funcname $@; }"
+    eval "$funcname() { _$(declare -f $funcname); _$funcname $@ \"\$@\"; }"
   }
+
+  bootfunc() {
+    local curl_max_time=$1 register=$2
+    read ESH_TERM_AUTH_TOKEN
+    if [ $register = 1 ]; then
+      if ! curl -f --max-time $curl_max_time -d STY=$STY -H "X-Escreen-Auth: $ESH_TERM_AUTH_TOKEN" -H "X-Escreen-User: $USER" $ESH_ATSERVER_URL/set-sty; then
+        echo "$FUNCNAME: failed to call $ESH_ATSERVER_URL/set-sty" >&2
+        read -p "[press return]" </dev/tty
+      else
+        echo "successfully registered $STY to $ESH_ATSERVER_URL/set-sty"
+        ESH_CURRENT_STY=$STY
+        _esh_e +ESH_CURRENT_STY
+      fi
+    fi
+    exec bash -c "$(ESH_TERM_AUTH_TOKEN=$ESH_TERM_AUTH_TOKEN _init_ctx $ESH_STY $ESH_PORT)" </dev/tty
+  }
+  _func_binder bootfunc $curl_max_time
+  export -f bootfunc
 
   resume_msg() {
     read -p "*** please press the \"password clear\" key sequence ($1-P) ***"
@@ -157,8 +168,8 @@ shelltitle "$ |:"
 caption always "%{= kw}%-w%{= BW}%n%t%{-}%+w %-= @%H %{= Y}%l%{-} %m/%d %0c$esh_info"
 register p $ESH_TERM_AUTH_TOKEN
 unsetenv SCREENRC
-screen bash -c "bootfunc \$(tty) 1 $ESH_STY $ESH_PORT < <(echo $ESH_TERM_AUTH_TOKEN)"
-bind c screen bash -c "bootfunc \$(tty) 0 $ESH_STY $ESH_PORT < <(echo $ESH_TERM_AUTH_TOKEN)"
+screen bash -c "bootfunc 1 < <(echo $ESH_TERM_AUTH_TOKEN)"
+bind c screen bash -c "bootfunc 0 < <(echo $ESH_TERM_AUTH_TOKEN)"
 bind P eval "password none" "detach"
 screen rm $rcfile
 EOF

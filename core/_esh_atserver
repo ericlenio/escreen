@@ -3,7 +3,23 @@
 # auth token web server
 #
 _esh_atserver() {
-  local i fifo=$(mktemp -u) port=${1:-1055} line response_body http_code http_status nc_fails=0 ESH_TERM_AUTH_TOKEN_PASSED http_user req_path nc_rc req_body req_type post_content_length
+  local i fifo port line response_body http_code http_status nc_fails=0 ESH_TERM_AUTH_TOKEN_PASSED http_user req_path nc_rc req_body req_type post_content_length opts="c" opt OPTIND check=0
+
+  while getopts "$opts" opt; do
+    case $opt in
+      c) check=1
+        ;;
+    esac
+  done
+  shift $(($OPTIND-1))
+  port=${1:-1055}
+
+  if [ $check = 1 ]; then
+    curl -v -f --max-time 3 http://127.0.0.1:$port/hello
+    return $?
+  fi
+
+  fifo=$(mktemp -u)
 
   [ -z "$ESH_TERM_AUTH_TOKEN" ] && _esh_at
   # valid_local_auth_tokens: a list of any token that can authenticate to this
@@ -24,7 +40,7 @@ _esh_atserver() {
   #
   # sleep a little to make sure gnu screen is really exited when the last
   # window exits
-  trap 'sleep 1; if ! env screen -S "$STY" -X unsetenv NO_SUCH_VARIABLE >/dev/null; then trap - USR1; echo $FUNCNAME: QUIT; exit; fi' USR1
+  trap 'sleep 1; if ! env screen -S "$STY" -X unsetenv NO_SUCH_VARIABLE >/dev/null; then trap - USR1; echo $(date +"%D %T") $FUNCNAME: QUIT $STY; exit; fi' USR1
   printf "%s auth token web server pid %s listening on port: %s\n" "$(date '+%D %T')" $$ $port
 
   while true; do
@@ -90,9 +106,14 @@ _esh_atserver() {
             response_body="$$"
             ;;
           /set-sty)
-            if [ $http_code = 200 ] && [[ "$req_body" =~ ^STY=([-\.[:alnum:]]+) ]]; then
-              export STY=${BASH_REMATCH[1]}
-              echo "/set-sty: new STY value: $STY"
+            if [ $http_code = 200 ]; then
+              if [[ "$req_body" =~ ^STY=([-\.@[:alnum:]]+)$ ]]; then
+                export STY=${BASH_REMATCH[1]}
+                echo "/set-sty: new STY value: $STY"
+              else
+                http_code=403
+                http_status=BAD_STY_VALUE
+              fi
             fi
             ;;
           /get-auth-token)
@@ -110,6 +131,7 @@ _esh_atserver() {
             else
               http_status="OK_TOKEN_UPDATED"
               valid_local_auth_tokens+=($ESH_TERM_AUTH_TOKEN)
+printf ">>>$FUNCNAME:valid_local_auth_tokens:${valid_local_auth_tokens[*]}\n"
             fi
             response_body="$http_status"
             ;;

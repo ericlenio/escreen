@@ -108,7 +108,11 @@ echo ">>>WARN: reading ESH_TERM_AUTH_TOKEN from gnu screen" >&2
     # the paste buffer to a temp file, then read the temp file for
     # ESH_TERM_AUTH_TOKEN
     if read -d '' ESH_TERM_AUTH_TOKEN < <(
-      env screen -X eval "paste p ." "writebuf $t" &
+      {
+        if ! env screen -X eval "paste p ." "writebuf $t"; then
+          echo "$FUNCNAME: failed to load ESH_TERM_AUTH_TOKEN from paste buffer (STY=$STY)" >&2
+        fi
+      } &
       cat $t
     ); then
       # eof, no biggie
