@@ -86,7 +86,7 @@ screen() {
             return 1
           fi
           ;;
-        -d|-D|-R|-RR|-ls|-list|-Q|-v|-x|-X)
+        -d|-D|-R|-RR|-ls|-list|-Q|-v|-x|-X|-wipe)
           env screen "$@"
           return $?
           ;;
