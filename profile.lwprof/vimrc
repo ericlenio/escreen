@@ -130,7 +130,7 @@ set wildmenu wildignore=*.o,*.class,*.jar,*.png,*.pdf,$PWD/**node_modules/**,bui
 filetype indent off
 "nnoremap K :execute " grep -srnw --binary-files=without-match --exclude-dir=.git --exclude-dir=node_modules --exclude-dir=.svn . -e " . expand("<cword>") . " " <bar> cwindow<CR>
 " note: vimgrep respects wildignore
-nnoremap K :let @/=expand("<cword>")<bar>exe "vimgrep /" . @/ . "/g **" <bar> cwindow<CR>
+"nnoremap K :let @/=expand("<cword>")<bar>exe "vimgrep /" . @/ . "/g **" <bar> cwindow<CR>
 if exists("my_find")
   call feedkeys(":find ".my_find."\<tab>","t")
 endif
