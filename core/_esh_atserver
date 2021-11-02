@@ -3,7 +3,7 @@
 # auth token web server
 #
 _esh_atserver() {
-  local i fifo port line response_body http_code http_status nc_fails=0 ESH_TERM_AUTH_TOKEN_PASSED http_user req_path nc_rc req_body req_type post_content_length opts="c" opt OPTIND check=0
+  local i fifo port line response_body http_code http_status nc_fails=0 ESH_TERM_AUTH_TOKEN_PASSED http_user req_path nc_rc req_body req_type post_content_length opts="c" opt OPTIND check=0 window_count
 
   while getopts "$opts" opt; do
     case $opt in
@@ -33,17 +33,17 @@ _esh_atserver() {
   exec 4>$fifo 3<$fifo
   rm $fifo
 
-  trap 'trap - RETURN INT USR1; echo "$FUNCNAME: stopping now"; exec 3>&- 4>&-; return' RETURN INT
+  trap 'trap - RETURN INT; echo "$FUNCNAME: stopping now"; exec 3>&- 4>&-; return' RETURN INT
 
   # signal this process with USR1 to run a little check to see if gnu screen is
   # still active, and if not active exit the auth token web server
   #
   # sleep a little to make sure gnu screen is really exited when the last
   # window exits
-  trap 'sleep 1; if ! env screen -S "$STY" -X unsetenv NO_SUCH_VARIABLE >/dev/null; then trap - USR1; echo $(date +"%D %T") $FUNCNAME: QUIT $STY; exit; fi' USR1
+  #trap 'sleep 1; if ! env screen -S "$STY" -X unsetenv NO_SUCH_VARIABLE >/dev/null; then trap - USR1; echo $(date +"%D %T") $FUNCNAME: QUIT $STY; exit; fi' USR1
   printf "%s auth token web server pid %s listening on port: %s\n" "$(date '+%D %T')" $$ $port
 
-  while true; do
+  while [ ! "$window_count" ] || [ $window_count -gt 0 ]; do
     response_body=""
     req_path="/"
     req_type=""
@@ -135,6 +135,22 @@ printf ">>>$FUNCNAME:valid_local_auth_tokens:${valid_local_auth_tokens[*]}\n"
             fi
             response_body="$http_status"
             ;;
+          /incr-window-count)
+            if [ $http_code != 200 ]; then
+              response_body="$http_status"
+            elif [ "$STY" ]; then
+              window_count=$(($window_count+1))
+              http_status="window_count=$window_count"
+            fi
+            ;;
+          /decr-window-count)
+            if [ $http_code != 200 ]; then
+              response_body="$http_status"
+            elif [ "$STY" ]; then
+              window_count=$(($window_count-1))
+              http_status="window_count=$window_count"
+            fi
+            ;;
         esac
         printf "%s %s %s %s %s\n" "$(date '+%D %T')" $req_path $http_code $http_status $http_user
         # IMPORTANT: send the response in 1 statement, otherwise we can get
@@ -147,4 +163,5 @@ printf ">>>$FUNCNAME:valid_local_auth_tokens:${valid_local_auth_tokens[*]}\n"
       fi
     done < <(nc -l 127.0.0.1 $port <&3; printf $?)
   done
+  echo "$(date +'%D %T') $FUNCNAME: QUIT $STY"
 }

@@ -108,6 +108,10 @@ screen() {
     local atserver_logfile=$ESH_TMP/$USER-atserver-$atserver_port.log
     _esh_atserver $atserver_port >$atserver_logfile 2>&1 </dev/null &
     export ESH_ATSERVER_PID=$!
+_esh_atserver_kill() {
+  echo "$FUNCNAME: kill process group now: $ESH_ATSERVER_PID"
+  kill -KILL -$ESH_ATSERVER_PID
+}
   else
     export ESH_ATSERVER_PID=$(curl -f -s -S --max-time $curl_max_time $ESH_ATSERVER_URL/get-pid)
   fi
@@ -136,6 +140,7 @@ screen() {
         _esh_e +ESH_CURRENT_STY
       fi
     fi
+    curl -f --max-time $curl_max_time -H "X-Escreen-Auth: $ESH_TERM_AUTH_TOKEN" -H "X-Escreen-User: $USER" $ESH_ATSERVER_URL/incr-window-count
     exec bash -c "$(ESH_TERM_AUTH_TOKEN=$ESH_TERM_AUTH_TOKEN _init_ctx $ESH_STY $ESH_PORT)" <$my_tty
   }
   _func_binder bootfunc $curl_max_time

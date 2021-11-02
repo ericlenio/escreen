@@ -4,9 +4,7 @@ _esh_trap_EXIT() {
   echo "INSIDE $FUNCNAME" >&2
   if [ ! "$SUDO_USER" ]; then
     if [ "$ESH_ATSERVER_PID" ]; then
-      # signal auth token server so it can check if it can stop itself
-      # (basically, check if the current gnu screen session has stopped)
-      kill -USR1 -$ESH_ATSERVER_PID
+      curl -v -S -f --max-time 5 -H "X-Escreen-Auth: $ESH_TERM_AUTH_TOKEN" -H "X-Escreen-User: $USER" $ESH_ATSERVER_URL/decr-window-count
     fi
     if [ "$SSH_TTY" ]; then
       eval "$(_esh_e)" </dev/null
