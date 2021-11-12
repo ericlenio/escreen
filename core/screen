@@ -1,7 +1,7 @@
 # vim:filetype=bash
 screen() {
   # make copy of original function args
-  local args=("$@") opt rcfile root_sty=$([ "$SSH_TTY" ] && echo 0 || echo 1) keyserver_port=1054 os=$(uname) resume_msg_window_id=39 curl_max_time=3
+  local args=("$@") opt rcfile root_sty=$([ "$SSH_TTY" ] && echo 0 || echo 1) keyserver_port=1054 os=$(uname) resume_msg_window_id=39
   export ESH_ATSERVER_URL=http://127.0.0.1:$keyserver_port
   # switch port if root, so we can allow concurrent gnu screen sessions for
   # root and 1 other user
@@ -72,7 +72,7 @@ screen() {
               return 1
             fi
             if [ $refresh_token = 1 ]; then
-              if ! curl -v -f -S --max-time $curl_max_time $ESH_ATSERVER_URL/refresh-auth-token; then
+              if ! _esh_atserver refresh-auth-token; then
                 echo "$FUNCNAME: failed call to /refresh-auth-token" >&2
                 read -p "[press return to continue]"
               fi
@@ -103,18 +103,9 @@ screen() {
     esh_info=" %{= cd}v$ESH_VERSION"
   fi
 
-  if ! curl -f -s -S --max-time $curl_max_time $ESH_ATSERVER_URL/hello; then
-    local atserver_port=${ESH_ATSERVER_URL##*:}
-    local atserver_logfile=$ESH_TMP/$USER-atserver-$atserver_port.log
-    _esh_atserver $atserver_port >$atserver_logfile 2>&1 </dev/null &
-    export ESH_ATSERVER_PID=$!
-_esh_atserver_kill() {
-  echo "$FUNCNAME: kill process group now: $ESH_ATSERVER_PID"
-  kill -KILL -$ESH_ATSERVER_PID
-}
-  else
-    export ESH_ATSERVER_PID=$(curl -f -s -S --max-time $curl_max_time $ESH_ATSERVER_URL/get-pid)
-  fi
+
+  _esh_atserver start
+  local ESH_ATSERVER_PID=$!
 
   rcfile=$(mktemp)
 
@@ -127,23 +118,30 @@ _esh_atserver_kill() {
   }
 
   bootfunc() {
-    local curl_max_time=$1 register=$2 my_tty
+    local register=$1 my_tty pid
+    shift
     read ESH_TERM_AUTH_TOKEN
     read my_tty
+    exec <$my_tty
     if [ $register = 1 ]; then
-      if ! curl -f --max-time $curl_max_time -d STY=$STY -H "X-Escreen-Auth: $ESH_TERM_AUTH_TOKEN" -H "X-Escreen-User: $USER" $ESH_ATSERVER_URL/set-sty; then
-        echo "$FUNCNAME: failed to call $ESH_ATSERVER_URL/set-sty" >&2
-        read -p "[press return]" <$my_tty
-      else
+      if _esh_atserver set-sty; then
         echo "successfully registered $STY to $ESH_ATSERVER_URL/set-sty"
         ESH_CURRENT_STY=$STY
         _esh_e +ESH_CURRENT_STY
+      else
+        echo "$FUNCNAME: failed to call $ESH_ATSERVER_URL/set-sty" >&2
+        read -p "[press return]"
       fi
     fi
-    curl -f --max-time $curl_max_time -H "X-Escreen-Auth: $ESH_TERM_AUTH_TOKEN" -H "X-Escreen-User: $USER" $ESH_ATSERVER_URL/incr-window-count
-    exec bash -c "$(ESH_TERM_AUTH_TOKEN=$ESH_TERM_AUTH_TOKEN _init_ctx $ESH_STY $ESH_PORT)" <$my_tty
+
+    _esh_atserver incr-window-count
+    if [ $# = 0 ]; then
+      exec bash -c "$(ESH_TERM_AUTH_TOKEN=$ESH_TERM_AUTH_TOKEN _init_ctx $ESH_STY $ESH_PORT)"
+    else
+      bash -c "$(ESH_TERM_AUTH_TOKEN=$ESH_TERM_AUTH_TOKEN _init_ctx $ESH_STY $ESH_PORT $@)"
+      _esh_atserver decr-window-count
+    fi
   }
-  _func_binder bootfunc $curl_max_time
   export -f bootfunc
 
   resume_msg() {
@@ -163,7 +161,7 @@ screen bash -c "bootfunc 1 < <(echo $ESH_TERM_AUTH_TOKEN; tty)"
 bind c screen bash -c "bootfunc 0 < <(echo $ESH_TERM_AUTH_TOKEN; tty)"
 #termcapinfo * '' u0=my_user0_string
 multiuser off
-bind / screen $ESH_EDITOR $(_esh_b ESH_PW_FILE)
+bind / screen bash -c "bootfunc 1 $ESH_EDITOR $(_esh_b ESH_PW_FILE) < <(echo $ESH_TERM_AUTH_TOKEN; tty)"
 # bind "%" to take a screenshot, and open a new window to edit it
 bind % exec bash -c 'f=\$(mktemp) t=\$RANDOM; env screen -X hardcopy \$f; env screen -t \$t sh -c "$ESH_EDITOR \$f; rm \$f"; env screen -X select \$t'
 bind \040 windowlist -b
@@ -180,5 +178,5 @@ bind P eval "password none" "detach"
 screen rm $rcfile
 EOF
   # strip off "screen." prefix from $TERM to avoid "$TERM too long" issue
-  env SCREENRC=$rcfile TERM=${TERM#screen.} screen -ln -S $ESH_STY -e$esc "${args[@]}"
+  env ESH_ATSERVER_PID=$ESH_ATSERVER_PID SCREENRC=$rcfile TERM=${TERM#screen.} screen -ln -S $ESH_STY -e$esc "${args[@]}"
 }

@@ -3,8 +3,8 @@ _esh_trap_EXIT() {
   trap - EXIT
   echo "INSIDE $FUNCNAME" >&2
   if [ ! "$SUDO_USER" ]; then
-    if [ "$STY" -a "$ESH_ATSERVER_PID" ]; then
-      curl -v -S -f --max-time 5 -H "X-Escreen-Auth: $ESH_TERM_AUTH_TOKEN" -H "X-Escreen-User: $USER" $ESH_ATSERVER_URL/decr-window-count
+    if [ "$STY" -a "$ESH_TOP_LEVEL_SHELL" = 1 ]; then
+      _esh_atserver decr-window-count
     fi
     if [ "$SSH_TTY" ]; then
       eval "$(_esh_e)" </dev/null

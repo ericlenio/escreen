@@ -3,165 +3,315 @@
 # auth token web server
 #
 _esh_atserver() {
-  local i fifo port line response_body http_code http_status nc_fails=0 ESH_TERM_AUTH_TOKEN_PASSED http_user req_path nc_rc req_body req_type post_content_length opts="c" opt OPTIND check=0 window_count
+  local i fifo line response_body http_code http_status nc_fails=0 pid
+  local ESH_TERM_AUTH_TOKEN_PASSED http_user req_path nc_rc req_body req_type 
+  local post_content_length opts="h" opt OPTIND window_count query_for status
+  local curl_max_time=3
+
+  local port=${ESH_ATSERVER_URL##*:}
+  local logfile=$ESH_TMP/$USER-atserver-$port.log
+  local pidfile=${logfile%.log}.pid
+
+  _usage() {
+    echo "${FUNCNAME[1]}: auth token web server"
+    echo "usage:"
+    echo "  ${FUNCNAME[1]} -h"
+    echo "  ${FUNCNAME[1]} control_op"
+    echo "options:"
+    echo "  -h: this help"
+    echo "  control_op: start|stop|status|log|logfile|pid|pidfile|hello|help"
+    echo "              get-window-count|decr-window-count|incr-window-count"
+    echo "              hard-window-count|set-hard-window-count|refresh-auth-token"
+    echo "              set-sty"
+  }
+
+  _curl() {
+    local endpoint=$1
+    shift
+    curl -S -f --max-time $curl_max_time -H "X-Escreen-Auth: $ESH_TERM_AUTH_TOKEN" -H "X-Escreen-User: $USER" "$@" $ESH_ATSERVER_URL$endpoint
+  }
+
+  trap 'trap - RETURN; unset -f _usage _curl' RETURN
 
   while getopts "$opts" opt; do
     case $opt in
-      c) check=1
+      h) _usage
+        return
         ;;
     esac
   done
   shift $(($OPTIND-1))
-  port=${1:-1055}
 
-  if [ $check = 1 ]; then
-    curl -v -f --max-time 3 http://127.0.0.1:$port/hello
-    return $?
-  fi
-
-  fifo=$(mktemp -u)
-
-  [ -z "$ESH_TERM_AUTH_TOKEN" ] && _esh_at
-  # valid_local_auth_tokens: a list of any token that can authenticate to this
-  # little web server
-  local valid_local_auth_tokens=($ESH_TERM_AUTH_TOKEN)
-
-  # set up bidirectional pipe (idea from
-  # https://unix.stackexchange.com/a/227981)
-  mkfifo $fifo
-  ( : <$fifo & ) # avoid deadlock on opening pipe
-  exec 4>$fifo 3<$fifo
-  rm $fifo
-
-  trap 'trap - RETURN INT; echo "$FUNCNAME: stopping now"; exec 3>&- 4>&-; return' RETURN INT
-
-  # signal this process with USR1 to run a little check to see if gnu screen is
-  # still active, and if not active exit the auth token web server
-  #
-  # sleep a little to make sure gnu screen is really exited when the last
-  # window exits
-  #trap 'sleep 1; if ! env screen -S "$STY" -X unsetenv NO_SUCH_VARIABLE >/dev/null; then trap - USR1; echo $(date +"%D %T") $FUNCNAME: QUIT $STY; exit; fi' USR1
-  printf "%s auth token web server pid %s listening on port: %s\n" "$(date '+%D %T')" $$ $port
-
-  while [ ! "$window_count" ] || [ $window_count -gt 0 ]; do
-    response_body=""
-    req_path="/"
-    req_type=""
-    req_body=""
-    http_code=401
-    post_content_length=""
-    http_status=unauthorized
-    # read each line of the http request from the listening netcat process that
-    # is stdin for this "while" loop
-    while read line || {
-      # check if nc failed
-      nc_rc=$line
-      if [[ "$nc_rc" =~ ^[0-9]+$ ]] && [ $nc_rc -gt 0 ]; then
-        nc_fails=$(($nc_fails+1))
-        if [ $nc_fails -ge 5 ]; then
-          printf "%s: too many failures, giving up\n" $FUNCNAME >&2
-          read -p "press return to quit $FUNCNAME" </dev/tty
-          return 1
-        fi
-        printf "nc fail: %s\n" $nc_rc >&2
-        sleep 1
+  local control_op=$1
+  case "$control_op" in
+    help) _usage
+      return
+      ;;
+    log) cat $logfile
+      return
+      ;;
+    logfile) echo $logfile
+      return
+      ;;
+    pidfile) echo $pidfile
+      return
+      ;;
+    pid) if [ -f $pidfile ]; then
+        cat $pidfile
+        return
+      else
+        return 1
       fi
-      break
-    }; do
-      line=${line//$'\r'/}
-      if [[ "$line" =~ ^X-Escreen-Auth:\ ([[:alnum:]]+) ]]; then
-        ESH_TERM_AUTH_TOKEN_PASSED=${BASH_REMATCH[1]}
-        for ((i=0;i<${#valid_local_auth_tokens[@]};i++)); do
-          if [ "$ESH_TERM_AUTH_TOKEN_PASSED" = "${valid_local_auth_tokens[$i]}" ]; then
-            http_code=200
-            http_status=OK
-            break
+      ;;
+    hello) echo "testing endpoint: /hello"
+      _curl /hello -v
+      return $?
+      ;;
+    get-window-count)
+      window_count=$(_curl /get-window-count)
+      printf "%s\n" $window_count
+      return $?
+      ;;
+    status)
+      if pid=$($FUNCNAME pid); then
+        if kill -0 $pid; then
+          if [ -t 1 ]; then
+            echo "server is running: $ESH_ATSERVER_URL, pid=$pid" >/dev/tty
           fi
-        done
-      elif [[ "$line" =~ ^X-Escreen-User:\ ([[:alnum:]]+) ]]; then
-        http_user=${BASH_REMATCH[1]}
-      elif [[ "$line" =~ ^(GET|POST)\ ([^[:space:]]*) ]]; then
-        req_type=${BASH_REMATCH[1]}
-        req_path=${BASH_REMATCH[2]}
-      elif [[ "$line" =~ ^Content-Length:\ ([0-9]+) ]]; then
-        post_content_length=${BASH_REMATCH[1]}
-      fi
-      if [ -z "$line" ]; then
-        # we have reached the end of the request headers, send back the
-        # response
-        #
-        if [ "$req_type" = POST ]; then
-          read -n $post_content_length req_body
+          echo "E_ATSERVER_RUNNING"
+          return
         fi
-        case "$req_path" in
-          /hello)
-            # /hello does not require any authentication
-            http_code=200
-            http_status=OK
-            response_body="HELLO"
-            ;;
-          /get-pid)
-            http_code=200
-            http_status=OK
-            response_body="$$"
-            ;;
-          /set-sty)
-            if [ $http_code = 200 ]; then
-              if [[ "$req_body" =~ ^STY=([-\.@[:alnum:]]+)$ ]]; then
-                export STY=${BASH_REMATCH[1]}
-                echo "/set-sty: new STY value: $STY"
-              else
-                http_code=403
-                http_status=BAD_STY_VALUE
-              fi
-            fi
-            ;;
-          /get-auth-token)
-            if [ $http_code = 200 ]; then
-              response_body=$ESH_TERM_AUTH_TOKEN
-            fi
-            ;;
-          /refresh-auth-token)
-            # /refresh-auth-token does not require any authentication
-            http_code=200
-            local old_token=$ESH_TERM_AUTH_TOKEN
-            _esh_at force_new_at
-            if [ "$old_token" = $ESH_TERM_AUTH_TOKEN ]; then
-              http_status="WARN_TOKEN_NOT_UPDATED"
-            else
-              http_status="OK_TOKEN_UPDATED"
-              valid_local_auth_tokens+=($ESH_TERM_AUTH_TOKEN)
-printf ">>>$FUNCNAME:valid_local_auth_tokens:${valid_local_auth_tokens[*]}\n"
-            fi
-            response_body="$http_status"
-            ;;
-          /incr-window-count)
-            if [ $http_code != 200 ]; then
-              response_body="$http_status"
-            elif [ "$STY" ]; then
-              window_count=$(($window_count+1))
-              http_status="window_count=$window_count"
-            fi
-            ;;
-          /decr-window-count)
-            if [ $http_code != 200 ]; then
-              response_body="$http_status"
-            elif [ "$STY" ]; then
-              window_count=$(($window_count-1))
-              http_status="window_count=$window_count"
-            fi
-            ;;
-        esac
-        printf "%s %s %s %s %s\n" "$(date '+%D %T')" $req_path $http_code $http_status $http_user
-        # IMPORTANT: send the response in 1 statement, otherwise we can get
-        # deadlock
-        printf 'HTTP/1.1 %s %s\r\nContent-Type: text/plain\r\nContent-Length: %s\r\nCache-Control: public, max-age=0\r\nConnection: close\r\n\r\n%s' \
-          $http_code \
-          $http_status \
-          ${#response_body} \
-          "$response_body" >&4
       fi
-    done < <(nc -l 127.0.0.1 $port <&3; printf $?)
-  done
-  echo "$(date +'%D %T') $FUNCNAME: QUIT $STY"
+      echo "E_ATSERVER_NOT_RUNNING"
+      return
+      ;;
+    start)
+      if [ -t 1 ]; then
+        echo "starting server at: $ESH_ATSERVER_URL" >/dev/tty
+      fi
+      status=$($FUNCNAME status)
+      if [ $status = E_ATSERVER_RUNNING ]; then
+        read -p "E_ATSERVER_RUNNING: force kill and restart [y]? "
+        if [ "$REPLY" = y -o -z "$REPLY" ]; then
+          $FUNCNAME stop
+        else
+          return
+        fi
+      fi
+      ;;
+    stop) echo "stopping server at: $ESH_ATSERVER_URL"
+      if pid=$($FUNCNAME pid); then
+        kill -TERM -$pid
+        rm $pidfile
+      else
+        return $?
+      fi
+      return
+      ;;
+    hard-window-count)
+      # query gnu screen directly for a window count
+      #
+      # note: this is a relatively slow operation, so avoid it if possible
+      if window_count=$(env screen -Q windows x | wc -c | tr -d ' '); then
+        echo $window_count
+        return
+      else
+        return $?
+      fi
+      ;;
+    set-hard-window-count)
+      window_count=$($FUNCNAME hard-window-count)
+      _curl /set-hard-window-count -d window_count=$window_count
+      return $?
+      ;;
+    refresh-auth-token)
+      _curl /refresh-auth-token
+      return $?
+      ;;
+    set-sty)
+      _curl /set-sty -d STY=$STY
+      return $?
+      ;;
+    incr-window-count)
+      _curl /incr-window-count -s
+      return $?
+      ;;
+    decr-window-count)
+      _curl /decr-window-count -s
+      return $?
+      ;;
+    *) echo "$FUNCNAME: unknown control_op: $control_op" >&2
+      _usage
+      return 1
+      ;;
+  esac
+
+  # everything below is to START the server
+  unset -f _usage
+  {
+    fifo=$(mktemp -u)
+
+    [ -z "$ESH_TERM_AUTH_TOKEN" ] && _esh_at
+    # valid_local_auth_tokens: a list of any token that can authenticate to this
+    # little web server
+    local valid_local_auth_tokens=($ESH_TERM_AUTH_TOKEN)
+
+    # set up bidirectional pipe (idea from
+    # https://unix.stackexchange.com/a/227981)
+    mkfifo $fifo
+    ( : <$fifo & ) # avoid deadlock on opening pipe
+    exec 4>$fifo 3<$fifo
+    rm $fifo
+
+    trap 'trap - RETURN INT; echo "$FUNCNAME: stopping now"; exec 3>&- 4>&-; return' RETURN INT
+
+    # signal this process with USR1 to run a little check to see if gnu screen is
+    # still active, and if not active exit the auth token web server
+    #
+    # sleep a little to make sure gnu screen is really exited when the last
+    # window exits
+    #trap 'sleep 1; if ! env screen -S "$STY" -X unsetenv NO_SUCH_VARIABLE >/dev/null; then trap - USR1; echo $(date +"%D %T") $FUNCNAME: QUIT $STY; exit; fi' USR1
+    printf "%s auth token web server pid %s listening on port: %s\n" "$(date '+%D %T')" $$ $port
+
+    while [ ! "$window_count" ] || [ $window_count -gt 0 ]; do
+      response_body=""
+      req_path="/"
+      req_type=""
+      req_body=""
+      http_code=401
+      post_content_length=""
+      http_status=unauthorized
+      # read each line of the http request from the listening netcat process that
+      # is stdin for this "while" loop
+      while read line || {
+        # check if nc failed
+        nc_rc=$line
+        if [[ "$nc_rc" =~ ^[0-9]+$ ]] && [ $nc_rc -gt 0 ]; then
+          nc_fails=$(($nc_fails+1))
+          if [ $nc_fails -ge 5 ]; then
+            printf "%s: too many failures, giving up\n" $FUNCNAME >&2
+            read -p "press return to quit $FUNCNAME" </dev/tty
+            return 1
+          fi
+          printf "nc fail: %s\n" $nc_rc >&2
+          sleep 1
+        fi
+        break
+      }; do
+        line=${line//$'\r'/}
+        if [[ "$line" =~ ^X-Escreen-Auth:\ ([[:alnum:]]+) ]]; then
+          ESH_TERM_AUTH_TOKEN_PASSED=${BASH_REMATCH[1]}
+          for ((i=0;i<${#valid_local_auth_tokens[@]};i++)); do
+            if [ "$ESH_TERM_AUTH_TOKEN_PASSED" = "${valid_local_auth_tokens[$i]}" ]; then
+              http_code=200
+              http_status=OK
+              break
+            fi
+          done
+        elif [[ "$line" =~ ^X-Escreen-User:\ ([[:alnum:]]+) ]]; then
+          http_user=${BASH_REMATCH[1]}
+        elif [[ "$line" =~ ^(GET|POST)\ ([^[:space:]]*) ]]; then
+          req_type=${BASH_REMATCH[1]}
+          req_path=${BASH_REMATCH[2]}
+        elif [[ "$line" =~ ^Content-Length:\ ([0-9]+) ]]; then
+          post_content_length=${BASH_REMATCH[1]}
+        fi
+        if [ -z "$line" ]; then
+          # we have reached the end of the request headers, send back the
+          # response
+          #
+          if [ "$req_type" = POST ]; then
+            read -n $post_content_length req_body
+          fi
+          case "$req_path" in
+            /hello)
+              # /hello does not require any authentication
+              http_code=200
+              http_status=OK
+              response_body="HELLO"
+              ;;
+            /get-pid)
+              http_code=200
+              http_status=OK
+              response_body="$$"
+              ;;
+            /set-sty)
+              if [ $http_code = 200 ]; then
+                if [[ "$req_body" =~ ^STY=([-\.@[:alnum:]]+)$ ]]; then
+                  export STY=${BASH_REMATCH[1]}
+                  echo "$req_path: new STY value: $STY"
+                else
+                  http_code=403
+                  http_status=BAD_STY_VALUE
+                fi
+              fi
+              ;;
+            /get-window-count)
+              http_code=200
+              http_status=OK
+              response_body="$window_count"
+              ;;
+            /set-hard-window-count)
+              if [ $http_code = 200 ]; then
+                if [[ "$req_body" =~ ^window_count=([0-9]+)$ ]]; then
+                  window_count=${BASH_REMATCH[1]}
+                  echo "$req_path: new value: $window_count"
+                else
+                  http_code=403
+                  http_status=BAD_WINDOW_COUNT_VALUE
+                fi
+              fi
+              ;;
+            /get-auth-token)
+              if [ $http_code = 200 ]; then
+                response_body=$ESH_TERM_AUTH_TOKEN
+              fi
+              ;;
+            /refresh-auth-token)
+              # /refresh-auth-token does not require any authentication
+              http_code=200
+              local old_token=$ESH_TERM_AUTH_TOKEN
+              _esh_at force_new_at
+              if [ "$old_token" = $ESH_TERM_AUTH_TOKEN ]; then
+                http_status="WARN_TOKEN_NOT_UPDATED"
+              else
+                http_status="OK_TOKEN_UPDATED"
+                valid_local_auth_tokens+=($ESH_TERM_AUTH_TOKEN)
+  printf ">>>$FUNCNAME:valid_local_auth_tokens:${valid_local_auth_tokens[*]}\n"
+              fi
+              response_body="$http_status"
+              ;;
+            /incr-window-count)
+              if [ $http_code != 200 ]; then
+                response_body="$http_status"
+              elif [ "$STY" ]; then
+                window_count=$(($window_count+1))
+                http_status="window_count=$window_count"
+              fi
+              ;;
+            /decr-window-count)
+              if [ $http_code != 200 ]; then
+                response_body="$http_status"
+              elif [ "$STY" ]; then
+                window_count=$(($window_count-1))
+                http_status="window_count=$window_count"
+              fi
+              ;;
+          esac
+          printf "%s %s %s %s %s\n" "$(date '+%D %T')" $req_path $http_code $http_status $http_user
+          # IMPORTANT: send the response in 1 statement, otherwise we can get
+          # deadlock
+          printf 'HTTP/1.1 %s %s\r\nContent-Type: text/plain\r\nContent-Length: %s\r\nCache-Control: public, max-age=0\r\nConnection: close\r\n\r\n%s' \
+            $http_code \
+            $http_status \
+            ${#response_body} \
+            "$response_body" >&4
+        fi
+      done < <(nc -l 127.0.0.1 $port <&3; printf $?)
+    done
+    echo "$(date +'%D %T') $FUNCNAME: QUIT $STY"
+  } >$logfile 2>&1 </dev/null &
+  pid=$!
+  echo $pid > $pidfile
+  echo "$FUNCNAME: server is started on $ESH_ATSERVER_URL, pid is $pid, log file is $logfile"
 }

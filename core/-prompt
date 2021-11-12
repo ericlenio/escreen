@@ -4,6 +4,7 @@
 #
 -prompt() {
   if [ -z "$(trap -p)" ]; then
+    ESH_TOP_LEVEL_SHELL=1
     trap _esh_trap_EXIT EXIT
     trap _esh_trap_HUP HUP
     # set default trap on USR1: this signal is used to control the auth token
