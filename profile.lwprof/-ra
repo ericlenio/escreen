@@ -205,11 +205,19 @@
 
   case $RA_MODE in
     ssh)
-      local extra_params="$(get_extra_ssh_params $raHostname)"
+      local extra_params="$(get_extra_ssh_params $raHostname)" cookie_jar=$HOME/.remoteadmin/ra-cookies
+      if [ ! -f $cookie_jar ]; then
+        touch $cookie_jar
+        chmod 600 $cookie_jar
+      fi
       if [ -n "$extra_params" ]; then
         echo "Passing extra params to ssh: $extra_params"
       fi
-      if c=($(curl -k -f -s -S -H "$auth_hdr" -H "X-Ra-Agent-Id: $raAgentId" $RA_SERVER_BASE_URL/ra-get-shell-ctx)); then
+      if \
+        curl -k -f -s -S -b "$cookie_jar" -c "$cookie_jar" -H "X-Ra-Session-Request: 1" -H "$auth_hdr" $RA_SERVER_BASE_URL/ra-simple-login \
+        && \
+        c=($(curl -k -f -s -S -b "$cookie_jar" -H "$auth_hdr" -H "X-Ra-Agent-Id: $raAgentId" $RA_SERVER_BASE_URL/ra-get-shell-ctx))
+        then
         SSH_STY_LBL=$raHostname ssh -t -oProxyJump=remoteadmin@$RA_SSH_PROXY_JUMP_HOST -p $raSshPort $extra_params "$@" $RA_SSH_USER@127.0.0.1 "${c[@]}" exec bash
 #echo sshConfigFile:$sshConfigFile
 #SSH_STY_LBL=$raHostname ssh -oProxyJump=remoteadmin@$RA_SSH_PROXY_JUMP_HOST:2999 -p $raSshPort $extra_params "$@" $RA_SSH_USER@ra-local "${c[@]}" exec bash
@@ -247,14 +255,17 @@
         fi
       fi
       appCtx=${context[$choice]}
-      PGDATABASE=${database[$choice]} \
-        PGUSER=${username[$choice]} \
-        PGHOST=${host[$choice]} \
-        PGSSLMODE=require \
-        PGPORT=${port[$choice]} \
-        PGOPTIONS="-c lw.raAgentId=$raAgentId/$appCtx}" \
-        PGPASSWORD="$(echo ${password[$choice]} | openssl enc -d -a -A)" \
-        psql -v PROMPT1="$raHostname:%n@%/>" "$@"
+      export PGDATABASE=${database[$choice]}
+      export PGUSER=${username[$choice]}
+      #export PGHOST=${host[$choice]}
+      export PGHOST=127.0.0.1
+      export PGSSLMODE=require
+      export PGPORT=${port[$choice]}
+      export PGOPTIONS="-c lw.raAgentId=$raAgentId/$appCtx}"
+      export PGPASSWORD="$(echo ${password[$choice]} | openssl enc -d -a -A)"
+      ssh -fN -L127.0.0.1:$PGPORT:127.0.0.1:$PGPORT ${host[$choice]}
+      psql -v PROMPT1="$raHostname:%n@%/>" "$@"
+      # do I need to stop ssh?
       ;;
   esac
 }
