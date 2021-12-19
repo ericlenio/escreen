@@ -22,7 +22,7 @@
 #trap "rm -f $stdout $cmds; echo $stdout was deleted" EXIT INT
 
 -ra() {
-  local exec ssh_params opts="he:u:j:drp" opt RA_SERVER_BASE_URL=${RA_SERVER_BASE_URL:-https://remoteadmin.private:3333} RA_SSH_USER=${RA_SSH_USER:-lincdoc} OPTIND=1 PATH="/usr/local/opt/curl/bin:$PATH"
+  local exec ssh_params opts="he:u:j:drps" opt RA_SERVER_BASE_URL=${RA_SERVER_BASE_URL:-https://remoteadmin.private:3333} RA_SSH_USER=${RA_SSH_USER:-lincdoc} OPTIND=1 PATH="/usr/local/opt/curl/bin:$PATH"
   declare -a exec
   declare -a ssh_params
   local ssh_params_file=$HOME/.remoteadmin/ssh_options filter RA_SSH_PROXY_JUMP_HOST RA_MODE=ssh superuser=0
@@ -55,6 +55,8 @@
         superuser=1
         ;;
       p) RA_MODE=psql
+        ;;
+      s) RA_MODE=show_users
         ;;
     esac
   done
@@ -106,7 +108,6 @@
 
   #local pwkey="LincWare LDAP:$RA_USER"
   #local pw=$(pw "$pwkey")
-  attempts=0
   if [ -z "$RA_USER_PASSWORD_64" ]; then
     _esh_b about
   fi
@@ -119,7 +120,7 @@
     return 1
   fi
   local raw agents auth=$(printf "%s:%s" "$RA_USER" "$pw" | openssl enc -a -A)
-  local auth_hdr=$(printf "Authorization: Basic %s" $auth)
+  local ldap_auth_hdr=$(printf "Authorization: Basic %s" $auth)
   local endpoint=$RA_SERVER_BASE_URL/ra-get-agents?superuser=$superuser
   if ! [[ $RA_SERVER_BASE_URL =~ ://([-\.[:alnum:]]+) ]]; then
     echo "could not parse hostname from endpoint: $RA_SERVER_BASE_URL" >&2
@@ -127,14 +128,7 @@
   fi
 
   local agt_id=${BASH_REMATCH[1]}/127.0.0.1
-  if ! raw=$(curl -k -S -s -f -H "Accept: text/plain" -H "$auth_hdr" -H "X-Ra-Agent-Id: $agt_id" $endpoint); then
-    echo "$FUNCNAME: failed to read $endpoint" >&2
-    return 1
-  fi
-  IFS=$'\n' read -d '' -a agents <<< "$raw"
-
   local matching=() header=() raAgentIdIdx agent=()
-  IFS='|' read -a header <<< "${agents[0]}"
 
   get_header_idx() {
     local i
@@ -146,24 +140,6 @@
     done
     return 1
   }
-
-  if ! raAgentIdIdx=$(get_header_idx raAgentId); then
-    echo "$FUNCNAME: failed to get raAgentIdIdx" >&2
-    return 1
-  fi
-
-  for ((i=1;i<${#agents[@]};i++)); do
-    agent=(${agents[$i]})
-    raAgentId=${agent[$raAgentIdIdx]}
-    if [[ $raAgentId =~ $filter ]]; then
-      matching+=("${agents[$i]}")
-    fi
-  done
-
-  if [ ${#matching[@]} -eq 0 ]; then
-    echo "$FUNCNAME: no matches for filter: $filter" >&2
-    return 1
-  fi
 
   get_data() {
     local i j data
@@ -185,39 +161,71 @@
     esac
   }
 
-  local n=$((${#matching[@]}-1)) choice=0
-  if [ $n -ge 1 ]; then
-    local choice_list=$(
-      for ((i=0;i<=$n;i++)); do
-        eval "$(get_data $i)"
-        dt=$(fmt_date $createTimestamp)
-        printf "%s (%s)\n" $raAgentId "$dt"
-      done
-    )
-    choice=$(-pick-something "Pick:" "$choice_list" 1) || {
-      echo "invalid choice"
+  if [ $RA_MODE != show_users ]; then
+    if ! raw=$(curl -k -S -s -f -H "Accept: text/plain" -H "$ldap_auth_hdr" -H "X-Ra-Agent-Id: $agt_id" $endpoint); then
+      echo "$FUNCNAME: failed to read $endpoint" >&2
       return 1
-    }
+    fi
+    IFS=$'\n' read -d '' -a agents <<< "$raw"
+
+    IFS='|' read -a header <<< "${agents[0]}"
+
+    if ! raAgentIdIdx=$(get_header_idx raAgentId); then
+      echo "$FUNCNAME: failed to get raAgentIdIdx" >&2
+      return 1
+    fi
+
+    for ((i=1;i<${#agents[@]};i++)); do
+      agent=(${agents[$i]})
+      raAgentId=${agent[$raAgentIdIdx]}
+      if [[ $raAgentId =~ $filter ]]; then
+        matching+=("${agents[$i]}")
+      fi
+    done
+
+    if [ ${#matching[@]} -eq 0 ]; then
+      echo "$FUNCNAME: no matches for filter: $filter" >&2
+      return 1
+    fi
+
+    local n=$((${#matching[@]}-1)) choice=0
+    if [ $n -ge 1 ]; then
+      local choice_list=$(
+        for ((i=0;i<=$n;i++)); do
+          eval "$(get_data $i)"
+          dt=$(fmt_date $createTimestamp)
+          printf "%s (%s)\n" $raAgentId "$dt"
+        done
+      )
+      choice=$(-pick-something "Pick:" "$choice_list" 1) || {
+        echo "invalid choice"
+        return 1
+      }
+    fi
+
+    #get_data $choice
+    eval "$(get_data $choice)"
   fi
 
-  #get_data $choice
-  eval "$(get_data $choice)"
-
   case $RA_MODE in
-    ssh)
-      local extra_params="$(get_extra_ssh_params $raHostname)" cookie_jar=$HOME/.remoteadmin/ra-cookies
+    ssh|show_users)
+      # get a session cookie so we can do various web service calls
+      local cookie_jar=$HOME/.remoteadmin/ra-cookies
       if [ ! -f $cookie_jar ]; then
         touch $cookie_jar
         chmod 600 $cookie_jar
       fi
+      curl -k -f -s -S -b "$cookie_jar" -c "$cookie_jar" -H "X-Ra-Session-Request: 1" -H "$ldap_auth_hdr" $RA_SERVER_BASE_URL/ra-simple-login
+      ;;
+  esac
+
+  case $RA_MODE in
+    ssh)
+      local extra_params="$(get_extra_ssh_params $raHostname)"
       if [ -n "$extra_params" ]; then
         echo "Passing extra params to ssh: $extra_params"
       fi
-      if \
-        curl -k -f -s -S -b "$cookie_jar" -c "$cookie_jar" -H "X-Ra-Session-Request: 1" -H "$auth_hdr" $RA_SERVER_BASE_URL/ra-simple-login \
-        && \
-        c=($(curl -k -f -s -S -b "$cookie_jar" -H "$auth_hdr" -H "X-Ra-Agent-Id: $raAgentId" $RA_SERVER_BASE_URL/ra-get-shell-ctx))
-        then
+      if c=($(curl -k -f -s -S -b "$cookie_jar" -H "$ldap_auth_hdr" -H "X-Ra-Agent-Id: $raAgentId" $RA_SERVER_BASE_URL/ra-get-shell-ctx)); then
         SSH_STY_LBL=$raHostname ssh -t -oProxyJump=remoteadmin@$RA_SSH_PROXY_JUMP_HOST -p $raSshPort $extra_params "$@" $RA_SSH_USER@127.0.0.1 "${c[@]}" exec bash
 #echo sshConfigFile:$sshConfigFile
 #SSH_STY_LBL=$raHostname ssh -oProxyJump=remoteadmin@$RA_SSH_PROXY_JUMP_HOST:2999 -p $raSshPort $extra_params "$@" $RA_SSH_USER@ra-local "${c[@]}" exec bash
@@ -266,6 +274,10 @@
       ssh -fN -L127.0.0.1:$PGPORT:127.0.0.1:$PGPORT ${host[$choice]}
       psql -v PROMPT1="$raHostname:%n@%/>" "$@"
       # do I need to stop ssh?
+      ;;
+    show_users)
+      local type="application/json"
+      curl -k -f -S -H "$ldap_auth_hdr" -H "X-Ra-Agent-Id: $agt_id" -H "Accept: $type" $RA_SERVER_BASE_URL/ra-users-get-browser-windows
       ;;
   esac
 }
