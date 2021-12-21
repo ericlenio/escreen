@@ -276,7 +276,8 @@
       # do I need to stop ssh?
       ;;
     show_users)
-      local type="application/json"
+      #local type="application/json"
+      local type="text/plain"
       curl -k -f -S -H "$ldap_auth_hdr" -H "X-Ra-Agent-Id: $agt_id" -H "Accept: $type" $RA_SERVER_BASE_URL/ra-users-get-browser-windows
       ;;
   esac
