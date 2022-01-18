@@ -2,8 +2,9 @@
 -totp() {
   local key_idx=${1:-0} otp key_id base32_key
   local key_ids=(
-    "Amazon Web Services:lenio@556585969992"
-    "LincWare OPS"
+    "TOTP Amazon Web Services:lenio@556585969992"
+    "TOTP LincWare OPS"
+    "TOTP lw-401-main-st"
   )
   key_id=${key_ids[$key_idx]}
   if [ -z "$key_id" ]; then
@@ -13,4 +14,5 @@
   base32_key=$(pw "$key_id")
   otp=$(oathtool --totp -b $base32_key)
   printf "%s:%s\n" "$key_id" $otp
+  printf $otp | c
 }
