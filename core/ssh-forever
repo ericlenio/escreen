@@ -1,6 +1,6 @@
 # vim:filetype=bash
 ssh-forever() (
-  local timeout=30 sleep=5
+  local timeout=10 sleep=1
   trap exit INT
   while true; do
     SECONDS=0
