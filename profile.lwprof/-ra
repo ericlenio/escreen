@@ -31,10 +31,12 @@
   usage() {
     echo "Usage: -ra [-hdr] [filter [ssh args ...]]"
     echo "       -ra [-d] -p [filter [psql args ...]]"
+    echo "       -ra [-d] -s"
     echo "  -h: this usage note"
     echo "  -d: use dev remoteadmin server"
     echo "  -r: in ssh mode (the default), ssh to the remote server as root; in psql mode, connect with the owner of the ld_admin schema"
     echo "  -p: psql mode"
+    echo "  -s: show current remoteadmin users"
   }
 
   while getopts $opts opt; do
