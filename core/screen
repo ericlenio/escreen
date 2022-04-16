@@ -2,10 +2,10 @@
 screen() {
   # make copy of original function args
   local args=("$@") opt rcfile root_sty=$([ "$SSH_TTY" ] && echo 0 || echo 1) keyserver_port=1054 os=$(uname) resume_msg_window_id=39
-  export ESH_ATSERVER_URL=http://127.0.0.1:$keyserver_port
   # switch port if root, so we can allow concurrent gnu screen sessions for
   # root and 1 other user
   [ $EUID = 0 ] && keyserver_port=1055
+  export ESH_ATSERVER_URL=http://127.0.0.1:$keyserver_port
   # Note: escreen sends "--", that is why we skip it here
   if [ "$1" != -- ]; then
     for opt in "$@"; do
