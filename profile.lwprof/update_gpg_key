@@ -27,7 +27,15 @@ update_gpg_key() {
   local aptfile=/etc/apt/sources.list.d/lincware.list
   if [ ! -f $aptfile ]; then
     if [ $ubuntu_release -ge 18 ]; then
-      echo "deb [arch=amd64] http://apt.lincware.com/ubuntu $(lsb_release -cs) core" > $aptfile
+      machine=$(uname -m)
+      case $machine in
+        x86_64) arch=amd64;;
+        aarch64) arch=arm64;;
+        *) echo "no support for machine: $machine" >&2
+          return 1
+          ;;
+      esac
+      echo "deb [arch=$arch] http://apt.lincware.com/ubuntu $(lsb_release -cs) core" > $aptfile
     else
       echo "deb http://apt.lincware.com/ubuntu three core" > $aptfile
     fi
