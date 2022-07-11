@@ -3,7 +3,9 @@
 #
 # based on notes from:
 # http://superuser.com/questions/429405/how-can-i-get-virtualbox-to-run-with-a-hosts-only-adapter
-vpn_iface=utun2
+set -e
+vpn_iface=utun3
+#vpn_subnet=10.4.1.0/24
 vmware_iface=vmnet2
 if [ $(uname -s) = Darwin ]; then
   #sudo sysctl -w net.inet.ip.forwarding=1 net.inet.ip.fw.enable=1
@@ -30,6 +32,5 @@ if [ $(uname -s) = Darwin ]; then
     # forward VPN traffic to lincware VPN: also must set up a static route on
     # the router to pass 10.9.0.0/16 to elmbp's en0 IP address
     echo "pass in quick proto { tcp udp } from 192.168.1.0/24 to 10.9.0.0/16 keep state"
-  } | sudo pfctl -mf -
-  sudo pfctl -e
+  } | sudo pfctl -e -mf -
 fi
